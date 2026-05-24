@@ -21,6 +21,9 @@ func (c *Client) Transfer(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read source SIM identity: %w", err)
 	}
+	if err := c.discoverEntitlement(*identity); err != nil {
+		return nil, err
+	}
 	source := c.cfg.Source.Device
 	source.ICCID = firstNonEmpty(source.ICCID, identity.ICCID)
 	target := c.cfg.Target.Device
@@ -36,6 +39,21 @@ func (c *Client) Transfer(ctx context.Context) (*Result, error) {
 		TemporaryToken: tokens.Temporary,
 	}
 	return c.activate(ctx, offer, UserInputResult{Button: MessageButtonUnknown})
+}
+
+func (c *Client) discoverEntitlement(identity sim.Identity) error {
+	if c.cfg.Entitlement.Server != "" {
+		return nil
+	}
+	discovered, err := DiscoverEntitlement(identity, c.cfg.Entitlement.SourceSIMType)
+	if err != nil {
+		return fmt.Errorf("discover entitlement config: %w", err)
+	}
+	discovered.SourceSIMType = c.cfg.Entitlement.SourceSIMType
+	discovered.Timeout = c.cfg.Entitlement.Timeout
+	discovered.AutoRetry511Limit = c.cfg.Entitlement.AutoRetry511Limit
+	c.cfg.Entitlement = discovered
+	return nil
 }
 
 func (c *Client) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {

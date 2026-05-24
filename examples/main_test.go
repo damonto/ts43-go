@@ -123,8 +123,8 @@ func TestParseFlagsTransferType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseFlags error = %v", err)
 	}
-	if !got.SourcePSIM {
-		t.Fatal("SourcePSIM = false, want true")
+	if got.SourceSIMType != ts43.SIMTypePSIM {
+		t.Fatalf("SourceSIMType = %v, want %v", got.SourceSIMType, ts43.SIMTypePSIM)
 	}
 	if got.TransferType != 2 {
 		t.Fatalf("TransferType = %d, want 2", got.TransferType)
@@ -145,8 +145,8 @@ func TestParseFlagsConversion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseFlags error = %v", err)
 	}
-	if !got.SourcePSIM {
-		t.Fatal("SourcePSIM = false, want true")
+	if got.SourceSIMType != ts43.SIMTypePSIM {
+		t.Fatalf("SourceSIMType = %v, want %v", got.SourceSIMType, ts43.SIMTypePSIM)
 	}
 	if !got.UseTempTokenConversion {
 		t.Fatal("UseTempTokenConversion = false, want true")
@@ -156,6 +156,27 @@ func TestParseFlagsConversion(t *testing.T) {
 	}
 	if !got.RestrictOldTerminalFields {
 		t.Fatal("RestrictOldTerminalFields = false, want true")
+	}
+}
+
+func TestValidateAllowsDiscoveryWithoutServer(t *testing.T) {
+	opts := cliOptions{
+		SourceDevice: ts43.Device{IMEI: "111111111111111"},
+		TargetDevice: ts43.Device{IMEI: "222222222222222"},
+	}
+	if err := opts.validate(); err != nil {
+		t.Fatalf("validate() error = %v", err)
+	}
+}
+
+func TestValidateAllowsExplicitServer(t *testing.T) {
+	opts := cliOptions{
+		Server:       "https://example.test/ts43",
+		SourceDevice: ts43.Device{IMEI: "111111111111111"},
+		TargetDevice: ts43.Device{IMEI: "222222222222222"},
+	}
+	if err := opts.validate(); err != nil {
+		t.Fatalf("validate() error = %v", err)
 	}
 }
 

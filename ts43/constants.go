@@ -29,6 +29,13 @@ func (t OperationType) String() string { return strconv.Itoa(int(t)) }
 
 type TransferType int
 
+type SIMType uint8
+
+const (
+	SIMTypeESIM SIMType = iota
+	SIMTypePSIM
+)
+
 const (
 	TransferTypeDisabled TransferType = 0
 

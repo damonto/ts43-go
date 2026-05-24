@@ -38,9 +38,6 @@ type eapRelayPacket struct {
 }
 
 func New(cfg *Config) (*Client, error) {
-	if cfg.Entitlement.Server == "" {
-		return nil, errors.New("entitlement server is required")
-	}
 	if cfg.Source.Device.IMEI == "" {
 		return nil, errors.New("source IMEI is required")
 	}
@@ -470,7 +467,7 @@ func oldTerminalEntitlementProtocol(source Device) string {
 }
 
 func selectedTransferType(entitlement Entitlement) TransferType {
-	if entitlement.TransferType != TransferTypeDisabled || !entitlement.PSIM {
+	if entitlement.TransferType != TransferTypeDisabled || entitlement.SourceSIMType != SIMTypePSIM {
 		return entitlement.TransferType
 	}
 	if entitlement.UseTempTokenConversion {

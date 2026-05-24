@@ -36,7 +36,7 @@ type Entitlement struct {
 	Server                  string
 	UsePost                 bool
 	Timeout                 time.Duration
-	PSIM                    bool
+	SourceSIMType           SIMType
 	TransferType            TransferType
 	UseTempTokenConversion  bool
 	SetTargetTerminalFields bool

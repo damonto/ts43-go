@@ -26,7 +26,7 @@ type cliOptions struct {
 	ListReaders               bool
 	Debug                     bool
 	UsePost                   bool
-	SourcePSIM                bool
+	SourceSIMType             ts43.SIMType
 	UseTempTokenConversion    bool
 	SetTargetTerminalFields   bool
 	RestrictOldTerminalFields bool
@@ -186,7 +186,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 			Server:                    opts.Server,
 			Version:                   opts.Version,
 			UsePost:                   opts.UsePost,
-			PSIM:                      opts.SourcePSIM,
+			SourceSIMType:             opts.SourceSIMType,
 			TransferType:              ts43.TransferType(opts.TransferType),
 			UseTempTokenConversion:    opts.UseTempTokenConversion,
 			SetTargetTerminalFields:   opts.SetTargetTerminalFields,
@@ -226,10 +226,10 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 	fs := flag.NewFlagSet("esim-transfer", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "Usage: %s -server URL -source-imei IMEI -target-imei IMEI [flags]\n", fs.Name())
+		fmt.Fprintf(stderr, "Usage: %s -source-imei IMEI -target-imei IMEI [flags]\n", fs.Name())
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "Pass the carrier-config transfer type for the selected source profile.")
-		fmt.Fprintln(stderr, "For Vodafone CZ, GMS uses -transfer-type 2 for pSIM sources and 3 for eSIM sources.")
+		fmt.Fprintln(stderr, "When -server is omitted, the TS.43 entitlement config is discovered from the source SIM MCC/MNC/GID1.")
+		fmt.Fprintln(stderr, "Use -source-psim for pSIM sources so discovery can select the carrier pSIM transfer type.")
 		fmt.Fprintln(stderr, "The selected source reader is treated as the source profile; no source profile list is built.")
 		fmt.Fprintln(stderr, "")
 		fs.PrintDefaults()
@@ -255,7 +255,8 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 	fs.StringVar(&opts.Version, "version", opts.Version, "TS.43 entitlement version")
 	fs.StringVar(&opts.AppName, "app-name", opts.AppName, "TS.43 app name")
 	fs.BoolVar(&opts.UsePost, "use-post", false, "send TS.43 service entitlement requests with POST")
-	fs.BoolVar(&opts.SourcePSIM, "source-psim", false, "source subscription is pSIM; otherwise eSIM")
+	sourcePSIM := false
+	fs.BoolVar(&sourcePSIM, "source-psim", false, "source subscription is pSIM; otherwise eSIM")
 	fs.BoolVar(&opts.UseTempTokenConversion, "use-temp-token-conversion", false, "use temporary token for pSIM-to-eSIM conversion")
 	fs.BoolVar(&opts.SetTargetTerminalFields, "set-target-terminal-fields", false, "carrier entitlement setTargetTerminalFields value")
 	fs.BoolVar(&opts.RestrictOldTerminalFields, "restrict-old-terminal-fields", false, "GMS Ljotr.Q value; when true only transfer types 7 and 9 send old terminal fields")
@@ -272,13 +273,13 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 	if fs.NArg() > 0 {
 		return cliOptions{}, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	if sourcePSIM {
+		opts.SourceSIMType = ts43.SIMTypeESIM
+	}
 	return opts, nil
 }
 
 func (opts cliOptions) validate() error {
-	if opts.Server == "" {
-		return errors.New("server is required")
-	}
 	if opts.SourceDevice.IMEI == "" {
 		return errors.New("source IMEI is required")
 	}

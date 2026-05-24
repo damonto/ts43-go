@@ -95,6 +95,117 @@ func TestClientUsesDefaultLogger(t *testing.T) {
 	}
 }
 
+func TestNewAllowsMissingEntitlementServer(t *testing.T) {
+	client, err := New(&Config{
+		HTTPClient:  fakeDoer(func(*http.Request) (*http.Response, error) { return response(500, ""), nil }),
+		Entitlement: Entitlement{},
+		Source:      Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
+		Target:      Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if client.cfg.Entitlement.Server != "" {
+		t.Fatalf("Server = %q, want empty before discovery", client.cfg.Entitlement.Server)
+	}
+}
+
+func TestTransferDiscoversEntitlementServer(t *testing.T) {
+	var calls []Operation
+	client, err := New(&Config{
+		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			if req.URL.Host != "ts43.eas3.msg.t-mobile.com" {
+				t.Fatalf("host = %q, want discovered T-Mobile server", req.URL.Host)
+			}
+			query := req.URL.Query()
+			if got := query.Get("entitlement_version"); got != "9.0" {
+				t.Fatalf("entitlement_version = %q, want 9.0", got)
+			}
+			op := Operation(query.Get("operation"))
+			calls = append(calls, op)
+			switch op {
+			case "":
+				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/><parm name="Validity" value="3600"/></characteristic></wap-provisioningdoc>`), nil
+			case OperationCheck:
+				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
+			case OperationTempToken:
+				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
+			case OperationManage:
+				if got := query.Get("temporary_token"); got != "tmp" {
+					t.Fatalf("temporary_token = %q, want tmp", got)
+				}
+				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
+			default:
+				t.Fatalf("unexpected operation %q", query.Get("operation"))
+				return response(500, ""), nil
+			}
+		}),
+		Entitlement: Entitlement{},
+		Source:      Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
+		Target:      Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
+		Logger:      slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	result, err := client.Transfer(context.Background())
+	if err != nil {
+		t.Fatalf("Transfer() error = %v", err)
+	}
+	if result.State != StateDone {
+		t.Fatalf("State = %d, want %d", result.State, StateDone)
+	}
+	if client.cfg.Entitlement.Server != "https://ts43.eas3.msg.t-mobile.com/google/" {
+		t.Fatalf("Server = %q, want discovered T-Mobile server", client.cfg.Entitlement.Server)
+	}
+	if got := operationList(calls); got != ",CheckEligibility,AcquireTemporaryToken,ManageSubscription" {
+		t.Fatalf("calls = %s", got)
+	}
+}
+
+func TestTransferKeepsExplicitEntitlementServer(t *testing.T) {
+	var calls int
+	client, err := New(&Config{
+		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			calls++
+			if req.URL.Host != "example.test" {
+				t.Fatalf("host = %q, want explicit server", req.URL.Host)
+			}
+			switch Operation(req.URL.Query().Get("operation")) {
+			case "":
+				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/></characteristic></wap-provisioningdoc>`), nil
+			case OperationCheck:
+				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
+			case OperationManage:
+				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
+			default:
+				t.Fatalf("unexpected operation %q", req.URL.Query().Get("operation"))
+				return response(500, ""), nil
+			}
+		}),
+		Entitlement: Entitlement{Server: "https://example.test/ts43"},
+		Source: Endpoint{
+			Channel: identityChannel{identity: sim.Identity{ICCID: "8910000000000000000", IMSI: "208011234567890", MCC: "208", MNC: "01"}},
+			Device:  Device{IMEI: "111111111111111"},
+		},
+		Target: Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
+		Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	result, err := client.Transfer(context.Background())
+	if err != nil {
+		t.Fatalf("Transfer() error = %v", err)
+	}
+	if result.State != StateDone {
+		t.Fatalf("State = %d, want %d", result.State, StateDone)
+	}
+	if calls != 3 {
+		t.Fatalf("HTTP calls = %d, want 3", calls)
+	}
+}
+
 func TestEAPRelayUsesLatestCookies(t *testing.T) {
 	var calls int
 	client, err := New(&Config{
@@ -1938,27 +2049,27 @@ func TestSelectedTransferType(t *testing.T) {
 		},
 		{
 			name:        "pSIM type two keeps explicit carrier type",
-			entitlement: Entitlement{PSIM: true, TransferType: TransferTypeTemporaryToken},
+			entitlement: Entitlement{SourceSIMType: SIMTypePSIM, TransferType: TransferTypeTemporaryToken},
 			want:        TransferTypeTemporaryToken,
 		},
 		{
 			name:        "pSIM type three keeps explicit carrier type",
-			entitlement: Entitlement{PSIM: true, TransferType: TransferTypeReusableActivationCode},
+			entitlement: Entitlement{SourceSIMType: SIMTypePSIM, TransferType: TransferTypeReusableActivationCode},
 			want:        TransferTypeReusableActivationCode,
 		},
 		{
 			name:        "pSIM type six keeps explicit carrier type with temp conversion",
-			entitlement: Entitlement{PSIM: true, TransferType: TransferTypeTS43V8, UseTempTokenConversion: true},
+			entitlement: Entitlement{SourceSIMType: SIMTypePSIM, TransferType: TransferTypeTS43V8, UseTempTokenConversion: true},
 			want:        TransferTypeTS43V8,
 		},
 		{
 			name:        "pSIM conversion without temp token uses old terminal IDs",
-			entitlement: Entitlement{PSIM: true},
+			entitlement: Entitlement{SourceSIMType: SIMTypePSIM},
 			want:        TransferTypeOldTerminalIDs,
 		},
 		{
 			name:        "pSIM conversion with temp token uses temporary token old terminal IDs",
-			entitlement: Entitlement{PSIM: true, UseTempTokenConversion: true},
+			entitlement: Entitlement{SourceSIMType: SIMTypePSIM, UseTempTokenConversion: true},
 			want:        TransferTypeTemporaryTokenOldTerminalIDs,
 		},
 	}
@@ -2325,6 +2436,18 @@ func (fakeChannel) AuthenticateAKA(context.Context, *sim.AKARequest) (*sim.AKARe
 	return nil, nil
 }
 
+type identityChannel struct {
+	identity sim.Identity
+}
+
+func (c identityChannel) Identity(context.Context) (*sim.Identity, error) {
+	return &c.identity, nil
+}
+
+func (identityChannel) AuthenticateAKA(context.Context, *sim.AKARequest) (*sim.AKAResponse, error) {
+	return nil, nil
+}
+
 type akaChannel struct{}
 
 func (akaChannel) Identity(context.Context) (*sim.Identity, error) {
@@ -2337,4 +2460,12 @@ func (akaChannel) AuthenticateAKA(context.Context, *sim.AKARequest) (*sim.AKARes
 		CK:  []byte{0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f},
 		IK:  []byte{0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f},
 	}, nil
+}
+
+func operationList(ops []Operation) string {
+	values := make([]string, 0, len(ops))
+	for _, op := range ops {
+		values = append(values, op.String())
+	}
+	return strings.Join(values, ",")
 }
