@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/damonto/euicc-go/driver/ccid"
+	lpaccid "github.com/damonto/euicc-go/driver/ccid"
 	"github.com/damonto/euicc-go/lpa"
-	"github.com/damonto/euicc-go/ts43"
+	sourceccid "github.com/damonto/ts43-go/driver/ccid"
+	"github.com/damonto/ts43-go/ts43"
 )
 
 type cliOptions struct {
@@ -72,7 +73,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	}
 
 	reader := bufio.NewReader(stdin)
-	source, err := ccid.New()
+	source, err := sourceccid.New()
 	if err != nil {
 		return openCCIDError("source", err)
 	}
@@ -94,12 +95,12 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 		return fmt.Errorf("select source reader: %w", err)
 	}
 
-	target, err := ccid.New()
+	target, err := lpaccid.New()
 	if err != nil {
 		return openCCIDError("target", err)
 	}
 	defer func() {
-		if closeErr := target.Disconnect(); closeErr != nil {
+		if closeErr := disconnectCCID(target); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close target reader: %w", closeErr))
 		}
 	}()
@@ -112,9 +113,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	if err != nil {
 		return fmt.Errorf("choose target reader: %w", err)
 	}
-	if err := target.SetReader(targetReader); err != nil {
-		return fmt.Errorf("select target reader: %w", err)
-	}
+	target.SetReader(targetReader)
 
 	lpaClient, err := lpa.New(&lpa.Options{
 		Channel: target,
@@ -131,26 +130,41 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	}()
 
 	var sourceLPAClient *lpa.Client
+	var sourceLPAChannel lpaccid.CCID
 	defer func() {
-		if sourceLPAClient == nil {
-			return
+		if sourceLPAClient != nil {
+			if closeErr := sourceLPAClient.Close(); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close source LPA client: %w", closeErr))
+			}
 		}
-		if closeErr := sourceLPAClient.Close(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close source LPA client: %w", closeErr))
+		if sourceLPAChannel != nil {
+			if closeErr := disconnectCCID(sourceLPAChannel); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close source LPA reader: %w", closeErr))
+			}
 		}
 	}()
 	sourceLPA := func() (*lpa.Client, error) {
 		if sourceLPAClient != nil {
 			return sourceLPAClient, nil
 		}
+		if err := source.Disconnect(); err != nil {
+			return nil, fmt.Errorf("close source TS.43 reader before source LPA: %w", err)
+		}
+		channel, err := lpaccid.New()
+		if err != nil {
+			return nil, err
+		}
+		channel.SetReader(sourceReader)
 		sourceClient, err := lpa.New(&lpa.Options{
-			Channel: source,
+			Channel: channel,
 			Logger:  logger,
 			Timeout: opts.Timeout,
 		})
 		if err != nil {
+			_ = disconnectCCID(channel)
 			return nil, err
 		}
+		sourceLPAChannel = channel
 		sourceLPAClient = sourceClient
 		return sourceLPAClient, nil
 	}
@@ -189,8 +203,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 			Device:  opts.SourceDevice,
 		},
 		Target: ts43.Endpoint{
-			Channel: target,
-			Device:  opts.TargetDevice,
+			Device: opts.TargetDevice,
 		},
 	})
 	if err != nil {
@@ -297,7 +310,7 @@ func printReaders(w io.Writer) error {
 }
 
 func listCCIDReaders() (_ []string, err error) {
-	channel, err := ccid.New()
+	channel, err := sourceccid.New()
 	if err != nil {
 		if ccidUnavailable(err) {
 			return nil, errCCIDUnavailable
@@ -315,6 +328,14 @@ func listCCIDReaders() (_ []string, err error) {
 		return nil, fmt.Errorf("list readers: %w", err)
 	}
 	return readers, nil
+}
+
+func disconnectCCID(channel any) error {
+	disconnecter, ok := channel.(interface{ Disconnect() error })
+	if !ok {
+		return nil
+	}
+	return disconnecter.Disconnect()
 }
 
 func openCCIDError(role string, err error) error {

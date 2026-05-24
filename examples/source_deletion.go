@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/damonto/euicc-go/ts43"
 	sgp22 "github.com/damonto/euicc-go/v2"
+	"github.com/damonto/ts43-go/ts43"
 )
 
 var errSourceProfileDeletionDeclined = errors.New("source profile deletion declined")
@@ -41,7 +41,7 @@ func deleteSourceProfile(reader *bufio.Reader, w io.Writer, client profileDeleti
 	if err != nil {
 		return err
 	}
-	if err := client.DisableProfile(iccid, true); err != nil && !errors.Is(err, sgp22.ErrProfileNotInEnabledState) {
+	if err := client.DisableProfile(iccid, true); err != nil {
 		return fmt.Errorf("disable source profile: %w", err)
 	}
 	if err := client.DeleteProfile(iccid); err != nil {

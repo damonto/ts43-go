@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/damonto/euicc-go/ts43"
 	sgp22 "github.com/damonto/euicc-go/v2"
+	"github.com/damonto/ts43-go/ts43"
 )
 
 func TestChooseReader(t *testing.T) {
@@ -406,21 +406,6 @@ func TestDeleteSourceProfile(t *testing.T) {
 			wantHandled: []sgp22.SequenceNumber{
 				6,
 			},
-		},
-		{
-			name:  "deletes source profile that is already disabled",
-			input: "y\n",
-			event: ts43.SourceProfileDeletionEvent{ICCID: sourceICCID.String()},
-			lists: [][]*sgp22.NotificationMetadata{
-				{},
-				{
-					{SequenceNumber: 4, ProfileManagementOperation: sgp22.NotificationEventDelete, ICCID: sourceICCID},
-				},
-			},
-			disableErr:   sgp22.ErrProfileNotInEnabledState,
-			wantDisabled: []string{sourceICCID.String()},
-			wantDeleted:  []string{sourceICCID.String()},
-			wantHandled:  []sgp22.SequenceNumber{4},
 		},
 		{
 			name:        "declined",

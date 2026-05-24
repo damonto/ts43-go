@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/damonto/euicc-go/ts43"
+	"github.com/damonto/ts43-go/ts43"
 )
 
 func ts43Websheet(reader *bufio.Reader, w io.Writer, event ts43.WebsheetEvent) (*ts43.WebsheetResult, error) {

@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/damonto/euicc-go/lpa"
-	"github.com/damonto/euicc-go/ts43"
 	sgp22 "github.com/damonto/euicc-go/v2"
+	"github.com/damonto/ts43-go/ts43"
 )
 
 func runTransfer(ctx context.Context, reader *bufio.Reader, w io.Writer, client *ts43.Client, lpaClient *lpa.Client, sourceLPA func() (*lpa.Client, error)) error {
