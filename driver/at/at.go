@@ -117,20 +117,22 @@ func (a *AT) Identity(ctx context.Context) (*sim.Identity, error) {
 }
 
 func (a *AT) transmitAPDU(command []byte) ([]byte, error) {
-	cmd := fmt.Sprintf("%X", command)
-	cmd = fmt.Sprintf("AT+CSIM=%d,%q", len(cmd), cmd)
-	rawResponse, err := a.sendCommand(cmd)
+	cmd, err := CSIMCommand(command).MarshalText()
 	if err != nil {
 		return nil, err
 	}
-	response, err := decodeCSIMResponse(rawResponse)
+	rawResponse, err := a.sendCommand(string(cmd))
 	if err != nil {
+		return nil, err
+	}
+	var response CSIMResponse
+	if err := response.UnmarshalText([]byte(rawResponse)); err != nil {
 		return nil, err
 	}
 	if len(response) < 2 {
 		return nil, errors.New("invalid response status word")
 	}
-	return response, nil
+	return []byte(response), nil
 }
 
 func writeFull(w io.Writer, p []byte) error {

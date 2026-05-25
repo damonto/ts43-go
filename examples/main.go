@@ -274,7 +274,7 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 		return cliOptions{}, fmt.Errorf("unexpected positional arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	if sourcePSIM {
-		opts.SourceSIMType = ts43.SIMTypeESIM
+		opts.SourceSIMType = ts43.SIMTypePSIM
 	}
 	return opts, nil
 }

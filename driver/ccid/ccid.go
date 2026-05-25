@@ -253,7 +253,11 @@ func (c *CCIDReader) selectFiles(ids ...uint16) error {
 }
 
 func (c *CCIDReader) transmitUSIM(command []byte) (apdu.Response, error) {
-	raw, err := c.transmit(command)
+	return transmitUSIM(c.transmit, command)
+}
+
+func transmitUSIM(transmit func([]byte) ([]byte, error), command []byte) (apdu.Response, error) {
+	raw, err := transmit(command)
 	if err != nil {
 		return nil, err
 	}
@@ -262,21 +266,21 @@ func (c *CCIDReader) transmitUSIM(command []byte) (apdu.Response, error) {
 		return nil, errors.New("short APDU response")
 	}
 	data := append([]byte(nil), resp.Data()...)
-	for resp.HasMore() {
-		resp, err = c.more(resp.SW2())
+	for statusHasMore(resp) {
+		resp, err = more(transmit, resp.SW2())
 		if err != nil {
 			return nil, err
 		}
 		data = append(data, resp.Data()...)
 	}
-	if !resp.OK() {
+	if !statusOK(resp) {
 		return nil, fmt.Errorf("APDU status %04X", resp.SW())
 	}
 	return append(data, byte(resp.SW()>>8), byte(resp.SW())), nil
 }
 
-func (c *CCIDReader) more(le byte) (apdu.Response, error) {
-	resp, err := c.transmit((&apdu.Request{CLA: 0x00, INS: 0xc0, Le: &le}).APDU())
+func more(transmit func([]byte) ([]byte, error), le byte) (apdu.Response, error) {
+	resp, err := transmit((&apdu.Request{CLA: 0x00, INS: 0xc0, Le: &le}).APDU())
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +289,14 @@ func (c *CCIDReader) more(le byte) (apdu.Response, error) {
 		return nil, errors.New("short APDU response")
 	}
 	return out, nil
+}
+
+func statusOK(response []byte) bool {
+	return len(response) >= 2 && response[len(response)-2] == 0x90 && response[len(response)-1] == 0x00
+}
+
+func statusHasMore(response []byte) bool {
+	return len(response) >= 2 && response[len(response)-2] == 0x61
 }
 
 func (c *CCIDReader) disconnect() error {
