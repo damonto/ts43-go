@@ -899,7 +899,7 @@ func TestPostRelayMatchesGMSRequestShape(t *testing.T) {
 					if got := req.Header.Get("Cookie"); got != tt.wantCookie {
 						t.Fatalf("Cookie = %q, want %q", got, tt.wantCookie)
 					}
-					if got := req.Header.Get("User-Agent"); !strings.Contains(got, DefaultClientTS43) {
+					if got := req.Header.Get("User-Agent"); !strings.Contains(got, DefaultODSAClientTS43) {
 						t.Fatalf("User-Agent = %q, want TS.43 client marker", got)
 					}
 					return response(200, `<wap-provisioningdoc/>`), nil

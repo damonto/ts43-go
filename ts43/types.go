@@ -10,11 +10,13 @@ import (
 )
 
 const (
-	AppODSAPrimary      = "ap2009"
-	DefaultAccept       = "text/vnd.wap.connectivity-xml"
-	EAPRelayContentType = "application/vnd.gsma.eap-relay.v1.0+json"
-	DefaultClientTS43   = "client-Primary-ODSA"
-	DefaultEAPAkaRealm  = "nai.epc"
+	AppODSAPrimary        = "ap2009"
+	AppVoWiFi             = "ap2004"
+	DefaultAccept         = "text/vnd.wap.connectivity-xml"
+	EAPRelayContentType   = "application/vnd.gsma.eap-relay.v1.0+json"
+	DefaultODSAClientTS43 = "client-Primary-ODSA"
+	DefaultWFCClientTS43  = "client-IMS-Entitlement"
+	DefaultEAPAkaRealm    = "nai.epc"
 )
 
 type Config struct {

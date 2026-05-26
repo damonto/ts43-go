@@ -299,6 +299,18 @@ func (c *Client) acquireActivationConfiguration(ctx context.Context, identity si
 }
 
 func (c *Client) call(ctx context.Context, identity sim.Identity, req ServiceEntitlementRequest, op ODSAOperation) (*ODSAResponse, []string, error) {
+	body, cookies, err := c.callRaw(ctx, identity, req, op)
+	if err != nil {
+		return nil, cookies, err
+	}
+	var resp ODSAResponse
+	if err := resp.UnmarshalBinary(body); err != nil {
+		return nil, cookies, err
+	}
+	return &resp, cookies, nil
+}
+
+func (c *Client) callRaw(ctx context.Context, identity sim.Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
 	httpReq, err := buildHTTPRequest(ctx, c.cfg.Entitlement, identity, req, op, c.clientTS43(), c.realm())
 	if err != nil {
 		return nil, nil, err
@@ -312,11 +324,7 @@ func (c *Client) call(ctx context.Context, identity sim.Identity, req ServiceEnt
 	if err != nil {
 		return nil, cookieHeaders(cookies), err
 	}
-	var resp ODSAResponse
-	if err := resp.UnmarshalBinary(body); err != nil {
-		return nil, cookieHeaders(cookies), err
-	}
-	return &resp, cookieHeaders(cookies), nil
+	return body, cookieHeaders(cookies), nil
 }
 
 func (c *Client) eapRelay(ctx context.Context, identity sim.Identity, body []byte, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
@@ -369,7 +377,7 @@ func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitl
 		accept = DefaultAccept
 	}
 	httpReq.Header.Set("Accept", EAPRelayContentType+", "+accept)
-	httpReq.Header.Set("User-Agent", userAgent(req, c.clientTS43()))
+	httpReq.Header.Set("User-Agent", userAgent(req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
 	for _, cookie := range cookies {
 		httpReq.AddCookie(cookie)
 	}
@@ -390,6 +398,7 @@ func (c *Client) baseRequest(device Device, authToken, tempToken string) Service
 		EntitlementVersion:  c.entitlementVersion(),
 		AuthenticationToken: authToken,
 		TemporaryToken:      tempToken,
+		App:                 AppODSAPrimary,
 		TerminalID:          device.IMEI,
 		TerminalVendor:      device.Vendor,
 		TerminalModel:       device.Model,
@@ -444,7 +453,7 @@ func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
 }
 
 func (c *Client) clientTS43() string {
-	return firstNonEmpty(c.cfg.ClientTS43, DefaultClientTS43)
+	return firstNonEmpty(c.cfg.ClientTS43, DefaultODSAClientTS43)
 }
 
 func (c *Client) realm() string {

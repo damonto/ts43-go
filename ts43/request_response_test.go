@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
@@ -27,6 +28,7 @@ func TestBuildHTTPRequest(t *testing.T) {
 				Entitlement{Server: "https://example.test/ts43", UsePost: tt.post},
 				sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
 				ServiceEntitlementRequest{
+					App:                AppODSAPrimary,
 					EntitlementVersion: "12.0",
 					TerminalID:         "123456789012345",
 					TerminalVendor:     "Google",
@@ -37,7 +39,7 @@ func TestBuildHTTPRequest(t *testing.T) {
 					Accept:             DefaultAccept,
 				},
 				ODSAOperation{Operation: OperationCheck, OperationType: OperationTypeOmit},
-				DefaultClientTS43,
+				DefaultODSAClientTS43,
 				DefaultEAPAkaRealm,
 			)
 			if err != nil {
@@ -64,6 +66,7 @@ func TestBuildHTTPRequestOmitsUnsetMessageButton(t *testing.T) {
 		ServiceEntitlementRequest{
 			AuthenticationToken: "auth",
 			EntitlementVersion:  "2.0",
+			App:                 AppODSAPrimary,
 			TerminalID:          "123456789012345",
 			TerminalVendor:      "Google",
 			TerminalModel:       "Pixel 8 Pro",
@@ -74,7 +77,7 @@ func TestBuildHTTPRequestOmitsUnsetMessageButton(t *testing.T) {
 			OperationType:    OperationTypeOmit,
 			OperationTargets: []Operation{OperationManage, OperationAcquireConf},
 		},
-		DefaultClientTS43,
+		DefaultODSAClientTS43,
 		DefaultEAPAkaRealm,
 	)
 	if err != nil {
@@ -82,6 +85,64 @@ func TestBuildHTTPRequestOmitsUnsetMessageButton(t *testing.T) {
 	}
 	if got := req.URL.Query().Get("MSG_btn"); got != "" {
 		t.Fatalf("MSG_btn = %q, want empty", got)
+	}
+}
+
+func TestBuildHTTPSendsConfiguredApp(t *testing.T) {
+	tests := []struct {
+		name string
+		app  string
+		want string
+	}{
+		{name: "explicit ODSA app", app: AppODSAPrimary, want: AppODSAPrimary},
+		{name: "explicit VoWiFi app", app: AppVoWiFi, want: AppVoWiFi},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := buildHTTPRequest(
+				context.Background(),
+				Entitlement{Server: "https://example.test/ts43"},
+				sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				ServiceEntitlementRequest{
+					App:                tt.app,
+					EntitlementVersion: "8.0",
+					TerminalID:         "123456789012345",
+					TerminalVendor:     "Google",
+					TerminalModel:      "Pixel 8 Pro",
+					TerminalSoftware:   "15/AP3A.240905.015",
+				},
+				ODSAOperation{},
+				DefaultODSAClientTS43,
+				DefaultEAPAkaRealm,
+			)
+			if err != nil {
+				t.Fatalf("buildHTTPRequest() error = %v", err)
+			}
+			if got := req.URL.Query().Get("app"); got != tt.want {
+				t.Fatalf("app = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildHTTPRequiresApp(t *testing.T) {
+	_, err := buildHTTPRequest(
+		context.Background(),
+		Entitlement{Server: "https://example.test/ts43"},
+		sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+		ServiceEntitlementRequest{
+			EntitlementVersion: "8.0",
+			TerminalID:         "123456789012345",
+			TerminalVendor:     "Google",
+			TerminalModel:      "Pixel 8 Pro",
+			TerminalSoftware:   "15/AP3A.240905.015",
+		},
+		ODSAOperation{},
+		DefaultODSAClientTS43,
+		DefaultEAPAkaRealm,
+	)
+	if !errors.Is(err, errAppRequired) {
+		t.Fatalf("buildHTTPRequest() error = %v, want %v", err, errAppRequired)
 	}
 }
 
@@ -93,6 +154,7 @@ func TestBuildHTTPRequestSendsExplicitRejectedMessageButton(t *testing.T) {
 		ServiceEntitlementRequest{
 			TemporaryToken:     "tmp",
 			EntitlementVersion: "2.0",
+			App:                AppODSAPrimary,
 			TerminalID:         "123456789012345",
 			TerminalVendor:     "Google",
 			TerminalModel:      "Pixel 8 Pro",
@@ -104,7 +166,7 @@ func TestBuildHTTPRequestSendsExplicitRejectedMessageButton(t *testing.T) {
 			MessageButton:    MessageButtonRejected,
 			MessageButtonSet: true,
 		},
-		DefaultClientTS43,
+		DefaultODSAClientTS43,
 		DefaultEAPAkaRealm,
 	)
 	if err != nil {
@@ -132,6 +194,7 @@ func TestBuildHTTPRequestsSendsExtendedFields(t *testing.T) {
 				ServiceEntitlementRequest{
 					TemporaryToken:     "tmp",
 					EntitlementVersion: "2.0",
+					App:                AppODSAPrimary,
 					TerminalID:         "123456789012345",
 					TerminalVendor:     "Google",
 					TerminalModel:      "Pixel 8 Pro",
@@ -155,7 +218,7 @@ func TestBuildHTTPRequestsSendsExtendedFields(t *testing.T) {
 					CompanionTerminalICCID:        "8910000000000000000",
 					CompanionTerminalEID:          "89049032000001000000000000000001",
 				},
-				DefaultClientTS43,
+				DefaultODSAClientTS43,
 				DefaultEAPAkaRealm,
 			)
 			if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,7 +18,7 @@ type ServiceEntitlementRequest struct {
 	EntitlementVersion  string
 	AuthenticationToken string
 	TemporaryToken      string
-	OmitEAPID           bool
+	App                 string
 	TerminalID          string
 	TerminalVendor      string
 	TerminalModel       string
@@ -26,8 +27,12 @@ type ServiceEntitlementRequest struct {
 	AppVersion          string
 	Accept              string
 	GID1                string
+	ClientTS43          string
+	OmitEAPID           bool
 	Cookies             []string
 }
+
+var errAppRequired = errors.New("app is required")
 
 type ODSAOperation struct {
 	Operation                      Operation
@@ -59,6 +64,9 @@ type ODSAOperation struct {
 }
 
 func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity sim.Identity, req ServiceEntitlementRequest, op ODSAOperation, clientTS43, realm string) (*http.Request, error) {
+	if req.App == "" {
+		return nil, errAppRequired
+	}
 	params := make(url.Values)
 	if err := addAuthIdentity(params, identity, req, realm); err != nil {
 		return nil, err
@@ -98,6 +106,9 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity sim
 		if err != nil {
 			return nil, err
 		}
+	}
+	if req.ClientTS43 != "" {
+		clientTS43 = req.ClientTS43
 	}
 	httpReq.Header.Set("Accept", accept)
 	httpReq.Header.Set("User-Agent", userAgent(req, clientTS43))
@@ -150,7 +161,7 @@ func addAuthIdentity(params url.Values, identity sim.Identity, req ServiceEntitl
 func addCommon(params url.Values, req ServiceEntitlementRequest) {
 	setFields(params,
 		formField{"terminal_id", req.TerminalID},
-		formField{"app", AppODSAPrimary},
+		formField{"app", req.App},
 		formField{"terminal_vendor", truncate(req.TerminalVendor, 4)},
 		formField{"terminal_model", truncate(req.TerminalModel, 10)},
 		formField{"terminal_sw_version", truncate(req.TerminalSoftware, 20)},
@@ -240,7 +251,7 @@ func operationTargets(ops []Operation) string {
 
 func userAgent(req ServiceEntitlementRequest, clientTS43 string) string {
 	if clientTS43 == "" {
-		clientTS43 = DefaultClientTS43
+		clientTS43 = DefaultODSAClientTS43
 	}
 	return fmt.Sprintf("PRD-TS43 term-%s/%s %s/%s OS-Android/%s",
 		truncate(req.TerminalVendor, 4),
