@@ -690,6 +690,12 @@ func TestParseWebsheetCallback(t *testing.T) {
 			wantIMEI:  "123456789012345",
 		},
 		{
+			name:      "prefixed adapter JSON callback",
+			line:      `TS43_ODSA_CALLBACK {"event":"finishFlow","nextAction":"AcquireConfiguration","source":"odsa"}`,
+			wantEvent: ts43.WebsheetEventFinishFlow,
+			wantNext:  ts43.OperationAcquireConf,
+		},
+		{
 			name:           "callback URL activation",
 			line:           "https://carrier.test/_callback/esim?activationCode=LPA%3A1%24smdp.example%24matching&iccid=8900000000000000000",
 			wantEvent:      ts43.WebsheetEventProfileReadyWithActivationCode,

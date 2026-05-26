@@ -58,6 +58,7 @@ func parseWebsheetCallback(line string) (*ts43.WebsheetResult, error) {
 	if line == "" {
 		return nil, errors.New("websheet callback is required")
 	}
+	line = trimCallbackLogPrefix(line, "TS43_ODSA_CALLBACK")
 	if strings.HasPrefix(line, "{") {
 		return parseWebsheetJSONCallback(line)
 	}
@@ -68,6 +69,14 @@ func parseWebsheetCallback(line string) (*ts43.WebsheetResult, error) {
 		return parseWebsheetCallbackURL(line)
 	}
 	return parseWebsheetCommand(line)
+}
+
+func trimCallbackLogPrefix(line, prefix string) string {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, prefix) {
+		return line
+	}
+	return strings.TrimSpace(strings.TrimPrefix(line, prefix))
 }
 
 type websheetCallbackPayload struct {
