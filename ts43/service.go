@@ -45,13 +45,16 @@ func (c *Client) discoverEntitlement(identity sim.Identity) error {
 	if c.cfg.Entitlement.Server != "" {
 		return nil
 	}
-	discovered, err := DiscoverEntitlement(identity, c.cfg.Entitlement.SourceSIMType)
+	requested := c.cfg.Entitlement
+	discovered, err := DiscoverEntitlementForChannel(identity, requested.SourceSIMType, requested.Channel)
 	if err != nil {
 		return fmt.Errorf("discover entitlement config: %w", err)
 	}
-	discovered.SourceSIMType = c.cfg.Entitlement.SourceSIMType
-	discovered.Timeout = c.cfg.Entitlement.Timeout
-	discovered.AutoRetry511Limit = c.cfg.Entitlement.AutoRetry511Limit
+	discovered.SourceSIMType = requested.SourceSIMType
+	if requested.Timeout != defaultEntitlementTimeout || discovered.Timeout == 0 {
+		discovered.Timeout = requested.Timeout
+	}
+	discovered.AutoRetry511Limit = requested.AutoRetry511Limit
 	c.cfg.Entitlement = discovered
 	return nil
 }

@@ -16,7 +16,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20404",
@@ -35,7 +36,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20404",
@@ -54,7 +56,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20408",
@@ -73,7 +76,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20412",
@@ -92,7 +96,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20601",
@@ -111,7 +116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20800",
@@ -130,7 +136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20801",
@@ -149,7 +156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20801",
@@ -168,7 +176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20802",
@@ -187,7 +196,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20809",
@@ -206,7 +216,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20809",
@@ -225,7 +236,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20810",
@@ -244,7 +256,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20811",
@@ -263,7 +276,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20813",
@@ -282,7 +296,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "20815",
@@ -301,7 +316,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "21403",
@@ -320,7 +336,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "21403",
@@ -339,7 +356,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "21405",
@@ -358,7 +376,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "21407",
@@ -377,7 +396,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "21438",
@@ -396,7 +416,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "21630",
@@ -415,7 +436,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "22801",
@@ -434,7 +456,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "22802",
@@ -453,7 +476,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "22812",
@@ -472,7 +496,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23001",
@@ -491,7 +516,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23003",
@@ -510,7 +536,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23099",
@@ -529,7 +556,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23102",
@@ -548,7 +576,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23201",
@@ -567,7 +596,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23202",
@@ -586,7 +616,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23203",
@@ -605,7 +636,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23203",
@@ -624,7 +656,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23203",
@@ -643,7 +676,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23205",
@@ -662,7 +696,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23207",
@@ -681,7 +716,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23209",
@@ -700,7 +736,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23210",
@@ -719,7 +756,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23211",
@@ -738,7 +776,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23212",
@@ -757,7 +796,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23410",
@@ -776,7 +816,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23430",
@@ -795,7 +836,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23430",
@@ -814,7 +856,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23430",
@@ -833,7 +876,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23430",
@@ -852,7 +896,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23433",
@@ -871,7 +916,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "23433",
@@ -890,7 +936,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "24008",
@@ -909,7 +956,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "24201",
@@ -928,7 +976,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "24202",
@@ -947,7 +996,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "24212",
@@ -966,7 +1016,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "24436",
@@ -985,7 +1036,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "24491",
@@ -1004,7 +1056,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1023,7 +1076,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1042,7 +1096,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1061,7 +1116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1080,7 +1136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1099,7 +1156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1118,7 +1176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1137,7 +1196,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1156,7 +1216,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26002",
@@ -1175,7 +1236,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1194,7 +1256,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1213,7 +1276,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1232,7 +1296,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1251,7 +1316,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1270,7 +1336,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1289,7 +1356,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1308,7 +1376,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1327,7 +1396,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26201",
@@ -1346,7 +1416,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26202",
@@ -1365,7 +1436,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26203",
@@ -1384,7 +1456,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1403,7 +1476,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1422,7 +1496,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1441,7 +1516,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1460,7 +1536,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1479,7 +1556,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1498,7 +1576,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1517,7 +1596,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1536,7 +1616,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26206",
@@ -1555,7 +1636,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26207",
@@ -1574,7 +1656,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26207",
@@ -1593,7 +1676,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26207",
@@ -1612,7 +1696,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26223",
@@ -1631,7 +1716,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26801",
@@ -1650,7 +1736,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26806",
@@ -1669,7 +1756,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26808",
@@ -1688,7 +1776,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26891",
@@ -1707,7 +1796,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "26892",
@@ -1726,7 +1816,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "27201",
@@ -1745,7 +1836,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "27202",
@@ -1764,7 +1856,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "27205",
@@ -1783,7 +1876,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "27211",
@@ -1802,7 +1896,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30222",
@@ -1821,7 +1916,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30222",
@@ -1840,7 +1936,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302220",
@@ -1859,7 +1956,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302220",
@@ -1878,7 +1976,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302220",
@@ -1897,7 +1996,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302220",
@@ -1916,7 +2016,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302221",
@@ -1935,7 +2036,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302221",
@@ -1954,7 +2056,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302221",
@@ -1973,7 +2076,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302370",
@@ -1992,7 +2096,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302490",
@@ -2011,7 +2116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302610",
@@ -2030,7 +2136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302610",
@@ -2049,7 +2156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302610",
@@ -2068,7 +2176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302610",
@@ -2087,7 +2196,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302630",
@@ -2106,7 +2216,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302630",
@@ -2125,7 +2236,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302630",
@@ -2144,7 +2256,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302630",
@@ -2163,7 +2276,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30264",
@@ -2182,7 +2296,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30264",
@@ -2201,7 +2316,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30264",
@@ -2220,7 +2336,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30264",
@@ -2239,7 +2356,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302640",
@@ -2258,7 +2376,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302640",
@@ -2277,7 +2396,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302640",
@@ -2296,7 +2416,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302640",
@@ -2315,7 +2436,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302654",
@@ -2334,7 +2456,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30268",
@@ -2353,7 +2476,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302680",
@@ -2372,7 +2496,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302681",
@@ -2391,7 +2516,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302690",
@@ -2410,7 +2536,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302690",
@@ -2429,7 +2556,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30272",
@@ -2448,7 +2576,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302720",
@@ -2467,7 +2596,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302780",
@@ -2486,7 +2616,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "302781",
@@ -2505,7 +2636,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30286",
@@ -2524,7 +2656,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "30286",
@@ -2543,7 +2676,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310012",
@@ -2562,7 +2696,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310026",
@@ -2581,7 +2716,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310030",
@@ -2600,7 +2736,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310070",
@@ -2619,7 +2756,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310150",
@@ -2638,7 +2776,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310160",
@@ -2657,7 +2796,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310170",
@@ -2676,7 +2816,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310200",
@@ -2695,7 +2836,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310210",
@@ -2714,7 +2856,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310220",
@@ -2733,7 +2876,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310230",
@@ -2752,7 +2896,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2771,7 +2916,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2790,7 +2936,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2809,7 +2956,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2828,7 +2976,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2847,7 +2996,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2866,7 +3016,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2885,7 +3036,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2904,7 +3056,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2923,7 +3076,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2942,7 +3096,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2961,7 +3116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2980,7 +3136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310240",
@@ -2999,7 +3156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310250",
@@ -3018,7 +3176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "31026",
@@ -3037,7 +3196,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3056,7 +3216,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3075,7 +3236,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3094,7 +3256,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3113,7 +3276,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3132,7 +3296,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3151,7 +3316,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3170,7 +3336,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3189,7 +3356,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3208,7 +3376,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3227,7 +3396,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3246,7 +3416,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310260",
@@ -3265,7 +3436,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310270",
@@ -3284,7 +3456,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310280",
@@ -3303,7 +3476,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310300",
@@ -3322,7 +3496,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310310",
@@ -3341,7 +3516,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310380",
@@ -3360,7 +3536,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310410",
@@ -3379,7 +3556,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310410",
@@ -3398,7 +3576,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310490",
@@ -3417,7 +3596,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310530",
@@ -3436,7 +3616,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310560",
@@ -3455,7 +3636,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310590",
@@ -3474,7 +3656,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310590",
@@ -3493,7 +3676,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310591",
@@ -3512,7 +3696,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310592",
@@ -3531,7 +3716,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310593",
@@ -3550,7 +3736,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310594",
@@ -3569,7 +3756,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310595",
@@ -3588,7 +3776,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310596",
@@ -3607,7 +3796,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310597",
@@ -3626,7 +3816,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310598",
@@ -3645,7 +3836,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310599",
@@ -3664,7 +3856,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310599",
@@ -3683,7 +3876,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310640",
@@ -3702,7 +3896,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310660",
@@ -3721,7 +3916,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310680",
@@ -3740,7 +3936,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310800",
@@ -3759,7 +3956,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310890",
@@ -3778,7 +3976,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "310950",
@@ -3797,7 +3996,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311180",
@@ -3816,7 +4016,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311180",
@@ -3835,7 +4036,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311220",
@@ -3854,7 +4056,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311221",
@@ -3873,7 +4076,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311222",
@@ -3892,7 +4096,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311223",
@@ -3911,7 +4116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311224",
@@ -3930,7 +4136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311225",
@@ -3949,7 +4156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311226",
@@ -3968,7 +4176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311227",
@@ -3987,7 +4196,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311228",
@@ -4006,7 +4216,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311229",
@@ -4025,7 +4236,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311270",
@@ -4044,7 +4256,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311280",
@@ -4063,7 +4276,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311281",
@@ -4082,7 +4296,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311282",
@@ -4101,7 +4316,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311283",
@@ -4120,7 +4336,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311284",
@@ -4139,7 +4356,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311285",
@@ -4158,7 +4376,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311286",
@@ -4177,7 +4396,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311287",
@@ -4196,7 +4416,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311288",
@@ -4215,7 +4436,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311289",
@@ -4234,7 +4456,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311480",
@@ -4253,7 +4476,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311480",
@@ -4272,7 +4496,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311480",
@@ -4291,7 +4516,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311480",
@@ -4310,7 +4536,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311481",
@@ -4329,7 +4556,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311481",
@@ -4348,7 +4576,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311482",
@@ -4367,7 +4596,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311482",
@@ -4386,7 +4616,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311483",
@@ -4405,7 +4636,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311483",
@@ -4424,7 +4656,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311484",
@@ -4443,7 +4676,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311484",
@@ -4462,7 +4696,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311485",
@@ -4481,7 +4716,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311485",
@@ -4500,7 +4736,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311486",
@@ -4519,7 +4756,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311486",
@@ -4538,7 +4776,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311487",
@@ -4557,7 +4796,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311487",
@@ -4576,7 +4816,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311488",
@@ -4595,7 +4836,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311488",
@@ -4614,7 +4856,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311489",
@@ -4633,7 +4876,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311489",
@@ -4652,7 +4896,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311490",
@@ -4671,7 +4916,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311580",
@@ -4690,7 +4936,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311581",
@@ -4709,7 +4956,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311582",
@@ -4728,7 +4976,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311583",
@@ -4747,7 +4996,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311584",
@@ -4766,7 +5016,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311585",
@@ -4785,7 +5036,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311586",
@@ -4804,7 +5056,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311587",
@@ -4823,7 +5076,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311588",
@@ -4842,7 +5096,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311589",
@@ -4861,7 +5116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311600",
@@ -4880,7 +5136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "311882",
@@ -4899,7 +5156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "312250",
@@ -4918,7 +5176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313100",
@@ -4937,7 +5196,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313110",
@@ -4956,7 +5216,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313120",
@@ -4975,7 +5236,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313130",
@@ -4994,7 +5256,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313140",
@@ -5013,7 +5276,8 @@
     "useSmdsDelayedDownload": true,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313340",
@@ -5032,7 +5296,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "313450",
@@ -5051,7 +5316,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "334040",
@@ -5070,7 +5336,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "334050",
@@ -5089,7 +5356,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "334070",
@@ -5108,7 +5376,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "334080",
@@ -5127,7 +5396,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405840",
@@ -5146,7 +5416,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405854",
@@ -5165,7 +5436,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405855",
@@ -5184,7 +5456,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405856",
@@ -5203,7 +5476,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405857",
@@ -5222,7 +5496,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405858",
@@ -5241,7 +5516,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405859",
@@ -5260,7 +5536,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405860",
@@ -5279,7 +5556,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405861",
@@ -5298,7 +5576,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405862",
@@ -5317,7 +5596,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405863",
@@ -5336,7 +5616,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405864",
@@ -5355,7 +5636,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405865",
@@ -5374,7 +5656,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405866",
@@ -5393,7 +5676,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405867",
@@ -5412,7 +5696,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405868",
@@ -5431,7 +5716,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405869",
@@ -5450,7 +5736,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405870",
@@ -5469,7 +5756,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405871",
@@ -5488,7 +5776,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405872",
@@ -5507,7 +5796,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405873",
@@ -5526,7 +5816,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "405874",
@@ -5545,7 +5836,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44010",
@@ -5564,7 +5856,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44010",
@@ -5583,7 +5876,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44020",
@@ -5602,7 +5896,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44020",
@@ -5621,7 +5916,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44020",
@@ -5640,7 +5936,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44050",
@@ -5659,7 +5956,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44050",
@@ -5678,7 +5976,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44051",
@@ -5697,7 +5996,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44051",
@@ -5716,7 +6016,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44052",
@@ -5735,7 +6036,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44054",
@@ -5754,7 +6056,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "44054",
@@ -5773,7 +6076,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "53024",
@@ -5792,7 +6096,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72402",
@@ -5811,7 +6116,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72403",
@@ -5830,7 +6136,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72404",
@@ -5849,7 +6156,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": false,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72406",
@@ -5868,7 +6176,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": true,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72410",
@@ -5887,7 +6196,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": true,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72411",
@@ -5906,7 +6216,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": true,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72423",
@@ -5925,7 +6236,8 @@
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
     "setTargetTerminalFields": true,
-    "restrictOldTerminalFields": false
+    "restrictOldTerminalFields": false,
+    "channel": "google"
   },
   {
     "mccmnc": "72454",
@@ -5943,6 +6255,432 @@
     "supportEsimToEsimTransfer": true,
     "useSmdsDelayedDownload": false,
     "useTempTokenConversion": true,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false,
+    "channel": "google"
+  },
+  {
+    "mccmnc": "45005",
+    "gid1": null,
+    "carrierName": "SK Telecom",
+    "channel": "samsung",
+    "entitlementServer": "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "provisioningVersion": "5.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": true,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "45002",
+    "gid1": null,
+    "carrierName": "KT",
+    "channel": "samsung",
+    "entitlementServer": "https://common.api.kt.com/device/rest/getEapAKAToODSA",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "provisioningVersion": "5.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": true,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "45006",
+    "gid1": null,
+    "carrierName": "LG U+",
+    "channel": "samsung",
+    "entitlementServer": "https://ts43-es.lguplus.com",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "provisioningVersion": "5.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": true,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "312012",
+    "gid1": null,
+    "carrierName": "Verizon Wireless",
+    "channel": "samsung",
+    "entitlementServer": "https://spc-ecs.myvzw.com",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": false,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "26201",
+    "gid1": null,
+    "carrierName": "Telekom Deutschland",
+    "channel": "samsung",
+    "entitlementServer": "https://entitlement.telekom.de:4443",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "9.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 2,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "24001",
+    "gid1": null,
+    "carrierName": "Telia",
+    "channel": "samsung",
+    "entitlementServer": "https://es.mnc001.mcc240.pub.3gppnetwork.org:10024/generic_devices/common",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "provisioningVersion": "5.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "52003",
+    "gid1": null,
+    "carrierName": "AIS",
+    "channel": "samsung",
+    "entitlementServer": "https://ss-es.ais.co.th",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "42602",
+    "gid1": null,
+    "carrierName": "Zain",
+    "channel": "samsung",
+    "entitlementServer": "https://es.bh.zain.com:10024",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "provisioningVersion": "5.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "302220",
+    "gid1": null,
+    "carrierName": "Telus",
+    "channel": "samsung",
+    "entitlementServer": "https://ent.telus.com/androidgw/",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "9.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 2,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "23440",
+    "gid1": null,
+    "carrierName": "spusu",
+    "channel": "samsung",
+    "entitlementServer": "https://sip.massresponse.com/livemvnowebservice/rest/samsunges/10248",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "24007",
+    "gid1": "0048",
+    "carrierName": "spusu",
+    "channel": "samsung",
+    "entitlementServer": "https://sip.massresponse.com/livemvnowebservice/rest/samsunges/10248",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "44010",
+    "gid1": null,
+    "carrierName": "NTT DOCOMO",
+    "channel": "samsung",
+    "entitlementServer": "https://aes.mnc010.mcc440.pub.3gppnetwork.org/",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "timeoutSeconds": 30,
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "44050",
+    "gid1": null,
+    "carrierName": "KDDI",
+    "channel": "samsung",
+    "entitlementServer": "https://ent-aap-device.kddi.com/DEGDROIDInterfaceTS43",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "10.0",
+    "requestVersion": "1",
+    "transferTypePsim": 9,
+    "transferTypeEsim": 2,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": true,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "23217",
+    "gid1": null,
+    "carrierName": "spusu",
+    "channel": "samsung",
+    "entitlementServer": "https://sip.massresponse.com/livemvnowebservice/rest/samsunges/10241",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "23228",
+    "gid1": null,
+    "carrierName": "spusu",
+    "channel": "samsung",
+    "entitlementServer": "https://sip.massresponse.com/livemvnowebservice/rest/samsunges/10241",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "24007",
+    "gid1": "0041",
+    "carrierName": "spusu",
+    "channel": "samsung",
+    "entitlementServer": "https://sip.massresponse.com/livemvnowebservice/rest/samsunges/10241",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "41904",
+    "gid1": null,
+    "carrierName": "STC Kuwait",
+    "channel": "samsung",
+    "entitlementServer": "https://esmart.stc.com.kw/ts43",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "9.0",
+    "requestVersion": "1",
+    "timeoutSeconds": 30,
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "41902",
+    "gid1": null,
+    "carrierName": "Zain",
+    "channel": "samsung",
+    "entitlementServer": "https://es.kw.zain.com:10024",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
+    "setTargetTerminalFields": false,
+    "restrictOldTerminalFields": false
+  },
+  {
+    "mccmnc": "24601",
+    "gid1": null,
+    "carrierName": "Telia LT",
+    "channel": "samsung",
+    "entitlementServer": "https://es.mnc001.mcc246.pub.3gppnetwork.org:10024/generic_devices/common",
+    "app": "ap2009",
+    "appName": "ap2009",
+    "entitlementVersion": "8.0",
+    "provisioningVersion": "5.0",
+    "requestVersion": "1",
+    "transferTypePsim": 7,
+    "transferTypeEsim": 6,
+    "acquireConfigurationPollingIntervalMinutes": 1,
+    "acquireConfigurationPollingTimeoutMinutes": 10,
+    "useHttpPost": false,
+    "supportPsimToEsimTransfer": true,
+    "supportEsimToEsimTransfer": true,
+    "useSmdsDelayedDownload": false,
+    "useTempTokenConversion": false,
     "setTargetTerminalFields": false,
     "restrictOldTerminalFields": false
   }

@@ -1887,6 +1887,8 @@ func TestManageSubscriptionOldTerminalIDGating(t *testing.T) {
 		{name: "restricted type two omits old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken, RestrictOldTerminalFields: true}},
 		{name: "restricted type three omits old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeReusableActivationCode, RestrictOldTerminalFields: true}},
 		{name: "restricted type seven sends old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeOldTerminalIDs, RestrictOldTerminalFields: true}, wantOld: true},
+		{name: "Samsung ignores Google restricted old ID gate", entitlement: Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung, TransferType: TransferTypeTemporaryToken, RestrictOldTerminalFields: true}, wantOld: true},
+		{name: "Samsung sends old IDs without Google proto", entitlement: Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung, TransferType: TransferTypeTemporaryToken, RestrictOldTerminalFields: true}, sourceProto: 1, wantOld: true},
 		{name: "explicit old terminal protocol sends proto", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeReusableActivationCode}, sourceProto: 1, wantOld: true, wantProto: "1"},
 	}
 	for _, tt := range tests {
@@ -1999,6 +2001,386 @@ func TestAcquireConfigurationSourceCredentialShape(t *testing.T) {
 	}
 }
 
+func TestSamsungTokenOperationRequestFields(t *testing.T) {
+	identity := sim.Identity{ICCID: "8910000000000000000", IMSI: "450051234567890", MCC: "450", MNC: "05"}
+	source := Device{IMEI: "111111111111111", ICCID: "8910000000000000000"}
+	target := Device{IMEI: "222222222222222", ICCID: "8920000000000000000", EID: "89049032000001000000000000000000", EntitlementProtocol: 1}
+
+	tests := []struct {
+		name      string
+		operation Operation
+		run       func(context.Context, *Client) error
+	}{
+		{
+			name:      "CheckEligibility",
+			operation: OperationCheck,
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.CheckEligibility(ctx, identity, source, AuthToken{Value: "auth"}, target)
+				return err
+			},
+		},
+		{
+			name:      "AcquireTemporaryToken",
+			operation: OperationTempToken,
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.AcquireTemporaryToken(ctx, identity, source, target, AuthToken{Value: "auth"})
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := New(&Config{
+				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+					query := req.URL.Query()
+					if got := query.Get("operation"); got != tt.operation.String() {
+						t.Fatalf("operation = %q, want %s", got, tt.operation)
+					}
+					if got := query.Get("token"); got != "auth" {
+						t.Fatalf("token = %q, want auth", got)
+					}
+					if got := query.Get("terminal_id"); got != source.IMEI {
+						t.Fatalf("terminal_id = %q, want source IMEI", got)
+					}
+					if got := query.Get("terminal_iccid"); got != source.ICCID {
+						t.Fatalf("terminal_iccid = %q, want source ICCID", got)
+					}
+					if got := query.Get("target_terminal_iccid"); got != "" {
+						t.Fatalf("target_terminal_iccid = %q, want empty", got)
+					}
+					if got := query.Get("target_terminal_eid"); got != "" {
+						t.Fatalf("target_terminal_eid = %q, want empty", got)
+					}
+					if got := query.Get("target_terminal_entitlement_protocol"); got != "" {
+						t.Fatalf("target_terminal_entitlement_protocol = %q, want empty", got)
+					}
+					switch tt.operation {
+					case OperationCheck:
+						want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)
+						if err != nil {
+							t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
+						}
+						if got := query.Get("IMSI"); got != want {
+							t.Fatalf("IMSI = %q, want %q", got, want)
+						}
+						if got := query.Get("target_terminal_id"); got != target.IMEI {
+							t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+						}
+						return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
+					case OperationTempToken:
+						if got := query.Get("IMSI"); got != "" {
+							t.Fatalf("IMSI = %q, want empty", got)
+						}
+						if got := query.Get("target_terminal_id"); got != "" {
+							t.Fatalf("target_terminal_id = %q, want empty", got)
+						}
+						if got := query.Get("operation_targets"); got != "ManageSubscription,AcquireConfiguration" {
+							t.Fatalf("operation_targets = %q, want ManageSubscription,AcquireConfiguration", got)
+						}
+						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
+					default:
+						t.Fatalf("unexpected operation %s", tt.operation)
+						return response(500, ""), nil
+					}
+				}),
+				Entitlement: Entitlement{
+					Server:       "https://example.test/ts43",
+					Channel:      EntitlementChannelSamsung,
+					TransferType: TransferTypeTemporaryToken,
+					PollTimeout:  time.Second,
+				},
+				Source: Endpoint{Channel: fakeChannel{}, Device: source},
+				Target: Endpoint{Device: target},
+				Logger: slog.Default(),
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if err := tt.run(context.Background(), client); err != nil {
+				t.Fatalf("%s error = %v", tt.operation, err)
+			}
+		})
+	}
+}
+
+func TestSamsungSourceCredentialRequestFields(t *testing.T) {
+	identity := sim.Identity{ICCID: "8910000000000000000", IMSI: "450051234567890", MCC: "450", MNC: "05"}
+	source := Device{IMEI: "111111111111111", ICCID: "8910000000000000000", EID: "89049032000000000000000000000001", EntitlementProtocol: 1}
+	target := Device{IMEI: "222222222222222", ICCID: "8920000000000000000", EID: "89049032000001000000000000000000"}
+
+	tests := []struct {
+		name      string
+		operation Operation
+		run       func(context.Context, *Client) error
+	}{
+		{
+			name:      "ManageSubscription",
+			operation: OperationManage,
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.manageSubscription(ctx, identity, source, target, authCredential(AuthToken{Value: "tmp"}), UserInputResult{Button: MessageButtonUnknown})
+				return err
+			},
+		},
+		{
+			name:      "AcquireConfiguration",
+			operation: OperationAcquireConf,
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.acquireConfiguration(ctx, identity, source, target, authCredential(AuthToken{Value: "tmp"}))
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := New(&Config{
+				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+					query := req.URL.Query()
+					if got := query.Get("operation"); got != tt.operation.String() {
+						t.Fatalf("operation = %q, want %s", got, tt.operation)
+					}
+					if got := query.Get("terminal_id"); got != source.IMEI {
+						t.Fatalf("terminal_id = %q, want source IMEI", got)
+					}
+					if got := query.Get("terminal_iccid"); got != source.ICCID {
+						t.Fatalf("terminal_iccid = %q, want source ICCID", got)
+					}
+					if got := query.Get("target_terminal_id"); got != target.IMEI {
+						t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+					}
+					if got := query.Get("target_terminal_iccid"); got != target.ICCID {
+						t.Fatalf("target_terminal_iccid = %q, want target ICCID", got)
+					}
+					wantTerminalEID := ""
+					wantTargetEID := target.EID
+					if tt.operation == OperationAcquireConf {
+						wantTerminalEID = source.EID
+						wantTargetEID = ""
+					}
+					if got := query.Get("terminal_eid"); got != wantTerminalEID {
+						t.Fatalf("terminal_eid = %q, want %q", got, wantTerminalEID)
+					}
+					if got := query.Get("target_terminal_eid"); got != wantTargetEID {
+						t.Fatalf("target_terminal_eid = %q, want %q", got, wantTargetEID)
+					}
+					if got := query.Get("old_terminal_entitlement_protocol"); got != "" {
+						t.Fatalf("old_terminal_entitlement_protocol = %q, want empty", got)
+					}
+					want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)
+					if err != nil {
+						t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
+					}
+					if got := query.Get("IMSI"); got != want {
+						t.Fatalf("IMSI = %q, want %q", got, want)
+					}
+					if got := query.Get("terminal_imsieapbase64"); got != "" {
+						t.Fatalf("terminal_imsieapbase64 = %q, want empty", got)
+					}
+					if tt.operation == OperationManage {
+						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
+					}
+					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
+				}),
+				Entitlement: Entitlement{
+					Server:       "https://example.test/ts43",
+					Channel:      EntitlementChannelSamsung,
+					TransferType: TransferTypeTS43V8,
+					PollTimeout:  time.Second,
+				},
+				Source: Endpoint{Channel: fakeChannel{}, Device: source},
+				Target: Endpoint{Device: target},
+				Logger: slog.Default(),
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if err := tt.run(context.Background(), client); err != nil {
+				t.Fatalf("%s error = %v", tt.operation, err)
+			}
+		})
+	}
+}
+
+func TestSamsungAcquireConfigurationEIDPlacement(t *testing.T) {
+	tests := []struct {
+		name          string
+		transferType  TransferType
+		wantTerminal  string
+		wantTargetEID string
+	}{
+		{
+			name:          "digitalized SIM without temporary token uses target_terminal_eid",
+			transferType:  TransferTypeOldTerminalIDs,
+			wantTargetEID: "89049032000001000000000000000000",
+		},
+		{
+			name:         "digitalized SIM with temporary token uses terminal_eid",
+			transferType: TransferTypeTemporaryTokenOldTerminalIDs,
+			wantTerminal: "89049032000001000000000000000000",
+		},
+		{
+			name:         "temporary token transfer uses terminal_eid",
+			transferType: TransferTypeTemporaryToken,
+			wantTerminal: "89049032000001000000000000000000",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := New(&Config{
+				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+					query := req.URL.Query()
+					if got := query.Get("operation"); got != OperationAcquireConf.String() {
+						t.Fatalf("operation = %q, want %s", got, OperationAcquireConf)
+					}
+					if got := query.Get("terminal_eid"); got != tt.wantTerminal {
+						t.Fatalf("terminal_eid = %q, want %q", got, tt.wantTerminal)
+					}
+					if got := query.Get("target_terminal_eid"); got != tt.wantTargetEID {
+						t.Fatalf("target_terminal_eid = %q, want %q", got, tt.wantTargetEID)
+					}
+					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
+				}),
+				Entitlement: Entitlement{
+					Server:       "https://example.test/ts43",
+					Channel:      EntitlementChannelSamsung,
+					TransferType: tt.transferType,
+					PollTimeout:  time.Second,
+				},
+				Source: Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
+				Target: Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
+				Logger: slog.Default(),
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			credential := authCredential(AuthToken{Value: "tmp"})
+			if transferTypeUsesTemporaryToken(tt.transferType) {
+				credential = temporaryCredential(TemporaryToken{Value: "tmp"})
+			}
+			_, err = client.acquireConfiguration(
+				context.Background(),
+				sim.Identity{ICCID: "8910000000000000000", IMSI: "450051234567890", MCC: "450", MNC: "05"},
+				Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
+				Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+				credential,
+			)
+			if err != nil {
+				t.Fatalf("AcquireConfiguration() error = %v", err)
+			}
+		})
+	}
+}
+
+func TestSamsungTemporaryTokenTransferSendsBasicTargetFields(t *testing.T) {
+	identity := sim.Identity{ICCID: "8910000000000000000", IMSI: "262011234567890", MCC: "262", MNC: "01"}
+	source := Device{IMEI: "111111111111111", ICCID: "8910000000000000000"}
+	target := Device{IMEI: "222222222222222", ICCID: "8920000000000000000", EID: "89049032000001000000000000000000"}
+
+	tests := []struct {
+		name      string
+		operation Operation
+		run       func(context.Context, *Client) error
+	}{
+		{
+			name:      "ManageSubscription",
+			operation: OperationManage,
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.manageSubscription(ctx, identity, source, target, temporaryCredential(TemporaryToken{Value: "tmp"}), UserInputResult{Button: MessageButtonUnknown})
+				return err
+			},
+		},
+		{
+			name:      "AcquireConfiguration",
+			operation: OperationAcquireConf,
+			run: func(ctx context.Context, client *Client) error {
+				_, err := client.acquireConfiguration(ctx, identity, source, target, temporaryCredential(TemporaryToken{Value: "tmp"}))
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := New(&Config{
+				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+					query := req.URL.Query()
+					if got := query.Get("operation"); got != tt.operation.String() {
+						t.Fatalf("operation = %q, want %s", got, tt.operation)
+					}
+					if got := query.Get("target_terminal_id"); got != target.IMEI {
+						t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+					}
+					if got := query.Get("target_terminal_iccid"); got != target.ICCID {
+						t.Fatalf("target_terminal_iccid = %q, want target ICCID", got)
+					}
+					if tt.operation == OperationManage {
+						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
+					}
+					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
+				}),
+				Entitlement: Entitlement{
+					Server:       "https://example.test/ts43",
+					Channel:      EntitlementChannelSamsung,
+					TransferType: TransferTypeTemporaryToken,
+					PollTimeout:  time.Second,
+				},
+				Source: Endpoint{Channel: fakeChannel{}, Device: source},
+				Target: Endpoint{Device: target},
+				Logger: slog.Default(),
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			if err := tt.run(context.Background(), client); err != nil {
+				t.Fatalf("%s error = %v", tt.operation, err)
+			}
+		})
+	}
+}
+
+func TestSamsungDigitalizedTempToken4FFManageClearsTerminalICCIDAndIMSI(t *testing.T) {
+	identity := sim.Identity{ICCID: "8910000000000000000", IMSI: "440501234567890", MCC: "440", MNC: "50"}
+	source := Device{IMEI: "111111111111111", ICCID: "8910000000000000000"}
+	target := Device{IMEI: "222222222222222", ICCID: "8920000000000000000", EID: "89049032000001000000000000000000"}
+
+	client, err := New(&Config{
+		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			query := req.URL.Query()
+			if got := query.Get("operation"); got != OperationManage.String() {
+				t.Fatalf("operation = %q, want %s", got, OperationManage)
+			}
+			if got := query.Get("operation_type"); got != OperationTypeTransferSubscription.String() {
+				t.Fatalf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
+			}
+			if got := query.Get("terminal_iccid"); got != "" {
+				t.Fatalf("terminal_iccid = %q, want empty", got)
+			}
+			if got := query.Get("IMSI"); got != "" {
+				t.Fatalf("IMSI = %q, want empty", got)
+			}
+			if got := query.Get("target_terminal_id"); got != target.IMEI {
+				t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+			}
+			return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
+		}),
+		Entitlement: Entitlement{
+			Server:                 "https://example.test/ts43",
+			Channel:                EntitlementChannelSamsung,
+			TransferType:           TransferTypeTemporaryTokenOldTerminalIDs,
+			UseTempTokenConversion: true,
+			PollTimeout:            time.Second,
+		},
+		Source: Endpoint{Channel: fakeChannel{}, Device: source},
+		Target: Endpoint{Device: target},
+		Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	_, err = client.manageSubscription(context.Background(), identity, source, target, temporaryCredential(TemporaryToken{Value: "tmp"}), UserInputResult{Button: MessageButtonUnknown})
+	if err != nil {
+		t.Fatalf("ManageSubscription() error = %v", err)
+	}
+}
+
 func TestTransferRequestAuthMode(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -2082,6 +2464,46 @@ func TestSelectedTransferType(t *testing.T) {
 	}
 }
 
+func TestSamsungManageSubscriptionOperationType(t *testing.T) {
+	tests := []struct {
+		name         string
+		transferType TransferType
+		want         OperationType
+	}{
+		{
+			name: "Samsung D2D transfer uses Samsung operation type",
+			want: OperationTypeSamsungD2DTransfer,
+		},
+		{
+			name:         "Samsung eSIM D2D type six follows Samsung TS.43 transfer type",
+			transferType: TransferTypeTS43V8,
+			want:         OperationTypeTransferSubscription,
+		},
+		{
+			name:         "Samsung pSIM digitalized type seven uses transfer subscription",
+			transferType: TransferTypeOldTerminalIDs,
+			want:         OperationTypeTransferSubscription,
+		},
+		{
+			name:         "Samsung pSIM temporary-token type nine uses transfer subscription",
+			transferType: TransferTypeTemporaryTokenOldTerminalIDs,
+			want:         OperationTypeTransferSubscription,
+		},
+		{
+			name:         "Samsung temporary-token D2D type two uses Samsung operation type",
+			transferType: TransferTypeTemporaryToken,
+			want:         OperationTypeSamsungD2DTransfer,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := samsungManageSubscriptionOperationType(tt.transferType); got != tt.want {
+				t.Fatalf("samsungManageSubscriptionOperationType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsSourceCredentialTransferType(t *testing.T) {
 	tests := []struct {
 		name string
@@ -2103,7 +2525,7 @@ func TestIsSourceCredentialTransferType(t *testing.T) {
 	}
 }
 
-func TestIncludeTargetTerminalIdentity(t *testing.T) {
+func TestGoogleIncludeTargetTerminalIdentity(t *testing.T) {
 	tests := []struct {
 		name        string
 		entitlement Entitlement
@@ -2121,8 +2543,8 @@ func TestIncludeTargetTerminalIdentity(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := includeTargetTerminalIdentity(tt.entitlement); got != tt.want {
-				t.Fatalf("includeTargetTerminalIdentity() = %v, want %v", got, tt.want)
+			if got := googleIncludeTargetTerminalIdentity(tt.entitlement); got != tt.want {
+				t.Fatalf("googleIncludeTargetTerminalIdentity() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -2158,7 +2580,7 @@ func TestManageSubscriptionTargetIdentityGating(t *testing.T) {
 						t.Fatalf("target_terminal_model = %q, want %q", got, wantModel)
 					}
 					wantOldICCID := ""
-					if includeOldTerminalIDs(tt.entitlement) {
+					if googleIncludeOldTerminalIDs(tt.entitlement) {
 						wantOldICCID = "8910000000000000000"
 					}
 					if got := query.Get("old_terminal_iccid"); got != wantOldICCID {

@@ -3,6 +3,7 @@ package ts43
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 type ServiceEntitlementRequest struct {
 	EntitlementVersion  string
+	RequestVersion      string
 	AuthenticationToken string
 	TemporaryToken      string
 	App                 string
@@ -25,6 +27,7 @@ type ServiceEntitlementRequest struct {
 	TerminalSoftware    string
 	AppName             string
 	AppVersion          string
+	ProvisioningVersion string
 	Accept              string
 	GID1                string
 	ClientTS43          string
@@ -64,6 +67,7 @@ type ODSAOperation struct {
 }
 
 func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity sim.Identity, req ServiceEntitlementRequest, op ODSAOperation, clientTS43, realm string) (*http.Request, error) {
+	req = shapeSamsungRequest(entitlement, req)
 	if req.App == "" {
 		return nil, errAppRequired
 	}
@@ -75,14 +79,14 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity sim
 	if op.Operation != "" {
 		addOperation(params, op)
 	}
+	if err := addSamsungOperationFields(params, entitlement, identity, op, realm); err != nil {
+		return nil, err
+	}
 	server, err := url.Parse(entitlement.Server)
 	if err != nil {
 		return nil, fmt.Errorf("parse entitlement server: %w", err)
 	}
-	accept := req.Accept
-	if accept == "" {
-		accept = DefaultAccept
-	}
+	accept := requestAccept(entitlement, req)
 	var httpReq *http.Request
 	if entitlement.UsePost {
 		data, err := json.Marshal(jsonBodyFields(params))
@@ -118,6 +122,60 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity sim
 		}
 	}
 	return httpReq, nil
+}
+
+func requestAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
+	if req.Accept != "" {
+		return req.Accept
+	}
+	if entitlement.Channel != EntitlementChannelSamsung {
+		return DefaultAccept
+	}
+	if req.AuthenticationToken == "" && req.TemporaryToken == "" && !req.OmitEAPID {
+		return EAPRelayContentType
+	}
+	return SamsungAccept
+}
+
+func shapeSamsungRequest(entitlement Entitlement, req ServiceEntitlementRequest) ServiceEntitlementRequest {
+	if entitlement.Channel != EntitlementChannelSamsung {
+		return req
+	}
+	req.App = AppODSAPrimary
+	return req
+}
+
+func addSamsungOperationFields(params url.Values, entitlement Entitlement, identity sim.Identity, op ODSAOperation, realm string) error {
+	if entitlement.Channel != EntitlementChannelSamsung || op.Operation == "" {
+		return nil
+	}
+	if op.Operation == OperationManage && samsungDigitalizedTempToken4FF(entitlement) {
+		params.Del("IMSI")
+		return nil
+	}
+	if !samsungOperationUsesEAPIdentity(op.Operation) {
+		params.Del("IMSI")
+		return nil
+	}
+	params.Del("IMSI")
+	eapIDBase64, err := terminalIMSIEAPBase64(identity, realm)
+	if err != nil {
+		return fmt.Errorf("build Samsung IMSI EAP identity: %w", err)
+	}
+	params.Set("IMSI", eapIDBase64)
+	return nil
+}
+
+func samsungOperationUsesEAPIdentity(operation Operation) bool {
+	return operation == OperationCheck || operation == OperationManage || operation == OperationAcquireConf
+}
+
+func terminalIMSIEAPBase64(identity sim.Identity, realm string) (string, error) {
+	eapID, err := sim.IMSIEAPIdentity(identity.MCCMNC(), identity.IMSI, realm)
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString([]byte(eapID)), nil
 }
 
 func jsonBodyFields(params url.Values) map[string]string {
@@ -159,19 +217,24 @@ func addAuthIdentity(params url.Values, identity sim.Identity, req ServiceEntitl
 }
 
 func addCommon(params url.Values, req ServiceEntitlementRequest) {
+	version := req.RequestVersion
+	if version == "" {
+		version = "0"
+	}
 	setFields(params,
 		formField{"terminal_id", req.TerminalID},
 		formField{"app", req.App},
 		formField{"terminal_vendor", truncate(req.TerminalVendor, 4)},
 		formField{"terminal_model", truncate(req.TerminalModel, 10)},
 		formField{"terminal_sw_version", truncate(req.TerminalSoftware, 20)},
-		formField{"vers", "0"},
+		formField{"vers", version},
 		formField{"entitlement_version", req.EntitlementVersion},
 	)
 	setOptional(params,
 		formField{"GID1", req.GID1},
 		formField{"app_version", req.AppVersion},
 		formField{"app_name", req.AppName},
+		formField{"provisioning_version", req.ProvisioningVersion},
 	)
 }
 

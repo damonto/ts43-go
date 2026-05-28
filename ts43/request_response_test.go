@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/damonto/ts43-go/sim"
@@ -122,6 +123,196 @@ func TestBuildHTTPSendsConfiguredApp(t *testing.T) {
 				t.Fatalf("app = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestBuildHTTPSendsSamsungInitialAuthFields(t *testing.T) {
+	req, err := buildHTTPRequest(
+		context.Background(),
+		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
+		sim.Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"},
+		ServiceEntitlementRequest{
+			RequestVersion:      "1",
+			App:                 AppODSAPrimary,
+			AppName:             AppODSAPrimary,
+			AppVersion:          "3.0.00",
+			ProvisioningVersion: "5.0",
+			EntitlementVersion:  "8.0",
+			TerminalID:          "123456789012345",
+			TerminalVendor:      "samsung",
+			TerminalModel:       "SM-S938B",
+			TerminalSoftware:    "16",
+		},
+		ODSAOperation{},
+		SamsungODSAClientTS43,
+		DefaultEAPAkaRealm,
+	)
+	if err != nil {
+		t.Fatalf("buildHTTPRequest() error = %v", err)
+	}
+	query := req.URL.Query()
+	if got := query.Get("app"); got != AppODSAPrimary {
+		t.Fatalf("app = %q, want %q", got, AppODSAPrimary)
+	}
+	if got := query.Get("vers"); got != "1" {
+		t.Fatalf("vers = %q, want 1", got)
+	}
+	if got := query.Get("app_name"); got != AppODSAPrimary {
+		t.Fatalf("app_name = %q, want %q", got, AppODSAPrimary)
+	}
+	if got := query.Get("provisioning_version"); got != "5.0" {
+		t.Fatalf("provisioning_version = %q, want 5.0", got)
+	}
+	if got := req.Header.Get("Accept"); got != EAPRelayContentType {
+		t.Fatalf("Accept = %q, want %q", got, EAPRelayContentType)
+	}
+	if got := req.Header.Get("User-Agent"); !strings.Contains(got, SamsungODSAClientTS43) {
+		t.Fatalf("User-Agent = %q, want Samsung TS.43 client marker", got)
+	}
+}
+
+func TestBuildHTTPSendsSamsungOperationAppFields(t *testing.T) {
+	req, err := buildHTTPRequest(
+		context.Background(),
+		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
+		sim.Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"},
+		ServiceEntitlementRequest{
+			AuthenticationToken: "auth",
+			RequestVersion:      "1",
+			App:                 AppODSAPrimary,
+			AppName:             AppODSAPrimary,
+			EntitlementVersion:  "8.0",
+			TerminalID:          "123456789012345",
+			TerminalVendor:      "samsung",
+			TerminalModel:       "SM-S938B",
+			TerminalSoftware:    "16",
+		},
+		ODSAOperation{Operation: OperationManage},
+		SamsungODSAClientTS43,
+		DefaultEAPAkaRealm,
+	)
+	if err != nil {
+		t.Fatalf("buildHTTPRequest() error = %v", err)
+	}
+	query := req.URL.Query()
+	if got := query.Get("app"); got != AppODSAPrimary {
+		t.Fatalf("app = %q, want %q", got, AppODSAPrimary)
+	}
+}
+
+func TestBuildHTTPUsesSamsungAcceptAfterAuthentication(t *testing.T) {
+	identity := sim.Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"}
+	req, err := buildHTTPRequest(
+		context.Background(),
+		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
+		identity,
+		ServiceEntitlementRequest{
+			AuthenticationToken: "auth",
+			App:                 AppODSAPrimary,
+			EntitlementVersion:  "8.0",
+			TerminalID:          "123456789012345",
+			TerminalVendor:      "samsung",
+			TerminalModel:       "SM-S938B",
+			TerminalSoftware:    "16",
+		},
+		ODSAOperation{Operation: OperationManage},
+		SamsungODSAClientTS43,
+		DefaultEAPAkaRealm,
+	)
+	if err != nil {
+		t.Fatalf("buildHTTPRequest() error = %v", err)
+	}
+	if got := req.Header.Get("Accept"); got != SamsungAccept {
+		t.Fatalf("Accept = %q, want %q", got, SamsungAccept)
+	}
+	query := req.URL.Query()
+	want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)
+	if err != nil {
+		t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
+	}
+	if got := query.Get("IMSI"); got != want {
+		t.Fatalf("IMSI = %q, want %q", got, want)
+	}
+	if got := query.Get("terminal_imsieapbase64"); got != "" {
+		t.Fatalf("terminal_imsieapbase64 = %q, want empty", got)
+	}
+}
+
+func TestBuildHTTPSamsungEAPIdentityOperationScope(t *testing.T) {
+	tests := []struct {
+		name      string
+		operation Operation
+		wantIMSI  bool
+	}{
+		{name: "CheckEligibility", operation: OperationCheck, wantIMSI: true},
+		{name: "AcquireTemporaryToken", operation: OperationTempToken},
+		{name: "ManageSubscription", operation: OperationManage, wantIMSI: true},
+		{name: "AcquireConfiguration", operation: OperationAcquireConf, wantIMSI: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req, err := buildHTTPRequest(
+				context.Background(),
+				Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
+				sim.Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"},
+				ServiceEntitlementRequest{
+					AuthenticationToken: "auth",
+					App:                 AppODSAPrimary,
+					EntitlementVersion:  "8.0",
+					TerminalID:          "123456789012345",
+					TerminalVendor:      "samsung",
+					TerminalModel:       "SM-S938B",
+					TerminalSoftware:    "16",
+				},
+				ODSAOperation{Operation: tt.operation},
+				SamsungODSAClientTS43,
+				DefaultEAPAkaRealm,
+			)
+			if err != nil {
+				t.Fatalf("buildHTTPRequest() error = %v", err)
+			}
+			if got := req.URL.Query().Get("IMSI") != ""; got != tt.wantIMSI {
+				t.Fatalf("IMSI present = %v, want %v", got, tt.wantIMSI)
+			}
+		})
+	}
+}
+
+func TestBuildHTTPSamsungRequiresEAPIdentity(t *testing.T) {
+	_, err := buildHTTPRequest(
+		context.Background(),
+		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
+		sim.Identity{MCC: "450", MNC: "05"},
+		ServiceEntitlementRequest{
+			AuthenticationToken: "auth",
+			App:                 AppODSAPrimary,
+			EntitlementVersion:  "8.0",
+			TerminalID:          "123456789012345",
+		},
+		ODSAOperation{Operation: OperationManage},
+		SamsungODSAClientTS43,
+		DefaultEAPAkaRealm,
+	)
+	if err == nil {
+		t.Fatal("buildHTTPRequest() error = nil")
+	}
+}
+
+func TestBaseRequestUsesSamsungDefaults(t *testing.T) {
+	client := &Client{cfg: Config{
+		AppVersion:  "3.0.00",
+		Entitlement: Entitlement{Channel: EntitlementChannelSamsung, Version: "8.0"},
+	}}
+
+	req := client.baseRequest(Device{IMEI: "123456789012345"}, "auth", "")
+	if req.App != AppODSAPrimary {
+		t.Fatalf("App = %q, want %q", req.App, AppODSAPrimary)
+	}
+	if req.AppName != AppODSAPrimary {
+		t.Fatalf("AppName = %q, want %q", req.AppName, AppODSAPrimary)
+	}
+	if req.RequestVersion != "1" {
+		t.Fatalf("RequestVersion = %q, want 1", req.RequestVersion)
 	}
 }
 

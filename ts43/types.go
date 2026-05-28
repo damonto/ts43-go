@@ -13,8 +13,10 @@ const (
 	AppODSAPrimary        = "ap2009"
 	AppVoWiFi             = "ap2004"
 	DefaultAccept         = "text/vnd.wap.connectivity-xml"
+	SamsungAccept         = "application/xml, text/xml"
 	EAPRelayContentType   = "application/vnd.gsma.eap-relay.v1.0+json"
 	DefaultODSAClientTS43 = "client-Primary-ODSA"
+	SamsungODSAClientTS43 = "Primary-ODSA"
 	DefaultWFCClientTS43  = "client-IMS-Entitlement"
 	DefaultEAPAkaRealm    = "nai.epc"
 )
@@ -36,6 +38,7 @@ type Config struct {
 
 type Entitlement struct {
 	Server                  string
+	Channel                 EntitlementChannel
 	UsePost                 bool
 	Timeout                 time.Duration
 	SourceSIMType           SIMType
@@ -51,7 +54,10 @@ type Entitlement struct {
 	PollInterval           time.Duration
 	PollTimeout            time.Duration
 	AutoRetry511Limit      int
+	App                    string
 	AppName                string
+	ProvisioningVersion    string
+	RequestVersion         string
 	Version                string
 }
 

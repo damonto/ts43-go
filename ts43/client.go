@@ -37,6 +37,8 @@ type eapRelayPacket struct {
 	Packet string `json:"eap-relay-packet"`
 }
 
+const defaultEntitlementTimeout = 30 * time.Second
+
 func New(cfg *Config) (*Client, error) {
 	if cfg.Source.Device.IMEI == "" {
 		return nil, errors.New("source IMEI is required")
@@ -53,7 +55,7 @@ func New(cfg *Config) (*Client, error) {
 	}
 	next.Entitlement.TransferType = selectedTransferType(next.Entitlement)
 	if next.Entitlement.Timeout == 0 {
-		next.Entitlement.Timeout = 30 * time.Second
+		next.Entitlement.Timeout = defaultEntitlementTimeout
 	}
 	if next.Entitlement.PollInterval == 0 {
 		next.Entitlement.PollInterval = time.Minute
@@ -63,9 +65,6 @@ func New(cfg *Config) (*Client, error) {
 	}
 	if next.Entitlement.AutoRetry511Limit == 0 {
 		next.Entitlement.AutoRetry511Limit = 1
-	}
-	if next.HTTPClient == nil {
-		next.HTTPClient = ts43http.NewHTTPClient(next.Logger, next.Entitlement.Timeout)
 	}
 	return &Client{cfg: next}, nil
 }
@@ -93,14 +92,7 @@ func (c *Client) Authenticate(ctx context.Context, identity sim.Identity, device
 
 func (c *Client) AcquireTemporaryToken(ctx context.Context, identity sim.Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
 	req := c.authRequest(source, auth)
-	op := ODSAOperation{
-		Operation:        OperationTempToken,
-		OperationType:    OperationTypeOmit,
-		OperationTargets: []Operation{OperationManage, OperationAcquireConf},
-	}
-	if includeTargetTerminalIdentity(c.cfg.Entitlement) {
-		setTargetTerminalFields(&op, target, true)
-	}
+	op := temporaryTokenOperation(c.cfg.Entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.call(ctx, identity, req, op)
 	if err != nil {
@@ -133,13 +125,7 @@ func (c *Client) AcquireTemporaryToken(ctx context.Context, identity sim.Identit
 
 func (c *Client) CheckEligibility(ctx context.Context, identity sim.Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
 	req := c.authRequest(source, auth)
-	op := ODSAOperation{
-		Operation:     OperationCheck,
-		OperationType: OperationTypeOmit,
-	}
-	if includeTargetTerminalIdentity(c.cfg.Entitlement) {
-		setTargetTerminalFields(&op, target, true)
-	}
+	op := checkEligibilityOperation(c.cfg.Entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.call(ctx, identity, req, op)
 	if err != nil {
@@ -172,36 +158,10 @@ func (c *Client) manageSubscription(ctx context.Context, identity sim.Identity, 
 }
 
 func (c *Client) manageSubscriptionRequest(source Device, target Device, credential transferCredential, answer UserInputResult) (ServiceEntitlementRequest, ODSAOperation) {
-	sourceCredential := IsSourceCredentialTransferType(c.cfg.Entitlement.TransferType)
-	reqDevice := target
-	if sourceCredential || c.cfg.Entitlement.TransferType == TransferTypeTemporaryToken {
-		reqDevice = source
-	}
+	reqDevice := manageSubscriptionRequestDevice(c.cfg.Entitlement, source, target)
 	req := c.transferRequest(reqDevice, credential)
-
-	op := ODSAOperation{
-		Operation:        OperationManage,
-		OperationType:    OperationTypeTransferSubscription,
-		MessageResponse:  answer.Response,
-		MessageButton:    answer.Button,
-		MessageButtonSet: answer.Button != MessageButtonUnknown,
-	}
-	if sourceCredential {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
-	} else {
-		op.TerminalEID = target.EID
-		op.TerminalICCID = target.ICCID
-		if includeManageSubscriptionTargetIdentity(c.cfg.Entitlement) {
-			setTargetTerminalFields(&op, target, true)
-		}
-	}
+	op := manageSubscriptionOperation(c.cfg.Entitlement, source, target, answer)
 	c.addOptionalOperationFields(&op)
-	if includeOldTerminalIDs(c.cfg.Entitlement) {
-		op.OldTerminalID = source.IMEI
-		op.OldTerminalICCID = source.ICCID
-		op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
-	}
 	return req, op
 }
 
@@ -214,27 +174,9 @@ func (c *Client) AcquireConfigurationWithTemporaryToken(ctx context.Context, ide
 }
 
 func (c *Client) acquireConfiguration(ctx context.Context, identity sim.Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
-	sourceCredential := IsSourceCredentialTransferType(c.cfg.Entitlement.TransferType)
-	reqDevice := target
-	if sourceCredential {
-		reqDevice = source
-	}
+	reqDevice := acquireConfigurationRequestDevice(c.cfg.Entitlement, source, target)
 	req := c.transferRequest(reqDevice, credential)
-	op := ODSAOperation{
-		Operation:     OperationAcquireConf,
-		OperationType: OperationTypeOmit,
-	}
-	if sourceCredential {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
-		op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
-	} else {
-		op.TerminalEID = target.EID
-		op.TerminalICCID = target.ICCID
-		if includeTargetTerminalIdentity(c.cfg.Entitlement) {
-			setTargetTerminalFields(&op, target, true)
-		}
-	}
+	op := acquireConfigurationOperation(c.cfg.Entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.call(ctx, identity, req, op)
 	return resp, err
@@ -250,21 +192,8 @@ func (c *Client) UpdateSubscriptionWithTemporaryToken(ctx context.Context, ident
 
 func (c *Client) updateSubscription(ctx context.Context, identity sim.Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.transferRequest(target, credential)
-	op := ODSAOperation{
-		Operation:     OperationManage,
-		OperationType: OperationTypeUpdateSubscription,
-		TerminalEID:   target.EID,
-		TerminalICCID: target.ICCID,
-	}
-	if includeTargetTerminalIdentity(c.cfg.Entitlement) {
-		setTargetTerminalFields(&op, target, true)
-	}
+	op := updateSubscriptionOperation(c.cfg.Entitlement, source, target)
 	c.addOptionalOperationFields(&op)
-	if includeOldTerminalIDs(c.cfg.Entitlement) {
-		op.OldTerminalID = source.IMEI
-		op.OldTerminalICCID = source.ICCID
-		op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
-	}
 	resp, _, err := c.call(ctx, identity, req, op)
 	if err != nil {
 		return resp, err
@@ -285,14 +214,7 @@ func (c *Client) AcquireActivationConfigurationWithTemporaryToken(ctx context.Co
 
 func (c *Client) acquireActivationConfiguration(ctx context.Context, identity sim.Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.transferRequest(target, credential)
-	op := ODSAOperation{
-		Operation:     OperationAcquireConf,
-		OperationType: OperationTypeOmit,
-		TerminalEID:   target.EID,
-	}
-	if includeTargetTerminalIdentity(c.cfg.Entitlement) {
-		setTargetTerminalFields(&op, target, true)
-	}
+	op := activationConfigurationOperation(c.cfg.Entitlement, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.call(ctx, identity, req, op)
 	return resp, err
@@ -316,7 +238,7 @@ func (c *Client) callRaw(ctx context.Context, identity sim.Identity, req Service
 		return nil, nil, err
 	}
 	c.cfg.Logger.Debug("TS.43 request", "method", httpReq.Method, "url", httpReq.URL.String(), "auth", authMode(req))
-	body, cookies, err := ts43http.DoRaw(ctx, c.cfg.HTTPClient, httpReq)
+	body, cookies, err := ts43http.DoRaw(ctx, c.httpClient(), httpReq)
 	if err != nil {
 		return nil, cookieHeaders(cookies), err
 	}
@@ -382,7 +304,15 @@ func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitl
 		httpReq.AddCookie(cookie)
 	}
 	c.cfg.Logger.Debug("TS.43 EAP relay", "method", httpReq.Method, "url", httpReq.URL.String())
-	return ts43http.DoRaw(ctx, c.cfg.HTTPClient, httpReq)
+	return ts43http.DoRaw(ctx, c.httpClient(), httpReq)
+}
+
+func (c *Client) httpClient() HTTPDoer {
+	if c.cfg.HTTPClient != nil {
+		return c.cfg.HTTPClient
+	}
+	c.cfg.HTTPClient = ts43http.NewHTTPClient(c.cfg.Logger, c.cfg.Entitlement.Timeout)
+	return c.cfg.HTTPClient
 }
 
 func relayPacket(data []byte) string {
@@ -396,16 +326,18 @@ func relayPacket(data []byte) string {
 func (c *Client) baseRequest(device Device, authToken, tempToken string) ServiceEntitlementRequest {
 	return ServiceEntitlementRequest{
 		EntitlementVersion:  c.entitlementVersion(),
+		RequestVersion:      c.requestVersion(),
 		AuthenticationToken: authToken,
 		TemporaryToken:      tempToken,
-		App:                 AppODSAPrimary,
+		App:                 c.app(),
 		TerminalID:          device.IMEI,
 		TerminalVendor:      device.Vendor,
 		TerminalModel:       device.Model,
 		TerminalSoftware:    device.SoftwareVersion,
 		AppName:             c.appName(),
 		AppVersion:          c.cfg.AppVersion,
-		Accept:              DefaultAccept,
+		ProvisioningVersion: c.cfg.Entitlement.ProvisioningVersion,
+		Accept:              c.accept(),
 	}
 }
 
@@ -428,18 +360,6 @@ func (c *Client) transferRequest(device Device, credential transferCredential) S
 	return c.authRequest(device, credential.auth)
 }
 
-func setTargetTerminalFields(op *ODSAOperation, target Device, includeIdentity bool) {
-	if includeIdentity {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
-	}
-	op.TargetTerminalICCID = target.ICCID
-	op.TargetTerminalModel = target.Model
-	op.TargetTerminalSN = target.SerialNumber
-	op.TargetTerminalIMEIs = terminalIMEIs(target)
-	op.TargetTerminalEntitlementProto = entitlementProtocol(target.EntitlementProtocol)
-}
-
 func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
 	companion := c.cfg.Companion
 	op.CompanionTerminalID = companion.IMEI
@@ -453,6 +373,12 @@ func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
 }
 
 func (c *Client) clientTS43() string {
+	if c.cfg.ClientTS43 != "" {
+		return c.cfg.ClientTS43
+	}
+	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+		return SamsungODSAClientTS43
+	}
 	return firstNonEmpty(c.cfg.ClientTS43, DefaultODSAClientTS43)
 }
 
@@ -461,7 +387,40 @@ func (c *Client) realm() string {
 }
 
 func (c *Client) appName() string {
-	return firstNonEmpty(c.cfg.Entitlement.AppName, "androidTransfer")
+	if c.cfg.Entitlement.AppName != "" {
+		return c.cfg.Entitlement.AppName
+	}
+	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+		return AppODSAPrimary
+	}
+	return "androidTransfer"
+}
+
+func (c *Client) accept() string {
+	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+		return ""
+	}
+	return DefaultAccept
+}
+
+func (c *Client) app() string {
+	if c.cfg.Entitlement.App != "" {
+		return c.cfg.Entitlement.App
+	}
+	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+		return AppODSAPrimary
+	}
+	return AppODSAPrimary
+}
+
+func (c *Client) requestVersion() string {
+	if c.cfg.Entitlement.RequestVersion != "" {
+		return c.cfg.Entitlement.RequestVersion
+	}
+	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+		return "1"
+	}
+	return "0"
 }
 
 func (c *Client) entitlementVersion() string {
@@ -496,31 +455,6 @@ func transferTypeUsesTemporaryToken(transferType TransferType) bool {
 
 func (c *Client) usesTemporaryToken() bool {
 	return transferTypeUsesTemporaryToken(c.cfg.Entitlement.TransferType)
-}
-
-func includeTargetTerminalIdentity(entitlement Entitlement) bool {
-	switch entitlement.TransferType {
-	case TransferTypeTemporaryToken, TransferTypeTemporaryTokenVariant11:
-		return entitlement.SetTargetTerminalFields
-	default:
-		return true
-	}
-}
-
-func includeManageSubscriptionTargetIdentity(entitlement Entitlement) bool {
-	return includeTargetTerminalIdentity(entitlement)
-}
-
-func includeOldTerminalIDs(entitlement Entitlement) bool {
-	if !entitlement.RestrictOldTerminalFields {
-		return true
-	}
-	switch entitlement.TransferType {
-	case TransferTypeOldTerminalIDs, TransferTypeTemporaryTokenOldTerminalIDs:
-		return true
-	default:
-		return false
-	}
 }
 
 func isHTTPStatus(err error, status int) bool {

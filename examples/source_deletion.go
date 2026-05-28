@@ -41,7 +41,7 @@ func deleteSourceProfile(reader *bufio.Reader, w io.Writer, client profileDeleti
 	if err != nil {
 		return err
 	}
-	if err := client.DisableProfile(iccid, true); err != nil {
+	if err := client.DisableProfile(iccid, false); err != nil {
 		return fmt.Errorf("disable source profile: %w", err)
 	}
 	if err := client.DeleteProfile(iccid); err != nil {

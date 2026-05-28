@@ -21,6 +21,7 @@ type OperationType int
 
 const (
 	OperationTypeOmit                 OperationType = -1
+	OperationTypeSamsungD2DTransfer   OperationType = 0
 	OperationTypeTransferSubscription OperationType = 3
 	OperationTypeUpdateSubscription   OperationType = 4
 )
@@ -31,9 +32,16 @@ type TransferType int
 
 type SIMType uint8
 
+type EntitlementChannel string
+
 const (
 	SIMTypeESIM SIMType = iota
 	SIMTypePSIM
+)
+
+const (
+	EntitlementChannelGoogle  EntitlementChannel = "google"
+	EntitlementChannelSamsung EntitlementChannel = "samsung"
 )
 
 const (
