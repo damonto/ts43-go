@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log/slog"
@@ -30,7 +31,29 @@ func (r RoundTripper) RoundTrip(req *nethttp.Request) (*nethttp.Response, error)
 }
 
 func newTransport() nethttp.RoundTripper {
-	return nethttp.DefaultTransport.(*nethttp.Transport).Clone()
+	transport := nethttp.DefaultTransport.(*nethttp.Transport).Clone()
+	transport.TLSClientConfig = ts43TLSConfig(transport.TLSClientConfig)
+	return transport
+}
+
+func ts43TLSConfig(cfg *tls.Config) *tls.Config {
+	if cfg == nil {
+		cfg = new(tls.Config)
+	} else {
+		cfg = cfg.Clone()
+	}
+	cfg.CipherSuites = []uint16{
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+		// Some carrier TS.43 endpoints still only negotiate TLS 1.2 RSA key exchange.
+		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	}
+	return cfg
 }
 
 func NewHTTPClient(logger *slog.Logger, timeout time.Duration) *nethttp.Client {

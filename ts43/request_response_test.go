@@ -37,7 +37,7 @@ func TestBuildHTTPRequest(t *testing.T) {
 					TerminalSoftware:   "15/AP3A.240905.015",
 					AppName:            "androidTransfer",
 					AppVersion:         "1.2.3",
-					Accept:             DefaultAccept,
+					Accept:             DefaultResponseAccept,
 				},
 				ODSAOperation{Operation: OperationCheck, OperationType: OperationTypeOmit},
 				DefaultODSAClientTS43,
@@ -49,7 +49,7 @@ func TestBuildHTTPRequest(t *testing.T) {
 			if req.Method != tt.method {
 				t.Fatalf("method = %s, want %s", req.Method, tt.method)
 			}
-			if req.Header.Get("Accept") != DefaultAccept {
+			if req.Header.Get("Accept") != EAPRelayContentType+", "+DefaultResponseAccept {
 				t.Fatalf("Accept = %q", req.Header.Get("Accept"))
 			}
 			if req.Header.Get("User-Agent") == "" {
@@ -163,8 +163,8 @@ func TestBuildHTTPSendsSamsungInitialAuthFields(t *testing.T) {
 	if got := query.Get("provisioning_version"); got != "5.0" {
 		t.Fatalf("provisioning_version = %q, want 5.0", got)
 	}
-	if got := req.Header.Get("Accept"); got != EAPRelayContentType {
-		t.Fatalf("Accept = %q, want %q", got, EAPRelayContentType)
+	if got := req.Header.Get("Accept"); got != EAPRelayContentType+", "+SamsungResponseAccept {
+		t.Fatalf("Accept = %q, want %q", got, EAPRelayContentType+", "+SamsungResponseAccept)
 	}
 	if got := req.Header.Get("User-Agent"); !strings.Contains(got, SamsungODSAClientTS43) {
 		t.Fatalf("User-Agent = %q, want Samsung TS.43 client marker", got)
@@ -200,7 +200,47 @@ func TestBuildHTTPSendsSamsungOperationAppFields(t *testing.T) {
 	}
 }
 
-func TestBuildHTTPUsesSamsungAcceptAfterAuthentication(t *testing.T) {
+func TestEAPRelayAccept(t *testing.T) {
+	tests := []struct {
+		name   string
+		accept string
+		want   string
+	}{
+		{
+			name: "empty uses default response formats",
+			want: EAPRelayContentType + ", " + DefaultResponseAccept,
+		},
+		{
+			name:   "adds relay format",
+			accept: DefaultResponseAccept,
+			want:   EAPRelayContentType + ", " + DefaultResponseAccept,
+		},
+		{
+			name:   "keeps existing relay format",
+			accept: EAPRelayContentType + ", " + DefaultResponseAccept,
+			want:   EAPRelayContentType + ", " + DefaultResponseAccept,
+		},
+		{
+			name:   "matches relay format with parameter",
+			accept: EAPRelayContentType + "; charset=utf-8, " + DefaultResponseAccept,
+			want:   EAPRelayContentType + "; charset=utf-8, " + DefaultResponseAccept,
+		},
+		{
+			name:   "matches relay format case-insensitively",
+			accept: strings.ToUpper(EAPRelayContentType) + ", " + DefaultResponseAccept,
+			want:   strings.ToUpper(EAPRelayContentType) + ", " + DefaultResponseAccept,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := eapRelayAccept(tt.accept); got != tt.want {
+				t.Fatalf("eapRelayAccept() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildHTTPUsesSamsungResponseAcceptAfterAuthentication(t *testing.T) {
 	identity := sim.Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"}
 	req, err := buildHTTPRequest(
 		context.Background(),
@@ -222,8 +262,8 @@ func TestBuildHTTPUsesSamsungAcceptAfterAuthentication(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildHTTPRequest() error = %v", err)
 	}
-	if got := req.Header.Get("Accept"); got != SamsungAccept {
-		t.Fatalf("Accept = %q, want %q", got, SamsungAccept)
+	if got := req.Header.Get("Accept"); got != SamsungResponseAccept {
+		t.Fatalf("Accept = %q, want %q", got, SamsungResponseAccept)
 	}
 	query := req.URL.Query()
 	want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)

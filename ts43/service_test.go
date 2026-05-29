@@ -577,11 +577,12 @@ func TestAcquireTemporaryTokenRequiresExpiry(t *testing.T) {
 	}
 }
 
-func TestAuthenticateInitialEAPRequestUsesDefaultAccept(t *testing.T) {
+func TestAuthenticateInitialEAPRequestUsesRelayAccept(t *testing.T) {
 	client := &Client{cfg: Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
-			if got := req.Header.Get("Accept"); got != DefaultAccept {
-				t.Fatalf("Accept = %q, want %q", got, DefaultAccept)
+			wantAccept := EAPRelayContentType + ", " + DefaultResponseAccept
+			if got := req.Header.Get("Accept"); got != wantAccept {
+				t.Fatalf("Accept = %q, want %q", got, wantAccept)
 			}
 			if got := req.URL.Query().Get("EAP_ID"); got == "" {
 				t.Fatal("EAP_ID is empty")
@@ -866,10 +867,19 @@ func TestPostRelayMatchesGMSRequestShape(t *testing.T) {
 		{
 			name:       "relay packet JSON",
 			packet:     "base64-eap-response",
-			accept:     DefaultAccept,
+			accept:     DefaultResponseAccept,
 			cookies:    []*http.Cookie{{Name: "SESSION", Value: "abc"}},
 			wantBody:   `{"eap-relay-packet":"base64-eap-response"}`,
-			wantAccept: EAPRelayContentType + ", " + DefaultAccept,
+			wantAccept: EAPRelayContentType + ", " + DefaultResponseAccept,
+			wantCookie: "SESSION=abc",
+		},
+		{
+			name:       "accept already includes relay packet JSON",
+			packet:     "base64-eap-response",
+			accept:     EAPRelayContentType + ", " + DefaultResponseAccept,
+			cookies:    []*http.Cookie{{Name: "SESSION", Value: "abc"}},
+			wantBody:   `{"eap-relay-packet":"base64-eap-response"}`,
+			wantAccept: EAPRelayContentType + ", " + DefaultResponseAccept,
 			wantCookie: "SESSION=abc",
 		},
 	}

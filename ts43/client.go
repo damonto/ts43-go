@@ -294,11 +294,7 @@ func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitl
 		return nil, nil, err
 	}
 	httpReq.Header.Set("Content-Type", EAPRelayContentType)
-	accept := req.Accept
-	if accept == "" {
-		accept = DefaultAccept
-	}
-	httpReq.Header.Set("Accept", EAPRelayContentType+", "+accept)
+	httpReq.Header.Set("Accept", eapRelayAccept(req.Accept))
 	httpReq.Header.Set("User-Agent", userAgent(req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
 	for _, cookie := range cookies {
 		httpReq.AddCookie(cookie)
@@ -400,7 +396,7 @@ func (c *Client) accept() string {
 	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
 		return ""
 	}
-	return DefaultAccept
+	return DefaultResponseAccept
 }
 
 func (c *Client) app() string {

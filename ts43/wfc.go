@@ -1,6 +1,7 @@
 package ts43
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"encoding/json"
@@ -256,6 +257,7 @@ func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity,
 	next.cfg.Entitlement = Entitlement{
 		Server:  cfg.Server,
 		UsePost: cfg.UsePost,
+		Timeout: c.cfg.Entitlement.Timeout,
 	}
 	req := ServiceEntitlementRequest{
 		EntitlementVersion: firstNonEmpty(cfg.Version, "2.0"),
@@ -265,8 +267,7 @@ func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity,
 		TerminalModel:      device.Model,
 		TerminalSoftware:   device.SoftwareVersion,
 		AppName:            cfg.AppName,
-		Accept:             DefaultAccept,
-		GID1:               identity.GID1,
+		Accept:             DefaultResponseAccept,
 		ClientTS43:         firstNonEmpty(cfg.ClientTS43, DefaultWFCClientTS43),
 	}
 	body, _, err := next.callRaw(ctx, identity, req, ODSAOperation{})
@@ -274,10 +275,13 @@ func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity,
 		return WFCStatus{}, err
 	}
 	var status WFCStatus
-	if err := status.UnmarshalBinary(body); err != nil {
-		return WFCStatus{}, err
+	emptyBody := len(bytes.TrimSpace(body)) == 0
+	if !emptyBody {
+		if err := status.UnmarshalBinary(body); err != nil {
+			return WFCStatus{}, err
+		}
 	}
-	if status == (WFCStatus{}) && cfg.DefaultServiceEntitlementEnabled {
+	if emptyBody && cfg.DefaultServiceEntitlementEnabled {
 		return WFCStatus{
 			EntitlementStatus: WFCEntitlementEnabled,
 			TCStatus:          WFCTCNotRequired,
@@ -285,7 +289,7 @@ func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity,
 			ProvStatus:        WFCProvisionNotRequired,
 		}, nil
 	}
-	if status == (WFCStatus{}) {
+	if emptyBody {
 		return WFCStatus{
 			EntitlementStatus: WFCEntitlementIncompatible,
 			TCStatus:          WFCTCNotAvailable,

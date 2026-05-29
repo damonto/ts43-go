@@ -12,8 +12,8 @@ import (
 const (
 	AppODSAPrimary        = "ap2009"
 	AppVoWiFi             = "ap2004"
-	DefaultAccept         = "text/vnd.wap.connectivity-xml"
-	SamsungAccept         = "application/xml, text/xml"
+	DefaultResponseAccept = "application/json, text/vnd.wap.connectivity-xml"
+	SamsungResponseAccept = "application/xml, text/xml"
 	EAPRelayContentType   = "application/vnd.gsma.eap-relay.v1.0+json"
 	DefaultODSAClientTS43 = "client-Primary-ODSA"
 	SamsungODSAClientTS43 = "Primary-ODSA"

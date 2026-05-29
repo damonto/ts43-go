@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -141,6 +142,91 @@ func TestWFCStatusUnmarshalBinary(t *testing.T) {
 	}
 }
 
+func TestCheckWFCEntitlementHandlesEmptyResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+	tests := []struct {
+		name           string
+		defaultEnabled bool
+		want           WFCStatus
+	}{
+		{
+			name:           "carrier default enables service",
+			defaultEnabled: true,
+			want: WFCStatus{
+				EntitlementStatus: WFCEntitlementEnabled,
+				TCStatus:          WFCTCNotRequired,
+				AddrStatus:        WFCAddressNotRequired,
+				ProvStatus:        WFCProvisionNotRequired,
+			},
+		},
+		{
+			name: "empty status is incompatible by default",
+			want: WFCStatus{
+				EntitlementStatus: WFCEntitlementIncompatible,
+				TCStatus:          WFCTCNotAvailable,
+				AddrStatus:        WFCAddressNotAvailable,
+				ProvStatus:        WFCProvisionNotProvisioned,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckWFCEntitlement(
+				context.Background(),
+				Config{
+					HTTPClient: server.Client(),
+					Source:     Endpoint{Channel: fakeChannel{}},
+				},
+				sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				Device{IMEI: "111111111111111", Vendor: "Google", Model: "Pixel 8 Pro", SoftwareVersion: "15"},
+				WFCConfig{
+					Server:                           server.URL,
+					DefaultServiceEntitlementEnabled: tt.defaultEnabled,
+				},
+			)
+			if err != nil {
+				t.Fatalf("CheckWFCEntitlement() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("CheckWFCEntitlement() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCheckWFCEntitlementKeepsZeroStatusResponse(t *testing.T) {
+	got, err := CheckWFCEntitlement(
+		context.Background(),
+		Config{
+			HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) {
+				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="0"/><parm name="TC_Status" value="0"/><parm name="AddrStatus" value="0"/><parm name="ProvStatus" value="0"/></characteristic></wap-provisioningdoc>`), nil
+			}),
+			Source: Endpoint{Channel: fakeChannel{}},
+		},
+		sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+		Device{IMEI: "111111111111111", Vendor: "Google", Model: "Pixel 8 Pro", SoftwareVersion: "15"},
+		WFCConfig{
+			Server:                           "https://example.test/ts43",
+			DefaultServiceEntitlementEnabled: true,
+		},
+	)
+	if err != nil {
+		t.Fatalf("CheckWFCEntitlement() error = %v", err)
+	}
+	want := WFCStatus{
+		EntitlementStatus: WFCEntitlementDisabled,
+		TCStatus:          WFCTCNotAvailable,
+		AddrStatus:        WFCAddressNotAvailable,
+		ProvStatus:        WFCProvisionNotProvisioned,
+	}
+	if got != want {
+		t.Fatalf("CheckWFCEntitlement() = %+v, want %+v", got, want)
+	}
+}
+
 func TestCheckWFCEntitlementPackageHelper(t *testing.T) {
 	status, err := CheckWFCEntitlement(
 		context.Background(),
@@ -174,6 +260,10 @@ func TestCheckWFCEntitlementSendsVoWiFiApp(t *testing.T) {
 			}
 			if got := query.Get("entitlement_version"); got != "8.0" {
 				t.Fatalf("entitlement_version = %q, want 8.0", got)
+			}
+			wantAccept := EAPRelayContentType + ", " + DefaultResponseAccept
+			if got := req.Header.Get("Accept"); got != wantAccept {
+				t.Fatalf("Accept = %q, want %q", got, wantAccept)
 			}
 			if got := req.Header.Get("User-Agent"); got == "" || !strings.Contains(got, DefaultWFCClientTS43) {
 				t.Fatalf("User-Agent = %q, want WFC client", got)

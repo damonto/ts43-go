@@ -125,16 +125,45 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity sim
 }
 
 func requestAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
+	accept := responseAccept(entitlement, req)
+	if initialEAPRequest(req) {
+		return eapRelayAccept(accept)
+	}
+	return accept
+}
+
+func responseAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
 	if req.Accept != "" {
 		return req.Accept
 	}
-	if entitlement.Channel != EntitlementChannelSamsung {
-		return DefaultAccept
+	if entitlement.Channel == EntitlementChannelSamsung {
+		return SamsungResponseAccept
 	}
-	if req.AuthenticationToken == "" && req.TemporaryToken == "" && !req.OmitEAPID {
-		return EAPRelayContentType
+	return DefaultResponseAccept
+}
+
+func initialEAPRequest(req ServiceEntitlementRequest) bool {
+	return req.AuthenticationToken == "" && req.TemporaryToken == "" && !req.OmitEAPID
+}
+
+func eapRelayAccept(accept string) string {
+	if accept == "" {
+		accept = DefaultResponseAccept
 	}
-	return SamsungAccept
+	if acceptHasMediaType(accept, EAPRelayContentType) {
+		return accept
+	}
+	return EAPRelayContentType + ", " + accept
+}
+
+func acceptHasMediaType(accept, mediaType string) bool {
+	for part := range strings.SplitSeq(accept, ",") {
+		value, _, _ := strings.Cut(strings.TrimSpace(part), ";")
+		if strings.EqualFold(value, mediaType) {
+			return true
+		}
+	}
+	return false
 }
 
 func shapeSamsungRequest(entitlement Entitlement, req ServiceEntitlementRequest) ServiceEntitlementRequest {
