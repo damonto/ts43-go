@@ -318,9 +318,62 @@ func (s *WFCStatus) unmarshalJSON(data []byte) error {
 func (s *WFCStatus) unmarshalXML(data []byte) error {
 	var payload wfcPayload
 	if err := xml.Unmarshal(data, &payload); err != nil {
-		return err
+		escaped, ok := escapeBareXMLAmpersands(data)
+		if !ok {
+			return err
+		}
+		if retryErr := xml.Unmarshal(escaped, &payload); retryErr != nil {
+			return err
+		}
 	}
 	return s.apply(payload)
+}
+
+func escapeBareXMLAmpersands(data []byte) ([]byte, bool) {
+	var out []byte
+	changed := false
+	for i := range data {
+		if data[i] != '&' {
+			out = append(out, data[i])
+			continue
+		}
+		if validXMLReference(data[i:]) {
+			out = append(out, data[i])
+			continue
+		}
+		out = append(out, '&', 'a', 'm', 'p', ';')
+		changed = true
+	}
+	return out, changed
+}
+
+func validXMLReference(data []byte) bool {
+	for _, ref := range [...]string{"&amp;", "&lt;", "&gt;", "&apos;", "&quot;"} {
+		if bytes.HasPrefix(data, []byte(ref)) {
+			return true
+		}
+	}
+	if len(data) < 4 || data[1] != '#' {
+		return false
+	}
+	i := 2
+	if data[i] == 'x' || data[i] == 'X' {
+		i++
+		start := i
+		for i < len(data) && isXMLHexDigit(data[i]) {
+			i++
+		}
+		return i > start && i < len(data) && data[i] == ';'
+	}
+	start := i
+	for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+		i++
+	}
+	return i > start && i < len(data) && data[i] == ';'
+}
+
+func isXMLHexDigit(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
 }
 
 func (s *WFCStatus) apply(payload wfcPayload) error {

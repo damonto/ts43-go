@@ -101,6 +101,32 @@ func TestWFCStatusUnmarshalBinary(t *testing.T) {
 			webFlow: true,
 		},
 		{
+			name: "needs web flow XML with bare ampersand",
+			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="0"/><parm name="TC_Status" value="0"/><parm name="AddrStatus" value="0"/><parm name="ProvStatus" value="0"/><parm name="ServiceFlow_URL" value="https://example.test/e911"/><parm name="ServiceFlow_UserData" value="PostData=abc&req_locale=en_US"/></characteristic></wap-provisioningdoc>`),
+			want: WFCStatus{
+				EntitlementStatus:   WFCEntitlementDisabled,
+				TCStatus:            WFCTCNotAvailable,
+				AddrStatus:          WFCAddressNotAvailable,
+				ProvStatus:          WFCProvisionNotProvisioned,
+				ServiceFlowURL:      "https://example.test/e911",
+				ServiceFlowUserData: "PostData=abc&req_locale=en_US",
+			},
+			webFlow: true,
+		},
+		{
+			name: "needs web flow XML keeps escaped ampersand",
+			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="0"/><parm name="TC_Status" value="0"/><parm name="AddrStatus" value="0"/><parm name="ProvStatus" value="0"/><parm name="ServiceFlow_URL" value="https://example.test/e911"/><parm name="ServiceFlow_UserData" value="PostData=abc&amp;amp;req_locale=en_US"/></characteristic></wap-provisioningdoc>`),
+			want: WFCStatus{
+				EntitlementStatus:   WFCEntitlementDisabled,
+				TCStatus:            WFCTCNotAvailable,
+				AddrStatus:          WFCAddressNotAvailable,
+				ProvStatus:          WFCProvisionNotProvisioned,
+				ServiceFlowURL:      "https://example.test/e911",
+				ServiceFlowUserData: "PostData=abc&amp;req_locale=en_US",
+			},
+			webFlow: true,
+		},
+		{
 			name: "entitled JSON",
 			body: []byte(`{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":"1","TC_Status":"2","AddrStatus":"2","ProvStatus":"2"}}`),
 			want: WFCStatus{
