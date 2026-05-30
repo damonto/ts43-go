@@ -48,6 +48,8 @@ type WFCEntitlementStatus int
 
 func (s WFCEntitlementStatus) String() string { return strconv.Itoa(int(s)) }
 
+func (s WFCEntitlementStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
 func (s *WFCEntitlementStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
 	if err != nil {
@@ -64,6 +66,8 @@ func (s *WFCEntitlementStatus) UnmarshalText(text []byte) error {
 type WFCTCStatus int
 
 func (s WFCTCStatus) String() string { return strconv.Itoa(int(s)) }
+
+func (s WFCTCStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
 
 func (s *WFCTCStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -82,6 +86,8 @@ type WFCAddressStatus int
 
 func (s WFCAddressStatus) String() string { return strconv.Itoa(int(s)) }
 
+func (s WFCAddressStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
 func (s *WFCAddressStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
 	if err != nil {
@@ -98,6 +104,8 @@ func (s *WFCAddressStatus) UnmarshalText(text []byte) error {
 type WFCProvisionStatus int
 
 func (s WFCProvisionStatus) String() string { return strconv.Itoa(int(s)) }
+
+func (s WFCProvisionStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
 
 func (s *WFCProvisionStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)

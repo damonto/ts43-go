@@ -17,9 +17,14 @@ type Request struct {
 }
 
 func (r *Request) APDU() []byte {
-	var apdu bytes.Buffer
-	_, _ = r.WriteTo(&apdu)
-	return apdu.Bytes()
+	apdu, _ := r.MarshalBinary()
+	return apdu
+}
+
+func (r *Request) MarshalBinary() ([]byte, error) {
+	var buf bytes.Buffer
+	_, _ = r.WriteTo(&buf)
+	return buf.Bytes(), nil
 }
 
 func (r *Request) WriteTo(w io.Writer) (n int64, err error) {

@@ -17,6 +17,8 @@ type Operation string
 
 func (op Operation) String() string { return string(op) }
 
+func (op Operation) MarshalText() ([]byte, error) { return []byte(op.String()), nil }
+
 type OperationType int
 
 const (
@@ -27,6 +29,8 @@ const (
 )
 
 func (t OperationType) String() string { return strconv.Itoa(int(t)) }
+
+func (t OperationType) MarshalText() ([]byte, error) { return []byte(t.String()), nil }
 
 type TransferType int
 
@@ -75,6 +79,8 @@ func (t TransferType) String() string {
 	return strconv.Itoa(int(t))
 }
 
+func (t TransferType) MarshalText() ([]byte, error) { return []byte(t.String()), nil }
+
 type OperationResult int
 
 const (
@@ -88,6 +94,8 @@ func (r OperationResult) String() string {
 	}
 	return strconv.Itoa(int(r))
 }
+
+func (r OperationResult) MarshalText() ([]byte, error) { return []byte(r.String()), nil }
 
 func (r *OperationResult) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -108,6 +116,15 @@ const (
 	AppEligibilityUnknown AppEligibility = -1
 	AppEligibilityEnabled AppEligibility = 1
 )
+
+func (e AppEligibility) String() string {
+	if e == AppEligibilityUnknown {
+		return ""
+	}
+	return strconv.Itoa(int(e))
+}
+
+func (e AppEligibility) MarshalText() ([]byte, error) { return []byte(e.String()), nil }
 
 func (e *AppEligibility) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -143,6 +160,8 @@ func (r SubscriptionResult) String() string {
 	return strconv.Itoa(int(r))
 }
 
+func (r SubscriptionResult) MarshalText() ([]byte, error) { return []byte(r.String()), nil }
+
 func (r *SubscriptionResult) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
 	if err != nil {
@@ -173,6 +192,8 @@ func (s ServiceStatus) String() string {
 	return strconv.Itoa(int(s))
 }
 
+func (s ServiceStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+
 func (s *ServiceStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
 	if err != nil {
@@ -200,6 +221,8 @@ func (b MessageButton) String() string {
 	}
 	return strconv.Itoa(int(b))
 }
+
+func (b MessageButton) MarshalText() ([]byte, error) { return []byte(b.String()), nil }
 
 func enumInteger(text []byte) (int, bool, error) {
 	s := strings.TrimSpace(string(text))

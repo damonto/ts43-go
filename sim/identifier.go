@@ -9,21 +9,55 @@ import (
 type ICCID []byte
 
 func NewICCID(value string) (ICCID, error) {
-	return EncodeBCD[ICCID](value)
+	var id ICCID
+	if err := id.UnmarshalText([]byte(value)); err != nil {
+		return nil, err
+	}
+	return id, nil
 }
 
 func (id ICCID) String() string {
 	return DecodeBCD(id)
 }
 
+func (id ICCID) MarshalText() ([]byte, error) {
+	return []byte(id.String()), nil
+}
+
+func (id *ICCID) UnmarshalText(text []byte) error {
+	next, err := EncodeBCD[ICCID](string(text))
+	if err != nil {
+		return err
+	}
+	*id = next
+	return nil
+}
+
 type IMEI []byte
 
 func NewIMEI(value string) (IMEI, error) {
-	return EncodeBCD[IMEI](value)
+	var id IMEI
+	if err := id.UnmarshalText([]byte(value)); err != nil {
+		return nil, err
+	}
+	return id, nil
 }
 
 func (id IMEI) String() string {
 	return DecodeBCD(id)
+}
+
+func (id IMEI) MarshalText() ([]byte, error) {
+	return []byte(id.String()), nil
+}
+
+func (id *IMEI) UnmarshalText(text []byte) error {
+	next, err := EncodeBCD[IMEI](string(text))
+	if err != nil {
+		return err
+	}
+	*id = next
+	return nil
 }
 
 // EncodeBCD encodes a decimal string as swapped GSM BCD.

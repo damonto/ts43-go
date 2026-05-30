@@ -2,11 +2,9 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"strings"
 
 	"github.com/damonto/ts43-go/ts43"
@@ -58,49 +56,24 @@ func parseWebsheetCallback(line string) (*ts43.WebsheetResult, error) {
 	if line == "" {
 		return nil, errors.New("websheet callback is required")
 	}
-	line = trimCallbackLogPrefix(line, "TS43_ODSA_CALLBACK")
-	if strings.HasPrefix(line, "{") {
-		return parseWebsheetJSONCallback(line)
-	}
-	if strings.Contains(line, "ODSAServiceFlow.") {
-		return parseWebsheetJSCallback(line)
-	}
-	if strings.Contains(line, "/_callback") {
-		return parseWebsheetCallbackURL(line)
+	if isWebsheetCallbackText(line) {
+		var callback ts43.WebsheetResult
+		if err := callback.UnmarshalText([]byte(line)); err != nil {
+			return nil, err
+		}
+		return &callback, nil
 	}
 	return parseWebsheetCommand(line)
 }
 
-func trimCallbackLogPrefix(line, prefix string) string {
+func isWebsheetCallbackText(line string) bool {
 	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, prefix) {
-		return line
+	if strings.HasPrefix(line, "TS43_ODSA_CALLBACK") {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "TS43_ODSA_CALLBACK"))
 	}
-	return strings.TrimSpace(strings.TrimPrefix(line, prefix))
-}
-
-type websheetCallbackPayload struct {
-	Event              string `json:"event"`
-	ActivationCode     string `json:"activationCode"`
-	DefaultSmdpAddress string `json:"defaultSmdpAddress"`
-	SMDPFQDN           string `json:"smdpFqdn"`
-	ICCID              string `json:"iccid"`
-	IMEI               string `json:"imei"`
-	NextAction         string `json:"nextAction"`
-}
-
-func parseWebsheetJSONCallback(line string) (*ts43.WebsheetResult, error) {
-	var payload websheetCallbackPayload
-	if err := json.Unmarshal([]byte(line), &payload); err != nil {
-		return nil, fmt.Errorf("parse websheet JSON callback: %w", err)
-	}
-	values := url.Values{}
-	values.Set("activationCode", payload.ActivationCode)
-	values.Set("defaultSmdpAddress", firstNonEmpty(payload.DefaultSmdpAddress, payload.SMDPFQDN))
-	values.Set("iccid", payload.ICCID)
-	values.Set("imei", payload.IMEI)
-	values.Set("nextAction", payload.NextAction)
-	return websheetResultFromName(payload.Event, nil, values)
+	return strings.HasPrefix(line, "{") ||
+		strings.Contains(line, "ODSAServiceFlow.") ||
+		strings.Contains(line, "/_callback")
 }
 
 func parseWebsheetCommand(line string) (*ts43.WebsheetResult, error) {
@@ -171,107 +144,6 @@ func parseWebsheetCommand(line string) (*ts43.WebsheetResult, error) {
 	}
 }
 
-func parseWebsheetJSCallback(line string) (*ts43.WebsheetResult, error) {
-	_, after, ok := strings.Cut(line, "ODSAServiceFlow.")
-	if !ok {
-		return nil, errors.New("ODSAServiceFlow callback is required")
-	}
-	name, rest, ok := strings.Cut(after, "(")
-	if !ok {
-		return nil, errors.New("callback argument list is required")
-	}
-	argsText, _, ok := strings.Cut(rest, ")")
-	if !ok {
-		return nil, errors.New("callback argument list is not closed")
-	}
-	return websheetResultFromName(name, splitJSArgs(argsText), nil)
-}
-
-func parseWebsheetCallbackURL(raw string) (*ts43.WebsheetResult, error) {
-	u, err := url.Parse(raw)
-	if err != nil {
-		return nil, fmt.Errorf("parse callback URL: %w", err)
-	}
-	query := u.Query()
-	name := firstValue(query, "event", "callback", "action", "method")
-	if name == "" {
-		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-		if len(parts) > 0 {
-			name = parts[len(parts)-1]
-		}
-	}
-	if normalized := normalizeCallbackName(name); normalized == "callback" || normalized == "esim" {
-		name = callbackNameFromQuery(query)
-	}
-	return websheetResultFromName(name, nil, query)
-}
-
-func websheetResultFromName(name string, args []string, query url.Values) (*ts43.WebsheetResult, error) {
-	switch normalizeCallbackName(name) {
-	case "profilereadywithactivationcode", "activation":
-		activationCode := argOrQuery(args, query, 0, "activationCode", "activation_code")
-		if activationCode == "" {
-			return nil, errors.New("activation code is required")
-		}
-		return &ts43.WebsheetResult{
-			Event:          ts43.WebsheetEventProfileReadyWithActivationCode,
-			ActivationCode: activationCode,
-			ICCID:          argOrQuery(args, query, 1, "iccid", "ICCID"),
-			IMEI:           argOrQuery(args, query, 2, "imei", "IMEI"),
-		}, nil
-	case "profilereadywithdefaultsmdp", "defaultsmdp":
-		smdp := argOrQuery(args, query, 0, "defaultSmdpAddress", "smdp", "smdpFqdn")
-		iccid := argOrQuery(args, query, 1, "iccid", "ICCID")
-		if smdp == "" || iccid == "" {
-			return nil, errors.New("default SM-DP+ and ICCID are required")
-		}
-		return &ts43.WebsheetResult{
-			Event:    ts43.WebsheetEventProfileReadyWithDefaultSMDP,
-			SMDPFQDN: smdp,
-			ICCID:    iccid,
-			IMEI:     argOrQuery(args, query, 2, "imei", "IMEI"),
-		}, nil
-	case "selectioncompleted", "select":
-		iccid := argOrQuery(args, query, 0, "iccid", "ICCID")
-		imei := argOrQuery(args, query, 1, "imei", "IMEI")
-		if iccid == "" && imei == "" {
-			return nil, errors.New("selected ICCID or IMEI is required")
-		}
-		return &ts43.WebsheetResult{Event: ts43.WebsheetEventSelectionCompleted, ICCID: iccid, IMEI: imei}, nil
-	case "finishflow", "done":
-		return &ts43.WebsheetResult{
-			Event:      ts43.WebsheetEventFinishFlow,
-			NextAction: operationFromText(argOrQuery(args, query, 0, "next_action", "nextAction")),
-		}, nil
-	case "dismissflow", "dismiss":
-		return &ts43.WebsheetResult{Event: ts43.WebsheetEventDismissFlow}, nil
-	case "deletetoken":
-		return &ts43.WebsheetResult{Event: ts43.WebsheetEventDeleteToken}, nil
-	case "checkprofileservicestatus", "status":
-		return &ts43.WebsheetResult{Event: ts43.WebsheetEventCheckProfileServiceStatus}, nil
-	case "deleteprofileinuse", "deleteprofile":
-		return &ts43.WebsheetResult{
-			Event: ts43.WebsheetEventDeleteProfileInUse,
-			ICCID: argOrQuery(args, query, 0, "iccid", "ICCID"),
-		}, nil
-	default:
-		return nil, fmt.Errorf("unknown websheet callback %q", name)
-	}
-}
-
-func callbackNameFromQuery(query url.Values) string {
-	switch {
-	case firstValue(query, "activationCode", "activation_code") != "":
-		return "profileReadyWithActivationCode"
-	case firstValue(query, "defaultSmdpAddress", "smdp", "smdpFqdn") != "":
-		return "profileReadyWithDefaultSmdp"
-	case firstValue(query, "next_action", "nextAction") != "":
-		return "finishFlow"
-	default:
-		return ""
-	}
-}
-
 func operationFromText(s string) ts43.Operation {
 	switch normalizeCallbackName(s) {
 	case "":
@@ -283,40 +155,6 @@ func operationFromText(s string) ts43.Operation {
 	default:
 		return ts43.Operation(s)
 	}
-}
-
-func splitJSArgs(text string) []string {
-	var args []string
-	var b strings.Builder
-	var quote rune
-	escaped := false
-	for _, r := range text {
-		switch {
-		case escaped:
-			b.WriteRune(r)
-			escaped = false
-		case r == '\\':
-			escaped = true
-		case quote != 0:
-			if r == quote {
-				quote = 0
-				continue
-			}
-			b.WriteRune(r)
-		case r == '\'' || r == '"':
-			quote = r
-		case r == ',':
-			args = append(args, strings.TrimSpace(b.String()))
-			b.Reset()
-		default:
-			b.WriteRune(r)
-		}
-	}
-	last := strings.TrimSpace(b.String())
-	if last != "" || text != "" {
-		args = append(args, last)
-	}
-	return args
 }
 
 func normalizeCallbackName(name string) string {
@@ -332,29 +170,4 @@ func normalizeCallbackName(name string) string {
 		}
 	}
 	return b.String()
-}
-
-func argOrQuery(args []string, query url.Values, index int, keys ...string) string {
-	if index < len(args) && args[index] != "" {
-		return args[index]
-	}
-	return firstValue(query, keys...)
-}
-
-func firstValue(values url.Values, keys ...string) string {
-	for _, key := range keys {
-		if value := values.Get(key); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
