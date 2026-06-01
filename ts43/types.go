@@ -13,6 +13,7 @@ const (
 	AppODSAPrimary        = "ap2009"
 	AppVoWiFi             = "ap2004"
 	DefaultResponseAccept = "application/json, text/vnd.wap.connectivity-xml"
+	WFCResponseAccept     = "text/vnd.wap.connectivity-xml"
 	SamsungResponseAccept = "application/xml, text/xml"
 	EAPRelayContentType   = "application/vnd.gsma.eap-relay.v1.0+json"
 	DefaultODSAClientTS43 = "client-Primary-ODSA"
@@ -260,6 +261,8 @@ const (
 	WebsheetEventDeleteToken
 	WebsheetEventCheckProfileServiceStatus
 	WebsheetEventDeleteProfileInUse
+	WebsheetEventVoWiFiEntitlementChanged
+	WebsheetEventVoWiFiDismissFlow
 )
 
 type DownloadConfig struct {

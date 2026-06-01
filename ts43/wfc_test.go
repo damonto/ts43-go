@@ -138,6 +138,41 @@ func TestWFCStatusUnmarshalBinary(t *testing.T) {
 			entitled: true,
 		},
 		{
+			name: "lowercase JSON fields",
+			body: []byte(`{"application":{"appid":"ap2004","entitlementstatus":"0","tc_status":"0","addrstatus":"0","provstatus":"0","serviceflow_url":"https://example.test/e911","serviceflow_userdata":"token=abc"}}`),
+			want: WFCStatus{
+				EntitlementStatus:   WFCEntitlementDisabled,
+				TCStatus:            WFCTCNotAvailable,
+				AddrStatus:          WFCAddressNotAvailable,
+				ProvStatus:          WFCProvisionNotProvisioned,
+				ServiceFlowURL:      "https://example.test/e911",
+				ServiceFlowUserData: "token=abc",
+			},
+			webFlow: true,
+		},
+		{
+			name: "VoWiFi JSON keyed by service id",
+			body: []byte(`{"ap2004":{"EntitlementStatus":"1","TC_Status":"2","AddrStatus":"2","ProvStatus":"2"}}`),
+			want: WFCStatus{
+				EntitlementStatus: WFCEntitlementEnabled,
+				TCStatus:          WFCTCNotRequired,
+				AddrStatus:        WFCAddressNotRequired,
+				ProvStatus:        WFCProvisionNotRequired,
+			},
+			entitled: true,
+		},
+		{
+			name: "selects VoWiFi JSON service id",
+			body: []byte(`{"ap2003":{"EntitlementStatus":"2"},"ap2004":{"EntitlementStatus":"1","TC_Status":"2","AddrStatus":"2","ProvStatus":"2"}}`),
+			want: WFCStatus{
+				EntitlementStatus: WFCEntitlementEnabled,
+				TCStatus:          WFCTCNotRequired,
+				AddrStatus:        WFCAddressNotRequired,
+				ProvStatus:        WFCProvisionNotRequired,
+			},
+			entitled: true,
+		},
+		{
 			name: "selects VoWiFi application XML",
 			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="AppID" value="ap2003"/><parm name="EntitlementStatus" value="2"/></characteristic><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="1"/><parm name="TC_Status" value="2"/><parm name="AddrStatus" value="2"/><parm name="ProvStatus" value="2"/></characteristic></wap-provisioningdoc>`),
 			want: WFCStatus{
@@ -163,6 +198,155 @@ func TestWFCStatusUnmarshalBinary(t *testing.T) {
 			}
 			if got.NeedsUserWebFlow() != tt.webFlow {
 				t.Fatalf("NeedsUserWebFlow() = %t, want %t", got.NeedsUserWebFlow(), tt.webFlow)
+			}
+		})
+	}
+}
+
+func TestWFCActivationMode(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     WFCStatus
+		want       WFCActivationMode
+		entitled   bool
+		webFlow    bool
+		inProgress bool
+	}{
+		{
+			name: "web view when terms missing",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementDisabled,
+				TCStatus:          WFCTCNotAvailable,
+				AddrStatus:        WFCAddressAvailable,
+				ProvStatus:        WFCProvisionProvisioned,
+			},
+			want:    WFCActivationWebView,
+			webFlow: true,
+		},
+		{
+			name: "web view when address missing",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementDisabled,
+				TCStatus:          WFCTCAvailable,
+				AddrStatus:        WFCAddressNotAvailable,
+				ProvStatus:        WFCProvisionProvisioned,
+			},
+			want:    WFCActivationWebView,
+			webFlow: true,
+		},
+		{
+			name: "in progress when terms are pending",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementDisabled,
+				TCStatus:          WFCTCInProgress,
+				AddrStatus:        WFCAddressAvailable,
+				ProvStatus:        WFCProvisionProvisioned,
+			},
+			want:       WFCActivationInProgress,
+			inProgress: true,
+		},
+		{
+			name: "in progress when address is pending",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementDisabled,
+				TCStatus:          WFCTCAvailable,
+				AddrStatus:        WFCAddressInProgress,
+				ProvStatus:        WFCProvisionProvisioned,
+			},
+			want:       WFCActivationInProgress,
+			inProgress: true,
+		},
+		{
+			name: "in progress when provisioning is pending",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementDisabled,
+				TCStatus:          WFCTCAvailable,
+				AddrStatus:        WFCAddressAvailable,
+				ProvStatus:        WFCProvisionInProgress,
+			},
+			want:       WFCActivationInProgress,
+			inProgress: true,
+		},
+		{
+			name: "not provisioned is unavailable",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementDisabled,
+				TCStatus:          WFCTCAvailable,
+				AddrStatus:        WFCAddressAvailable,
+				ProvStatus:        WFCProvisionNotProvisioned,
+			},
+			want: WFCActivationUnavailable,
+		},
+		{
+			name: "entitlement provisioning is unavailable",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementProvisioning,
+				TCStatus:          WFCTCAvailable,
+				AddrStatus:        WFCAddressAvailable,
+				ProvStatus:        WFCProvisionProvisioned,
+			},
+			want: WFCActivationUnavailable,
+		},
+		{
+			name: "entitled can be activated",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementEnabled,
+				TCStatus:          WFCTCNotRequired,
+				AddrStatus:        WFCAddressNotRequired,
+				ProvStatus:        WFCProvisionNotRequired,
+			},
+			want:     WFCActivationAvailable,
+			entitled: true,
+		},
+		{
+			name: "incompatible is unavailable",
+			status: WFCStatus{
+				EntitlementStatus: WFCEntitlementIncompatible,
+				TCStatus:          WFCTCNotAvailable,
+				AddrStatus:        WFCAddressNotAvailable,
+				ProvStatus:        WFCProvisionNotProvisioned,
+			},
+			want: WFCActivationUnavailable,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.status.ActivationMode(); got != tt.want {
+				t.Fatalf("ActivationMode() = %d, want %d", got, tt.want)
+			}
+			if got := tt.status.Entitled(); got != tt.entitled {
+				t.Fatalf("Entitled() = %t, want %t", got, tt.entitled)
+			}
+			if got := tt.status.NeedsUserWebFlow(); got != tt.webFlow {
+				t.Fatalf("NeedsUserWebFlow() = %t, want %t", got, tt.webFlow)
+			}
+			if got := tt.status.InProgress(); got != tt.inProgress {
+				t.Fatalf("InProgress() = %t, want %t", got, tt.inProgress)
+			}
+		})
+	}
+}
+
+func TestWFCConfigShouldShowWebFlow(t *testing.T) {
+	status := WFCStatus{
+		EntitlementStatus: WFCEntitlementDisabled,
+		TCStatus:          WFCTCNotAvailable,
+		AddrStatus:        WFCAddressNotAvailable,
+		ProvStatus:        WFCProvisionNotProvisioned,
+	}
+	tests := []struct {
+		name string
+		cfg  WFCConfig
+		want bool
+	}{
+		{name: "shown when carrier allows webview", cfg: WFCConfig{ShowVoWiFiWebview: true}, want: true},
+		{name: "hidden when carrier disables webview", cfg: WFCConfig{}, want: false},
+		{name: "hidden when activation is skipped", cfg: WFCConfig{ShowVoWiFiWebview: true, SkipActivation: true}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.cfg.ShouldShowWebFlow(status); got != tt.want {
+				t.Fatalf("ShouldShowWebFlow() = %t, want %t", got, tt.want)
 			}
 		})
 	}
@@ -287,7 +471,7 @@ func TestCheckWFCEntitlementSendsVoWiFiApp(t *testing.T) {
 			if got := query.Get("entitlement_version"); got != "8.0" {
 				t.Fatalf("entitlement_version = %q, want 8.0", got)
 			}
-			wantAccept := EAPRelayContentType + ", " + DefaultResponseAccept
+			wantAccept := EAPRelayContentType + ", " + WFCResponseAccept
 			if got := req.Header.Get("Accept"); got != wantAccept {
 				t.Fatalf("Accept = %q, want %q", got, wantAccept)
 			}

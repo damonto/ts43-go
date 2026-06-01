@@ -9,6 +9,7 @@ import (
 )
 
 type websheetCallbackPayload struct {
+	Source             string `json:"source"`
 	Event              string `json:"event"`
 	ActivationCode     string `json:"activationCode"`
 	DefaultSmdpAddress string `json:"defaultSmdpAddress"`
@@ -23,15 +24,19 @@ func (r *WebsheetResult) UnmarshalText(text []byte) error {
 	if line == "" {
 		return errors.New("websheet callback is required")
 	}
+	vowifiCallback := strings.HasPrefix(line, "TS43_VOWIFI_CALLBACK")
 	line = trimCallbackLogPrefix(line, "TS43_ODSA_CALLBACK")
+	line = trimCallbackLogPrefix(line, "TS43_VOWIFI_CALLBACK")
 
 	var next WebsheetResult
 	var err error
 	switch {
 	case strings.HasPrefix(line, "{"):
-		next, err = websheetResultFromJSON(line)
+		next, err = websheetResultFromJSON(line, vowifiCallback)
 	case strings.Contains(line, "ODSAServiceFlow."):
 		next, err = websheetResultFromJS(line)
+	case strings.Contains(line, "VoWiFiWebServiceFlow."):
+		next, err = websheetResultFromVoWiFiJS(line)
 	case strings.Contains(line, "/_callback"):
 		next, err = websheetResultFromURL(line)
 	default:
@@ -52,10 +57,13 @@ func trimCallbackLogPrefix(line, prefix string) string {
 	return strings.TrimSpace(strings.TrimPrefix(line, prefix))
 }
 
-func websheetResultFromJSON(line string) (WebsheetResult, error) {
+func websheetResultFromJSON(line string, vowifiCallback bool) (WebsheetResult, error) {
 	var payload websheetCallbackPayload
 	if err := json.Unmarshal([]byte(line), &payload); err != nil {
 		return WebsheetResult{}, fmt.Errorf("parse websheet JSON callback: %w", err)
+	}
+	if vowifiCallback || strings.EqualFold(payload.Source, "vowifi") {
+		return websheetResultFromVoWiFiName(payload.Event)
 	}
 	values := url.Values{}
 	values.Set("activationCode", payload.ActivationCode)
@@ -80,6 +88,29 @@ func websheetResultFromJS(line string) (WebsheetResult, error) {
 		return WebsheetResult{}, errors.New("callback argument list is not closed")
 	}
 	return websheetResultFromName(name, splitJSArgs(argsText), nil)
+}
+
+func websheetResultFromVoWiFiJS(line string) (WebsheetResult, error) {
+	_, after, ok := strings.Cut(line, "VoWiFiWebServiceFlow.")
+	if !ok {
+		return WebsheetResult{}, errors.New("VoWiFiWebServiceFlow callback is required")
+	}
+	name, _, ok := strings.Cut(after, "(")
+	if !ok {
+		return WebsheetResult{}, errors.New("callback argument list is required")
+	}
+	return websheetResultFromVoWiFiName(name)
+}
+
+func websheetResultFromVoWiFiName(name string) (WebsheetResult, error) {
+	switch normalizeCallbackName(name) {
+	case "entitlementchanged":
+		return WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}, nil
+	case "dismissflow":
+		return WebsheetResult{Event: WebsheetEventVoWiFiDismissFlow}, nil
+	default:
+		return WebsheetResult{}, fmt.Errorf("unknown VoWiFi websheet callback %q", name)
+	}
 }
 
 func websheetResultFromURL(raw string) (WebsheetResult, error) {
@@ -149,6 +180,8 @@ func websheetResultFromName(name string, args []string, query url.Values) (Websh
 			Event: WebsheetEventDeleteProfileInUse,
 			ICCID: argOrQuery(args, query, 0, "iccid", "ICCID"),
 		}, nil
+	case "entitlementchanged":
+		return WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}, nil
 	default:
 		return WebsheetResult{}, fmt.Errorf("unknown websheet callback %q", name)
 	}

@@ -33,8 +33,8 @@ func ts43Websheet(reader *bufio.Reader, w io.Writer, event ts43.WebsheetEvent) (
 	fmt.Fprintln(w, "  DELETE_TOKEN")
 	fmt.Fprintln(w, "  DELETE_PROFILE <iccid>")
 	fmt.Fprintln(w, "  DISMISS")
-	fmt.Fprintln(w, "The injected JS adapter is available at examples/odsa_service_flow.js.")
-	fmt.Fprintln(w, "Paste the JSON message emitted by that adapter, a JS ODSAServiceFlow call,")
+	fmt.Fprintln(w, "The injected JS adapters are available at examples/odsa_service_flow.js and examples/vowifi_service_flow.js.")
+	fmt.Fprintln(w, "Paste the JSON message emitted by an adapter, a JS ODSAServiceFlow/VoWiFiWebServiceFlow call,")
 	fmt.Fprintln(w, "or a callback URL containing /_callback or /_callback/esim.")
 
 	for {
@@ -71,8 +71,12 @@ func isWebsheetCallbackText(line string) bool {
 	if strings.HasPrefix(line, "TS43_ODSA_CALLBACK") {
 		line = strings.TrimSpace(strings.TrimPrefix(line, "TS43_ODSA_CALLBACK"))
 	}
+	if strings.HasPrefix(line, "TS43_VOWIFI_CALLBACK") {
+		line = strings.TrimSpace(strings.TrimPrefix(line, "TS43_VOWIFI_CALLBACK"))
+	}
 	return strings.HasPrefix(line, "{") ||
 		strings.Contains(line, "ODSAServiceFlow.") ||
+		strings.Contains(line, "VoWiFiWebServiceFlow.") ||
 		strings.Contains(line, "/_callback")
 }
 

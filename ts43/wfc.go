@@ -26,6 +26,11 @@ var (
 )
 
 const (
+	appVoLTE  = "ap2003"
+	appSMSOIP = "ap2005"
+)
+
+const (
 	WFCEntitlementDisabled     WFCEntitlementStatus = 0
 	WFCEntitlementEnabled      WFCEntitlementStatus = 1
 	WFCEntitlementIncompatible WFCEntitlementStatus = 2
@@ -42,6 +47,10 @@ const (
 	WFCProvisionProvisioned    WFCProvisionStatus   = 1
 	WFCProvisionNotRequired    WFCProvisionStatus   = 2
 	WFCProvisionInProgress     WFCProvisionStatus   = 3
+	WFCActivationUnavailable   WFCActivationMode    = 0
+	WFCActivationInProgress    WFCActivationMode    = 1
+	WFCActivationWebView       WFCActivationMode    = 2
+	WFCActivationAvailable     WFCActivationMode    = 3
 )
 
 type WFCEntitlementStatus int
@@ -119,6 +128,8 @@ func (s *WFCProvisionStatus) UnmarshalText(text []byte) error {
 	*s = WFCProvisionStatus(n)
 	return nil
 }
+
+type WFCActivationMode int
 
 type WFCConfig struct {
 	CarrierName                      string
@@ -218,29 +229,50 @@ type WFCStatus struct {
 }
 
 func (s WFCStatus) Entitled() bool {
-	return s.EntitlementStatus == WFCEntitlementEnabled &&
-		(s.ProvStatus == WFCProvisionProvisioned || s.ProvStatus == WFCProvisionNotRequired) &&
-		(s.TCStatus == WFCTCAvailable || s.TCStatus == WFCTCNotRequired) &&
-		(s.AddrStatus == WFCAddressAvailable || s.AddrStatus == WFCAddressNotRequired)
+	return s.ActivationMode() == WFCActivationAvailable
 }
 
 func (s WFCStatus) NeedsUserWebFlow() bool {
-	return s.EntitlementStatus == WFCEntitlementDisabled &&
-		(s.TCStatus == WFCTCNotAvailable || s.AddrStatus == WFCAddressNotAvailable)
+	return s.ActivationMode() == WFCActivationWebView
 }
 
 func (s WFCStatus) InProgress() bool {
-	return s.EntitlementStatus == WFCEntitlementProvisioning ||
-		(s.EntitlementStatus == WFCEntitlementDisabled &&
-			(s.TCStatus == WFCTCInProgress || s.AddrStatus == WFCAddressInProgress)) ||
-		(s.EntitlementStatus == WFCEntitlementDisabled &&
-			(s.ProvStatus == WFCProvisionNotProvisioned || s.ProvStatus == WFCProvisionInProgress) &&
-			(s.TCStatus == WFCTCAvailable || s.TCStatus == WFCTCNotRequired) &&
-			(s.AddrStatus == WFCAddressAvailable || s.AddrStatus == WFCAddressNotRequired))
+	return s.ActivationMode() == WFCActivationInProgress
 }
 
 func (s WFCStatus) Incompatible() bool {
 	return s.EntitlementStatus == WFCEntitlementIncompatible
+}
+
+func (s WFCStatus) ActivationMode() WFCActivationMode {
+	if s.EntitlementStatus == WFCEntitlementIncompatible {
+		return WFCActivationUnavailable
+	}
+	if s.EntitlementStatus == WFCEntitlementDisabled {
+		if s.TCStatus == WFCTCNotAvailable || s.AddrStatus == WFCAddressNotAvailable {
+			return WFCActivationWebView
+		}
+		if s.TCStatus == WFCTCInProgress ||
+			s.AddrStatus == WFCAddressInProgress ||
+			s.ProvStatus == WFCProvisionInProgress {
+			return WFCActivationInProgress
+		}
+		return WFCActivationUnavailable
+	}
+	if s.EntitlementStatus == WFCEntitlementEnabled &&
+		(s.ProvStatus == WFCProvisionProvisioned || s.ProvStatus == WFCProvisionNotRequired) &&
+		(s.TCStatus == WFCTCAvailable || s.TCStatus == WFCTCNotRequired) &&
+		(s.AddrStatus == WFCAddressAvailable || s.AddrStatus == WFCAddressNotRequired) {
+		return WFCActivationAvailable
+	}
+	return WFCActivationUnavailable
+}
+
+func (c WFCConfig) ShouldShowWebFlow(status WFCStatus) bool {
+	if c.SkipActivation || !c.ShowVoWiFiWebview {
+		return false
+	}
+	return status.NeedsUserWebFlow()
 }
 
 func CheckWFCEntitlement(ctx context.Context, cfg Config, identity sim.Identity, device Device, wfc WFCConfig) (WFCStatus, error) {
@@ -275,7 +307,7 @@ func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity,
 		TerminalModel:      device.Model,
 		TerminalSoftware:   device.SoftwareVersion,
 		AppName:            cfg.AppName,
-		Accept:             DefaultResponseAccept,
+		Accept:             WFCResponseAccept,
 		ClientTS43:         firstNonEmpty(cfg.ClientTS43, DefaultWFCClientTS43),
 	}
 	body, _, err := next.callRaw(ctx, identity, req, ODSAOperation{})
@@ -399,19 +431,81 @@ type wfcPayload struct {
 }
 
 func (p *wfcPayload) UnmarshalJSON(data []byte) error {
-	var named struct {
-		Application *wfcFields `json:"APPLICATION"`
-	}
-	if err := json.Unmarshal(data, &named); err != nil {
-		return err
-	}
 	var root wfcFields
 	if err := json.Unmarshal(data, &root); err != nil {
 		return err
 	}
-	p.Application = named.Application
+
+	var fieldsByName map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fieldsByName); err != nil {
+		return err
+	}
+	var vowifi, generic, volte, smsoip wfcFields
+	var hasVoWiFi, hasGeneric, hasVoLTE, hasSMSOIP bool
+	for name, raw := range fieldsByName {
+		appID, ok := wfcJSONAppID(name)
+		if !ok {
+			continue
+		}
+		app, err := decodeWFCJSONFields(raw, appID)
+		if err != nil {
+			return err
+		}
+		if app.AppID.String() == AppVoWiFi {
+			vowifi = app
+			hasVoWiFi = true
+			continue
+		}
+		switch app.AppID.String() {
+		case appVoLTE:
+			volte = app
+			hasVoLTE = true
+		case appSMSOIP:
+			smsoip = app
+			hasSMSOIP = true
+		default:
+			generic = app
+			hasGeneric = true
+		}
+	}
+	switch {
+	case hasVoWiFi:
+		p.Application = &vowifi
+	case hasGeneric:
+		p.Application = &generic
+	case hasVoLTE:
+		p.Application = &volte
+	case hasSMSOIP:
+		p.Application = &smsoip
+	}
 	p.Root = root
 	return nil
+}
+
+func wfcJSONAppID(name string) (string, bool) {
+	switch {
+	case strings.EqualFold(name, "APPLICATION"):
+		return "", true
+	case strings.EqualFold(name, AppVoWiFi):
+		return AppVoWiFi, true
+	case strings.EqualFold(name, appVoLTE):
+		return appVoLTE, true
+	case strings.EqualFold(name, appSMSOIP):
+		return appSMSOIP, true
+	default:
+		return "", false
+	}
+}
+
+func decodeWFCJSONFields(data []byte, appID string) (wfcFields, error) {
+	var fields wfcFields
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return wfcFields{}, err
+	}
+	if fields.AppID == "" && appID != "" {
+		fields.AppID = stringField(appID)
+	}
+	return fields, nil
 }
 
 func (p *wfcPayload) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
@@ -423,7 +517,7 @@ func (p *wfcPayload) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) 
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			if t.Name.Local != "characteristic" || characteristicType(t) != "APPLICATION" {
+			if t.Name.Local != "characteristic" || !strings.EqualFold(characteristicType(t), "APPLICATION") {
 				if err := decoder.Skip(); err != nil {
 					return err
 				}
@@ -471,6 +565,17 @@ type wfcFields struct {
 	ServiceFlowUserData stringField `json:"ServiceFlow_UserData"`
 }
 
+func (f *wfcFields) UnmarshalJSON(data []byte) error {
+	var fields map[string]stringField
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for name, value := range fields {
+		f.set(name, value.String())
+	}
+	return nil
+}
+
 func (f *wfcFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
 	for {
 		tok, err := decoder.Token()
@@ -499,22 +604,33 @@ func (f *wfcFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) e
 }
 
 func (f *wfcFields) set(name, value string) {
-	switch name {
-	case "AppID":
+	switch normalizeWFCFieldName(name) {
+	case "appid":
 		f.AppID = stringField(value)
-	case "EntitlementStatus":
+	case "entitlementstatus":
 		f.EntitlementStatus = stringField(value)
-	case "TC_Status":
+	case "tcstatus":
 		f.TCStatus = stringField(value)
-	case "AddrStatus":
+	case "addrstatus":
 		f.AddrStatus = stringField(value)
-	case "ProvStatus":
+	case "provstatus":
 		f.ProvStatus = stringField(value)
-	case "ServiceFlow_URL":
+	case "serviceflowurl":
 		f.ServiceFlowURL = stringField(value)
-	case "ServiceFlow_UserData":
+	case "serviceflowuserdata":
 		f.ServiceFlowUserData = stringField(value)
 	}
+}
+
+func normalizeWFCFieldName(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if r == '_' {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return strings.ToLower(b.String())
 }
 
 func (f wfcFields) empty() bool {

@@ -36,6 +36,16 @@ func TestWebsheetResultUnmarshalText(t *testing.T) {
 			wantNext:  OperationAcquireConf,
 		},
 		{
+			name:      "VoWiFi entitlement changed JSON callback",
+			text:      `TS43_VOWIFI_CALLBACK {"event":"entitlementChanged","source":"vowifi"}`,
+			wantEvent: WebsheetEventVoWiFiEntitlementChanged,
+		},
+		{
+			name:      "VoWiFi dismiss JavaScript callback",
+			text:      `VoWiFiWebServiceFlow.dismissFlow()`,
+			wantEvent: WebsheetEventVoWiFiDismissFlow,
+		},
+		{
 			name:           "callback URL activation",
 			text:           "https://carrier.test/_callback/esim?activationCode=LPA%3A1%24smdp.example%24matching&iccid=8900000000000000000",
 			wantEvent:      WebsheetEventProfileReadyWithActivationCode,
