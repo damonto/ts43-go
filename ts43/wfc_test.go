@@ -29,6 +29,7 @@ func TestDiscoverWFC(t *testing.T) {
 				Version:                          "8.0",
 				ClientTS43:                       DefaultWFCClientTS43,
 				DefaultServiceEntitlementEnabled: true,
+				WebsheetClientName:               "WiFiCallingWebViewController",
 			},
 		},
 		{
@@ -41,6 +42,7 @@ func TestDiscoverWFC(t *testing.T) {
 				Version:                          "8.0",
 				ClientTS43:                       DefaultWFCClientTS43,
 				DefaultServiceEntitlementEnabled: true,
+				WebsheetClientName:               "WiFiCallingWebViewController",
 			},
 		},
 		{
@@ -63,6 +65,41 @@ func TestDiscoverWFC(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("DiscoverWFC() = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDiscoverWFCWebsheetClientName(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity sim.Identity
+		want     string
+	}{
+		{
+			name:     "uscc uses VoWiFi service flow",
+			identity: sim.Identity{MCC: "311", MNC: "220"},
+			want:     "VoWiFiWebServiceFlow",
+		},
+		{
+			name:     "cspire uses VoWiFi service flow",
+			identity: sim.Identity{MCC: "311", MNC: "230"},
+			want:     "VoWiFiWebServiceFlow",
+		},
+		{
+			name:     "default uses WiFi calling web view",
+			identity: sim.Identity{MCC: "208", MNC: "01"},
+			want:     "WiFiCallingWebViewController",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DiscoverWFC(tt.identity)
+			if err != nil {
+				t.Fatalf("DiscoverWFC() error = %v", err)
+			}
+			if got.WebsheetClientName != tt.want {
+				t.Fatalf("WebsheetClientName = %q, want %q", got.WebsheetClientName, tt.want)
 			}
 		})
 	}
@@ -198,6 +235,34 @@ func TestWFCStatusUnmarshalBinary(t *testing.T) {
 			}
 			if got.NeedsUserWebFlow() != tt.webFlow {
 				t.Fatalf("NeedsUserWebFlow() = %t, want %t", got.NeedsUserWebFlow(), tt.webFlow)
+			}
+		})
+	}
+}
+
+func TestWFCStatusUnmarshalBinaryRequiresStatusFields(t *testing.T) {
+	tests := []struct {
+		name string
+		body []byte
+	}{
+		{
+			name: "missing terms JSON",
+			body: []byte(`{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":"1","AddrStatus":"2","ProvStatus":"2"}}`),
+		},
+		{
+			name: "empty terms XML",
+			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="1"/><parm name="TC_Status" value=""/><parm name="AddrStatus" value="2"/><parm name="ProvStatus" value="2"/></characteristic></wap-provisioningdoc>`),
+		},
+		{
+			name: "only app id XML",
+			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/></characteristic></wap-provisioningdoc>`),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got WFCStatus
+			if err := got.UnmarshalBinary(tt.body); err == nil {
+				t.Fatal("WFCStatus.UnmarshalBinary() error is nil")
 			}
 		})
 	}
@@ -495,5 +560,99 @@ func TestCheckWFCEntitlementSendsVoWiFiApp(t *testing.T) {
 	}
 	if !status.Entitled() {
 		t.Fatalf("Entitled() = false, status = %+v", status)
+	}
+}
+
+func TestCheckWFCEntitlementUsesCachedToken(t *testing.T) {
+	client := &Client{cfg: Config{
+		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			query := req.URL.Query()
+			if got := query.Get("IMSI"); got != "310260123456789" {
+				t.Fatalf("IMSI = %q, want source IMSI", got)
+			}
+			if got := query.Get("token"); got != "cached-token" {
+				t.Fatalf("token = %q, want cached-token", got)
+			}
+			if got := query.Get("EAP_ID"); got != "" {
+				t.Fatalf("EAP_ID = %q, want empty", got)
+			}
+			if got := req.Header.Get("Cookie"); got != "sid=old" {
+				t.Fatalf("Cookie = %q, want sid=old", got)
+			}
+			return responseWithCookie(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="fresh-token"/><parm name="validity" value="3600"/></characteristic><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="1"/><parm name="TC_Status" value="2"/><parm name="AddrStatus" value="2"/><parm name="ProvStatus" value="2"/></characteristic></wap-provisioningdoc>`, "sid=new"), nil
+		}),
+		Source: Endpoint{Channel: fakeChannel{}},
+		Logger: slog.Default(),
+	}}
+
+	got, err := client.CheckWFCEntitlementWithToken(
+		context.Background(),
+		sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+		Device{IMEI: "111111111111111"},
+		WFCConfig{Server: "https://example.test/ts43"},
+		AuthToken{Value: "cached-token", Cookies: []string{"sid=old"}},
+	)
+	if err != nil {
+		t.Fatalf("CheckWFCEntitlementWithToken() error = %v", err)
+	}
+	if !got.Status.Entitled() {
+		t.Fatalf("Status.Entitled() = false, status = %+v", got.Status)
+	}
+	if got.AuthToken.Value != "fresh-token" {
+		t.Fatalf("AuthToken.Value = %q, want fresh-token", got.AuthToken.Value)
+	}
+	if strings.Join(got.AuthToken.Cookies, ",") != "sid=new" {
+		t.Fatalf("AuthToken.Cookies = %q, want sid=new", strings.Join(got.AuthToken.Cookies, ","))
+	}
+	if got.AuthToken.ExpiresAt.IsZero() {
+		t.Fatal("AuthToken.ExpiresAt is zero")
+	}
+}
+
+func TestCheckWFCEntitlementFallsBackFromRejectedCachedToken(t *testing.T) {
+	var requests []string
+	client := &Client{cfg: Config{
+		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			query := req.URL.Query()
+			switch {
+			case query.Get("token") == "expired-token":
+				requests = append(requests, "cached")
+				return response(http.StatusNetworkAuthenticationRequired, ""), nil
+			case query.Get("EAP_ID") != "":
+				requests = append(requests, "eap")
+				return response(200, eapRelayBody(t, 7)), nil
+			case req.Method == http.MethodPost:
+				requests = append(requests, "relay")
+				if got := req.Header.Get("Accept"); got != WFCResponseAccept {
+					t.Fatalf("relay Accept = %q, want %q", got, WFCResponseAccept)
+				}
+				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="fresh-token"/></characteristic><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="1"/><parm name="TC_Status" value="2"/><parm name="AddrStatus" value="2"/><parm name="ProvStatus" value="2"/></characteristic></wap-provisioningdoc>`), nil
+			default:
+				t.Fatalf("unexpected request: method=%s query=%s", req.Method, req.URL.RawQuery)
+				return response(500, ""), nil
+			}
+		}),
+		Source: Endpoint{Channel: akaChannel{}},
+		Logger: slog.Default(),
+	}}
+
+	got, err := client.CheckWFCEntitlementWithToken(
+		context.Background(),
+		sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+		Device{IMEI: "111111111111111"},
+		WFCConfig{Server: "https://example.test/ts43"},
+		AuthToken{Value: "expired-token"},
+	)
+	if err != nil {
+		t.Fatalf("CheckWFCEntitlementWithToken() error = %v", err)
+	}
+	if !got.Status.Entitled() {
+		t.Fatalf("Status.Entitled() = false, status = %+v", got.Status)
+	}
+	if got.AuthToken.Value != "fresh-token" {
+		t.Fatalf("AuthToken.Value = %q, want fresh-token", got.AuthToken.Value)
+	}
+	if strings.Join(requests, ",") != "cached,eap,relay" {
+		t.Fatalf("requests = %q, want cached,eap,relay", strings.Join(requests, ","))
 	}
 }

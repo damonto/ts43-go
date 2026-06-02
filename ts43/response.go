@@ -152,10 +152,10 @@ func (f *tokenFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement)
 }
 
 func (f *tokenFields) set(name, value string) {
-	switch name {
+	switch strings.ToLower(name) {
 	case "token":
 		f.Token = stringField(value)
-	case "Validity":
+	case "validity":
 		f.Validity = stringField(value)
 	}
 }

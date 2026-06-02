@@ -294,13 +294,20 @@ func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitl
 		return nil, nil, err
 	}
 	httpReq.Header.Set("Content-Type", EAPRelayContentType)
-	httpReq.Header.Set("Accept", eapRelayAccept(req.Accept))
+	httpReq.Header.Set("Accept", relayResponseAccept(req))
 	httpReq.Header.Set("User-Agent", userAgent(req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
 	for _, cookie := range cookies {
 		httpReq.AddCookie(cookie)
 	}
 	c.cfg.Logger.Debug("TS.43 EAP relay", "method", httpReq.Method, "url", httpReq.URL.String())
 	return ts43http.DoRaw(ctx, c.httpClient(), httpReq)
+}
+
+func relayResponseAccept(req ServiceEntitlementRequest) string {
+	if req.App == AppVoWiFi || req.ClientTS43 == DefaultWFCClientTS43 {
+		return firstNonEmpty(req.Accept, WFCResponseAccept)
+	}
+	return eapRelayAccept(req.Accept)
 }
 
 func (c *Client) httpClient() HTTPDoer {

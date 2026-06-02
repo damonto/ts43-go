@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -142,6 +143,12 @@ type WFCConfig struct {
 	DefaultServiceEntitlementEnabled bool
 	SkipActivation                   bool
 	ShowVoWiFiWebview                bool
+	WebsheetClientName               string
+}
+
+type WFCResult struct {
+	Status    WFCStatus
+	AuthToken AuthToken
 }
 
 type wfcRecord struct {
@@ -157,6 +164,7 @@ type wfcRecord struct {
 	DefaultServiceEntitlementEnabled bool    `json:"defaultServiceEntitlementStatus"`
 	SkipActivation                   bool    `json:"skipActivation"`
 	ShowVoWiFiWebview                bool    `json:"showVoWiFiWebview"`
+	WebsheetClientName               string  `json:"websheetClientName"`
 }
 
 func DiscoverWFC(identity sim.Identity) (WFCConfig, error) {
@@ -216,6 +224,7 @@ func (r wfcRecord) config() WFCConfig {
 		DefaultServiceEntitlementEnabled: r.DefaultServiceEntitlementEnabled,
 		SkipActivation:                   r.SkipActivation,
 		ShowVoWiFiWebview:                r.ShowVoWiFiWebview,
+		WebsheetClientName:               r.WebsheetClientName,
 	}
 }
 
@@ -276,6 +285,14 @@ func (c WFCConfig) ShouldShowWebFlow(status WFCStatus) bool {
 }
 
 func CheckWFCEntitlement(ctx context.Context, cfg Config, identity sim.Identity, device Device, wfc WFCConfig) (WFCStatus, error) {
+	result, err := CheckWFCEntitlementWithToken(ctx, cfg, identity, device, wfc, AuthToken{})
+	if err != nil {
+		return WFCStatus{}, err
+	}
+	return result.Status, nil
+}
+
+func CheckWFCEntitlementWithToken(ctx context.Context, cfg Config, identity sim.Identity, device Device, wfc WFCConfig, token AuthToken) (WFCResult, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
@@ -286,12 +303,30 @@ func CheckWFCEntitlement(ctx context.Context, cfg Config, identity sim.Identity,
 		cfg.HTTPClient = ts43http.NewHTTPClient(cfg.Logger, cfg.Entitlement.Timeout)
 	}
 	client := &Client{cfg: cfg}
-	return client.CheckWFCEntitlement(ctx, identity, device, wfc)
+	return client.CheckWFCEntitlementWithToken(ctx, identity, device, wfc, token)
 }
 
 func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity, device Device, cfg WFCConfig) (WFCStatus, error) {
+	result, err := c.CheckWFCEntitlementWithToken(ctx, identity, device, cfg, AuthToken{})
+	if err != nil {
+		return WFCStatus{}, err
+	}
+	return result.Status, nil
+}
+
+func (c *Client) CheckWFCEntitlementWithToken(ctx context.Context, identity sim.Identity, device Device, cfg WFCConfig, token AuthToken) (WFCResult, error) {
+	if token.Value != "" {
+		result, err := c.checkWFCEntitlementOnce(ctx, identity, device, cfg, token)
+		if !isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) {
+			return result, err
+		}
+	}
+	return c.checkWFCEntitlementOnce(ctx, identity, device, cfg, AuthToken{})
+}
+
+func (c *Client) checkWFCEntitlementOnce(ctx context.Context, identity sim.Identity, device Device, cfg WFCConfig, token AuthToken) (WFCResult, error) {
 	if cfg.Server == "" {
-		return WFCStatus{}, errors.New("wfc entitlement server is required")
+		return WFCResult{}, errors.New("wfc entitlement server is required")
 	}
 	next := *c
 	next.cfg.Entitlement = Entitlement{
@@ -300,44 +335,50 @@ func (c *Client) CheckWFCEntitlement(ctx context.Context, identity sim.Identity,
 		Timeout: c.cfg.Entitlement.Timeout,
 	}
 	req := ServiceEntitlementRequest{
-		EntitlementVersion: firstNonEmpty(cfg.Version, "2.0"),
-		App:                firstNonEmpty(cfg.App, AppVoWiFi),
-		TerminalID:         device.IMEI,
-		TerminalVendor:     device.Vendor,
-		TerminalModel:      device.Model,
-		TerminalSoftware:   device.SoftwareVersion,
-		AppName:            cfg.AppName,
-		Accept:             WFCResponseAccept,
-		ClientTS43:         firstNonEmpty(cfg.ClientTS43, DefaultWFCClientTS43),
+		EntitlementVersion:  firstNonEmpty(cfg.Version, "2.0"),
+		App:                 firstNonEmpty(cfg.App, AppVoWiFi),
+		TerminalID:          device.IMEI,
+		TerminalVendor:      device.Vendor,
+		TerminalModel:       device.Model,
+		TerminalSoftware:    device.SoftwareVersion,
+		AppName:             cfg.AppName,
+		Accept:              WFCResponseAccept,
+		ClientTS43:          firstNonEmpty(cfg.ClientTS43, DefaultWFCClientTS43),
+		AuthenticationToken: token.Value,
+		Cookies:             token.Cookies,
 	}
-	body, _, err := next.callRaw(ctx, identity, req, ODSAOperation{})
+	body, cookies, err := next.callRaw(ctx, identity, req, ODSAOperation{})
 	if err != nil {
-		return WFCStatus{}, err
+		return WFCResult{}, err
 	}
 	var status WFCStatus
 	emptyBody := len(bytes.TrimSpace(body)) == 0
 	if !emptyBody {
 		if err := status.UnmarshalBinary(body); err != nil {
-			return WFCStatus{}, err
+			return WFCResult{}, err
 		}
 	}
+	nextToken := token
+	if parsed, err := wfcAuthTokenFromBody(body, token, cookies); err == nil {
+		nextToken = parsed
+	}
 	if emptyBody && cfg.DefaultServiceEntitlementEnabled {
-		return WFCStatus{
+		return WFCResult{Status: WFCStatus{
 			EntitlementStatus: WFCEntitlementEnabled,
 			TCStatus:          WFCTCNotRequired,
 			AddrStatus:        WFCAddressNotRequired,
 			ProvStatus:        WFCProvisionNotRequired,
-		}, nil
+		}, AuthToken: nextToken}, nil
 	}
 	if emptyBody {
-		return WFCStatus{
+		return WFCResult{Status: WFCStatus{
 			EntitlementStatus: WFCEntitlementIncompatible,
 			TCStatus:          WFCTCNotAvailable,
 			AddrStatus:        WFCAddressNotAvailable,
 			ProvStatus:        WFCProvisionNotProvisioned,
-		}, nil
+		}, AuthToken: nextToken}, nil
 	}
-	return status, nil
+	return WFCResult{Status: status, AuthToken: nextToken}, nil
 }
 
 func (s *WFCStatus) UnmarshalBinary(data []byte) error {
@@ -563,7 +604,15 @@ type wfcFields struct {
 	ProvStatus          stringField `json:"ProvStatus"`
 	ServiceFlowURL      stringField `json:"ServiceFlow_URL"`
 	ServiceFlowUserData stringField `json:"ServiceFlow_UserData"`
+	required            uint8
 }
+
+const (
+	wfcFieldEntitlement uint8 = 1 << iota
+	wfcFieldTC
+	wfcFieldAddr
+	wfcFieldProv
+)
 
 func (f *wfcFields) UnmarshalJSON(data []byte) error {
 	var fields map[string]stringField
@@ -609,12 +658,16 @@ func (f *wfcFields) set(name, value string) {
 		f.AppID = stringField(value)
 	case "entitlementstatus":
 		f.EntitlementStatus = stringField(value)
+		f.required |= wfcFieldEntitlement
 	case "tcstatus":
 		f.TCStatus = stringField(value)
+		f.required |= wfcFieldTC
 	case "addrstatus":
 		f.AddrStatus = stringField(value)
+		f.required |= wfcFieldAddr
 	case "provstatus":
 		f.ProvStatus = stringField(value)
+		f.required |= wfcFieldProv
 	case "serviceflowurl":
 		f.ServiceFlowURL = stringField(value)
 	case "serviceflowuserdata":
@@ -644,6 +697,9 @@ func (f wfcFields) empty() bool {
 }
 
 func (f wfcFields) status() (WFCStatus, error) {
+	if err := f.requireStatusFields(); err != nil {
+		return WFCStatus{}, err
+	}
 	var entitlementStatus WFCEntitlementStatus
 	if err := entitlementStatus.UnmarshalText([]byte(f.EntitlementStatus)); err != nil {
 		return WFCStatus{}, err
@@ -668,4 +724,56 @@ func (f wfcFields) status() (WFCStatus, error) {
 		ServiceFlowURL:      f.ServiceFlowURL.String(),
 		ServiceFlowUserData: f.ServiceFlowUserData.String(),
 	}, nil
+}
+
+func (f wfcFields) requireStatusFields() error {
+	var missing []string
+	if f.required&wfcFieldEntitlement == 0 || f.EntitlementStatus.String() == "" {
+		missing = append(missing, "EntitlementStatus")
+	}
+	if f.required&wfcFieldTC == 0 || f.TCStatus.String() == "" {
+		missing = append(missing, "TC_Status")
+	}
+	if f.required&wfcFieldAddr == 0 || f.AddrStatus.String() == "" {
+		missing = append(missing, "AddrStatus")
+	}
+	if f.required&wfcFieldProv == 0 || f.ProvStatus.String() == "" {
+		missing = append(missing, "ProvStatus")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("wfc status missing required fields: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func wfcAuthTokenFromBody(body []byte, current AuthToken, cookies []string) (AuthToken, error) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return current, nil
+	}
+	var payload odsaPayload
+	var err error
+	if json.Valid(body) {
+		err = json.Unmarshal(body, &payload)
+	} else {
+		err = xml.Unmarshal(body, &payload)
+	}
+	if err != nil {
+		return current, err
+	}
+	if payload.Token == nil || payload.Token.Token == "" {
+		return current, nil
+	}
+	next := current
+	next.Value = payload.Token.Token.String()
+	next.Cookies = mergeCookieHeaders(current.Cookies, cookies)
+	next.ExpiresAt = time.Now().Add(time.Duration(wfcAuthTokenValidity(payload.Token.Validity.String())) * time.Second)
+	return next, nil
+}
+
+func wfcAuthTokenValidity(value string) int {
+	validity := atoi(value)
+	if validity > 0 {
+		return validity
+	}
+	return 3600
 }
