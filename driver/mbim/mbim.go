@@ -221,7 +221,7 @@ func (m *MBIM) Identity(ctx context.Context) (*sim.Identity, error) {
 	if data, err := m.readBinary(sim.USIMAID, []byte{0x6f, 0x3e}, 0); err == nil {
 		gid1 = sim.GroupIdentifierString(data)
 	}
-	return sim.NewIdentity(sim.Identity{ICCID: status.SimICCID, IMSI: status.SubscriberID, GID1: gid1}, ad)
+	return sim.NewIdentity(sim.Identity{ICCID: status.SIMICCID, IMSI: status.SubscriberID, GID1: gid1}, ad)
 }
 
 func (m *MBIM) subscriberReadyStatus() (*SubscriberReadyStatusResponse, error) {

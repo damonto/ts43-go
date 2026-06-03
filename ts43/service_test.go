@@ -38,7 +38,7 @@ func TestActivateDownloadAndCompleteActivation(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	result, err := client.activate(context.Background(), &Offer{
+	result, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -81,7 +81,7 @@ func TestClientUsesDefaultLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if client.cfg.Logger == nil {
+	if client.runtime.logger == nil {
 		t.Fatal("Logger = nil, want default logger")
 	}
 	_, _, err = client.call(
@@ -105,8 +105,8 @@ func TestNewAllowsMissingEntitlementServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if client.cfg.Entitlement.Server != "" {
-		t.Fatalf("Server = %q, want empty before discovery", client.cfg.Entitlement.Server)
+	if client.transfer.entitlement.Server != "" {
+		t.Fatalf("Server = %q, want empty before discovery", client.transfer.entitlement.Server)
 	}
 }
 
@@ -155,8 +155,8 @@ func TestTransferDiscoversEntitlementServer(t *testing.T) {
 	if result.State != StateDone {
 		t.Fatalf("State = %d, want %d", result.State, StateDone)
 	}
-	if client.cfg.Entitlement.Server != "https://ts43.eas3.msg.t-mobile.com/google/" {
-		t.Fatalf("Server = %q, want discovered T-Mobile server", client.cfg.Entitlement.Server)
+	if client.transfer.entitlement.Server != "https://ts43.eas3.msg.t-mobile.com/google/" {
+		t.Fatalf("Server = %q, want discovered T-Mobile server", client.transfer.entitlement.Server)
 	}
 	if got := operationList(calls); got != ",CheckEligibility,AcquireTemporaryToken,ManageSubscription" {
 		t.Fatalf("calls = %s", got)
@@ -271,7 +271,7 @@ func TestActivateReturnsDownloadFromManageSubscription(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	result, err := client.activate(context.Background(), &Offer{
+	result, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -373,7 +373,7 @@ func TestContinueAfterSourceProfileDeletionUsesReturnedToken(t *testing.T) {
 				t.Fatalf("New() error = %v", err)
 			}
 
-			result, err := client.activate(context.Background(), &Offer{
+			result, err := client.activate(context.Background(), &transferOffer{
 				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -518,7 +518,7 @@ func TestActivateReturnsDoneFromManageSubscription(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	result, err := client.activate(context.Background(), &Offer{
+	result, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -536,13 +536,13 @@ func TestActivateReturnsDoneFromManageSubscription(t *testing.T) {
 }
 
 func TestAcquireTemporaryTokenRequiresTransferTargets(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) {
 			return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="OperationTargets" value="ManageSubscription"/></characteristic></wap-provisioningdoc>`), nil
 		}),
 		Entitlement: Entitlement{Server: "https://example.test/ts43"},
 		Logger:      slog.Default(),
-	}}
+	})
 
 	_, err := client.AcquireTemporaryToken(
 		context.Background(),
@@ -557,13 +557,13 @@ func TestAcquireTemporaryTokenRequiresTransferTargets(t *testing.T) {
 }
 
 func TestAcquireTemporaryTokenRequiresExpiry(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) {
 			return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 		}),
 		Entitlement: Entitlement{Server: "https://example.test/ts43"},
 		Logger:      slog.Default(),
-	}}
+	})
 
 	_, err := client.AcquireTemporaryToken(
 		context.Background(),
@@ -578,7 +578,7 @@ func TestAcquireTemporaryTokenRequiresExpiry(t *testing.T) {
 }
 
 func TestAuthenticateInitialEAPRequestUsesRelayAccept(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			wantAccept := EAPRelayContentType + ", " + DefaultResponseAccept
 			if got := req.Header.Get("Accept"); got != wantAccept {
@@ -591,7 +591,7 @@ func TestAuthenticateInitialEAPRequestUsesRelayAccept(t *testing.T) {
 		}),
 		Entitlement: Entitlement{Server: "https://example.test/ts43"},
 		Logger:      slog.Default(),
-	}}
+	})
 
 	token, err := client.Authenticate(
 		context.Background(),
@@ -844,8 +844,8 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Transfer() error = %v", err)
 			}
-			if result.Offer.AuthToken.Value != tt.wantAuth {
-				t.Fatalf("Offer.AuthToken = %q, want %q", result.Offer.AuthToken.Value, tt.wantAuth)
+			if result.session.offer.AuthToken.Value != tt.wantAuth {
+				t.Fatalf("session AuthToken = %q, want %q", result.session.offer.AuthToken.Value, tt.wantAuth)
 			}
 			if got := strings.Join(calls, ","); got != tt.wantCalls {
 				t.Fatalf("calls = %q, want %q", got, tt.wantCalls)
@@ -885,7 +885,7 @@ func TestPostRelayMatchesGMSRequestShape(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{
+			client := newClient(Config{
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					if req.Method != http.MethodPost {
 						t.Fatalf("method = %q, want POST", req.Method)
@@ -916,7 +916,7 @@ func TestPostRelayMatchesGMSRequestShape(t *testing.T) {
 				}),
 				Entitlement: Entitlement{Server: "https://example.test/ts43"},
 				Logger:      slog.Default(),
-			}}
+			})
 
 			_, _, err := client.postRelay(context.Background(), tt.packet, ServiceEntitlementRequest{
 				TerminalID:       "111111111111111",
@@ -980,7 +980,7 @@ func TestActivateRefreshesTokenAfterManageHTTP511(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	result, err := client.activate(context.Background(), &Offer{
+	result, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1048,7 +1048,7 @@ func TestPollConfigurationRetriesAfterHTTP511(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	resp, err := client.pollConfiguration(context.Background(), &Offer{
+	resp, err := client.pollConfiguration(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1162,7 +1162,7 @@ func TestActivateTypeTwoDelayedDownloadWithTemporaryToken(t *testing.T) {
 				t.Fatalf("New() error = %v", err)
 			}
 
-			result, err := client.activate(context.Background(), &Offer{
+			result, err := client.activate(context.Background(), &transferOffer{
 				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1251,7 +1251,7 @@ func TestActivateHandlesManageSubscriptionPendingResults(t *testing.T) {
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}
-			result, err := client.activate(context.Background(), &Offer{
+			result, err := client.activate(context.Background(), &transferOffer{
 				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1281,15 +1281,15 @@ func TestContinueRequiresPendingRequestBodies(t *testing.T) {
 		},
 		{
 			name:   "missing user input",
-			result: &Result{State: StatePendingUserInput, Offer: &Offer{}},
+			result: &Result{State: StatePendingUserInput, session: &transferSession{offer: &transferOffer{}}},
 		},
 		{
 			name:   "missing websheet result",
-			result: &Result{State: StatePendingWebsheet, Offer: &Offer{}},
+			result: &Result{State: StatePendingWebsheet, session: &transferSession{offer: &transferOffer{}}},
 		},
 		{
 			name:   "missing source profile deletion confirmation",
-			result: &Result{State: StatePendingSourceProfileDeletion, Offer: &Offer{}},
+			result: &Result{State: StatePendingSourceProfileDeletion, session: &transferSession{offer: &transferOffer{}}},
 		},
 		{
 			name:   "missing offer",
@@ -1380,11 +1380,13 @@ func TestCompleteActivationReturnsDoneFromUpdateSubscription(t *testing.T) {
 	}
 
 	result := &Result{
-		Offer: &Offer{
-			SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
-			SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
-			TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
-			TemporaryToken: TemporaryToken{Value: "old-temp"},
+		session: &transferSession{
+			offer: &transferOffer{
+				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
+				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+				TemporaryToken: TemporaryToken{Value: "old-temp"},
+			},
 		},
 		DownloadConfig: DownloadConfig{ProfileICCID: "8900000000000000000"},
 	}
@@ -1428,11 +1430,13 @@ func TestCompleteActivationReturnsDismissEvent(t *testing.T) {
 	}
 
 	result, err := client.CompleteActivation(context.Background(), &Result{
-		Offer: &Offer{
-			SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
-			SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
-			TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
-			AuthToken:      AuthToken{Value: "temp"},
+		session: &transferSession{
+			offer: &transferOffer{
+				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
+				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+				AuthToken:      AuthToken{Value: "temp"},
+			},
 		},
 		DownloadConfig: DownloadConfig{ProfileICCID: "8900000000000000000"},
 	}, ActivationResult{})
@@ -1476,11 +1480,13 @@ func TestCompleteActivationReturnsPendingActivationForDelayedDownload(t *testing
 	}
 
 	result, err := client.CompleteActivation(context.Background(), &Result{
-		Offer: &Offer{
-			SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
-			SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
-			TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
-			AuthToken:      AuthToken{Value: "temp"},
+		session: &transferSession{
+			offer: &transferOffer{
+				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
+				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+				AuthToken:      AuthToken{Value: "temp"},
+			},
 		},
 		DownloadConfig: DownloadConfig{ProfileICCID: "8900000000000000000"},
 	}, ActivationResult{})
@@ -1526,7 +1532,7 @@ func TestManageSubscriptionAcceptsActionableResults(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{
+			client := newClient(Config{
 				HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) {
 					body := `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="` + tt.subscriptionResult + `"/>`
 					if tt.websheetURL != "" {
@@ -1543,7 +1549,7 @@ func TestManageSubscriptionAcceptsActionableResults(t *testing.T) {
 				}),
 				Entitlement: Entitlement{Server: "https://example.test/ts43"},
 				Logger:      slog.Default(),
-			}}
+			})
 			_, err := client.ManageSubscription(
 				context.Background(),
 				sim.Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
@@ -1579,7 +1585,7 @@ func TestPollConfigurationUsesServerPollingInterval(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	_, err = client.pollConfiguration(context.Background(), &Offer{
+	_, err = client.pollConfiguration(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1612,7 +1618,7 @@ func TestPollConfigurationUsesPollingIntervalUnit(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	_, err = client.pollConfiguration(context.Background(), &Offer{
+	_, err = client.pollConfiguration(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1645,7 +1651,7 @@ func TestPollConfigurationUsesConfiguredIntervalWhenServerOmitsPollingInterval(t
 		t.Fatalf("New() error = %v", err)
 	}
 
-	_, err = client.pollConfiguration(context.Background(), &Offer{
+	_, err = client.pollConfiguration(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1676,7 +1682,7 @@ func TestPollConfigurationStopsWhenPollingIntervalIsZero(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	_, err = client.pollConfiguration(context.Background(), &Offer{
+	_, err = client.pollConfiguration(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1701,7 +1707,7 @@ func TestActivateReturnsDelayedDownloadEventWhenServerDelaysDownload(t *testing.
 		t.Fatalf("New() error = %v", err)
 	}
 
-	result, err := client.activate(context.Background(), &Offer{
+	result, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1741,8 +1747,10 @@ func TestApplyDownloadConfigurationRejectsMissingDownloadInfo(t *testing.T) {
 	client := &Client{}
 
 	result, err := client.applyDownloadConfiguration(&Result{
-		Offer: &Offer{
-			TargetDevice: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+		session: &transferSession{
+			offer: &transferOffer{
+				TargetDevice: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+			},
 		},
 	}, DownloadConfig{})
 	if !errors.Is(err, errDownloadInfoMissing) {
@@ -1777,7 +1785,7 @@ func TestActivateReturnsSMDSDiscoveryEventForDelayedDownload(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	result, err := client.activate(context.Background(), &Offer{
+	result, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1836,7 +1844,7 @@ func TestPollConfigurationHandlesDeactivatedServiceStatus(t *testing.T) {
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}
-			resp, err := client.pollConfiguration(context.Background(), &Offer{
+			resp, err := client.pollConfiguration(context.Background(), &transferOffer{
 				SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 				SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 				TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1869,7 +1877,7 @@ func TestPollConfigurationRejectsUnknownServiceStatus(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	_, err = client.pollConfiguration(context.Background(), &Offer{
+	_, err = client.pollConfiguration(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
@@ -1903,7 +1911,7 @@ func TestManageSubscriptionOldTerminalIDGating(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{
+			client := newClient(Config{
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("old_terminal_id") != ""; got != tt.wantOld {
@@ -1919,7 +1927,7 @@ func TestManageSubscriptionOldTerminalIDGating(t *testing.T) {
 				}),
 				Entitlement: tt.entitlement,
 				Logger:      slog.Default(),
-			}}
+			})
 			credential := authCredential(AuthToken{Value: "tmp"})
 			if transferTypeUsesTemporaryToken(tt.entitlement.TransferType) {
 				credential = temporaryCredential(TemporaryToken{Value: "tmp"})
@@ -2410,7 +2418,7 @@ func TestTransferRequestAuthMode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{Entitlement: tt.entitlement}}
+			client := newClient(Config{Entitlement: tt.entitlement})
 
 			req := client.transferRequest(Device{IMEI: "111111111111111"}, client.transferCredentialFromTokens(TransferTokenResult{
 				Auth:      AuthToken{Value: "transfer"},
@@ -2573,7 +2581,7 @@ func TestManageSubscriptionTargetIdentityGating(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{
+			client := newClient(Config{
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("target_terminal_id") != ""; got != tt.wantTarget {
@@ -2600,7 +2608,7 @@ func TestManageSubscriptionTargetIdentityGating(t *testing.T) {
 				}),
 				Entitlement: tt.entitlement,
 				Logger:      slog.Default(),
-			}}
+			})
 
 			credential := authCredential(AuthToken{Value: "tmp"})
 			if transferTypeUsesTemporaryToken(tt.entitlement.TransferType) {
@@ -2633,7 +2641,7 @@ func TestCheckEligibilityTargetIdentityGating(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{
+			client := newClient(Config{
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("target_terminal_id") != ""; got != tt.wantTarget {
@@ -2649,7 +2657,7 @@ func TestCheckEligibilityTargetIdentityGating(t *testing.T) {
 				}),
 				Entitlement: tt.entitlement,
 				Logger:      slog.Default(),
-			}}
+			})
 
 			_, err := client.CheckEligibility(
 				context.Background(),
@@ -2677,7 +2685,7 @@ func TestAcquireTemporaryTokenTargetIdentityGating(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &Client{cfg: Config{
+			client := newClient(Config{
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("target_terminal_id") != ""; got != tt.wantTarget {
@@ -2693,7 +2701,7 @@ func TestAcquireTemporaryTokenTargetIdentityGating(t *testing.T) {
 				}),
 				Entitlement: tt.entitlement,
 				Logger:      slog.Default(),
-			}}
+			})
 
 			tokens, err := client.AcquireTemporaryToken(
 				context.Background(),
@@ -2713,7 +2721,7 @@ func TestAcquireTemporaryTokenTargetIdentityGating(t *testing.T) {
 }
 
 func TestTransferRequestsSendTargetAndConfiguredFields(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			query := req.URL.Query()
 			switch Operation(query.Get("operation")) {
@@ -2764,9 +2772,9 @@ func TestTransferRequestsSendTargetAndConfiguredFields(t *testing.T) {
 			FriendlyName:    "Pixel Watch",
 			Service:         "SharedNumber",
 		},
-	}}
+	})
 
-	_, err := client.activate(context.Background(), &Offer{
+	_, err := client.activate(context.Background(), &transferOffer{
 		SourceIdentity: sim.Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
 		SourceDevice:   Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
 		TargetDevice: Device{
@@ -2799,7 +2807,7 @@ func TestTemporaryTokenExpiresAt(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := temporaryTokenExpiresAt(tt.value, now)
+			got, err := temporaryTokenExpiresAt(tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("temporaryTokenExpiresAt() error = %v, wantErr %v", err, tt.wantErr)
 			}

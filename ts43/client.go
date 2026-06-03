@@ -17,7 +17,26 @@ import (
 )
 
 type Client struct {
-	cfg Config
+	runtime  clientRuntime
+	transfer transferDefaults
+}
+
+type clientRuntime struct {
+	logger     *slog.Logger
+	httpClient HTTPDoer
+	events     chan<- Event
+	now        func() time.Time
+	sleep      func(context.Context, time.Duration) error
+}
+
+type transferDefaults struct {
+	entitlement Entitlement
+	source      Endpoint
+	target      Endpoint
+	companion   Device
+	appVersion  string
+	clientTS43  string
+	realm       string
 }
 
 // TransferTokenResult carries the source auth token and, for transfer types
@@ -37,6 +56,10 @@ type eapRelayPacket struct {
 	Packet string `json:"eap-relay-packet"`
 }
 
+type entitlementTransport struct {
+	client *Client
+}
+
 const defaultEntitlementTimeout = 30 * time.Second
 
 func New(cfg *Config) (*Client, error) {
@@ -49,24 +72,44 @@ func New(cfg *Config) (*Client, error) {
 	if cfg.Target.Device.EID == "" {
 		return nil, errors.New("target EID is required")
 	}
-	next := *cfg
-	if next.Logger == nil {
-		next.Logger = slog.Default()
+	return newClient(*cfg), nil
+}
+
+func newClient(cfg Config) *Client {
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
 	}
-	next.Entitlement.TransferType = selectedTransferType(next.Entitlement)
-	if next.Entitlement.Timeout == 0 {
-		next.Entitlement.Timeout = defaultEntitlementTimeout
+	cfg.Entitlement.TransferType = selectedTransferType(cfg.Entitlement)
+	if cfg.Entitlement.Timeout == 0 {
+		cfg.Entitlement.Timeout = defaultEntitlementTimeout
 	}
-	if next.Entitlement.PollInterval == 0 {
-		next.Entitlement.PollInterval = time.Minute
+	if cfg.Entitlement.PollInterval == 0 {
+		cfg.Entitlement.PollInterval = time.Minute
 	}
-	if next.Entitlement.PollTimeout == 0 {
-		next.Entitlement.PollTimeout = 10 * time.Minute
+	if cfg.Entitlement.PollTimeout == 0 {
+		cfg.Entitlement.PollTimeout = 10 * time.Minute
 	}
-	if next.Entitlement.AutoRetry511Limit == 0 {
-		next.Entitlement.AutoRetry511Limit = 1
+	if cfg.Entitlement.AutoRetry511Limit == 0 {
+		cfg.Entitlement.AutoRetry511Limit = 1
 	}
-	return &Client{cfg: next}, nil
+	return &Client{
+		runtime: clientRuntime{
+			logger:     cfg.Logger,
+			httpClient: cfg.HTTPClient,
+			events:     cfg.Events,
+			now:        cfg.Now,
+			sleep:      cfg.Sleep,
+		},
+		transfer: transferDefaults{
+			entitlement: cfg.Entitlement,
+			source:      cfg.Source,
+			target:      cfg.Target,
+			companion:   cfg.Companion,
+			appVersion:  cfg.AppVersion,
+			clientTS43:  cfg.ClientTS43,
+			realm:       cfg.Realm,
+		},
+	}
 }
 
 func (c *Client) Authenticate(ctx context.Context, identity sim.Identity, device Device) (AuthToken, error) {
@@ -85,14 +128,14 @@ func (c *Client) Authenticate(ctx context.Context, identity sim.Identity, device
 	}
 	expires := time.Time{}
 	if resp.AuthTokenValidity > 0 {
-		expires = time.Now().Add(time.Duration(resp.AuthTokenValidity) * time.Second)
+		expires = c.now().Add(time.Duration(resp.AuthTokenValidity) * time.Second)
 	}
 	return AuthToken{Value: resp.AuthenticationToken, ExpiresAt: expires, Cookies: cookies}, nil
 }
 
 func (c *Client) AcquireTemporaryToken(ctx context.Context, identity sim.Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
 	req := c.authRequest(source, auth)
-	op := temporaryTokenOperation(c.cfg.Entitlement, source, target)
+	op := temporaryTokenOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.call(ctx, identity, req, op)
 	if err != nil {
@@ -107,13 +150,13 @@ func (c *Client) AcquireTemporaryToken(ctx context.Context, identity sim.Identit
 	if !slices.Contains(resp.OperationTargets, OperationManage) || !slices.Contains(resp.OperationTargets, OperationAcquireConf) {
 		return TransferTokenResult{}, errors.New("temporary token does not allow transfer operations")
 	}
-	expiresAt, err := temporaryTokenExpiresAt(resp.TemporaryTokenExpiry, time.Now())
+	expiresAt, err := temporaryTokenExpiresAt(resp.TemporaryTokenExpiry)
 	if err != nil {
 		return TransferTokenResult{}, err
 	}
 	mergedCookies := mergeCookieHeaders(auth.Cookies, cookies)
 	return TransferTokenResult{
-		Auth: authTokenFromResponse(auth, resp, mergedCookies),
+		Auth: authTokenFromResponse(auth, resp, mergedCookies, c.now()),
 		Temporary: TemporaryToken{
 			Value:     resp.TemporaryToken,
 			ExpiresAt: expiresAt,
@@ -125,7 +168,7 @@ func (c *Client) AcquireTemporaryToken(ctx context.Context, identity sim.Identit
 
 func (c *Client) CheckEligibility(ctx context.Context, identity sim.Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
 	req := c.authRequest(source, auth)
-	op := checkEligibilityOperation(c.cfg.Entitlement, source, target)
+	op := checkEligibilityOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.call(ctx, identity, req, op)
 	if err != nil {
@@ -134,7 +177,7 @@ func (c *Client) CheckEligibility(ctx context.Context, identity sim.Identity, so
 	if resp.OperationResult != OperationResultSuccess || resp.PrimaryAppEligibility != AppEligibilityEnabled {
 		return AuthToken{}, &CarrierDeniedError{Operation: OperationCheck, Result: resp}
 	}
-	return authTokenFromResponse(auth, resp, mergeCookieHeaders(auth.Cookies, cookies)), nil
+	return authTokenFromResponse(auth, resp, mergeCookieHeaders(auth.Cookies, cookies), c.now()), nil
 }
 
 func (c *Client) ManageSubscription(ctx context.Context, identity sim.Identity, source Device, target Device, auth AuthToken, answer UserInputResult) (*ODSAResponse, error) {
@@ -158,9 +201,9 @@ func (c *Client) manageSubscription(ctx context.Context, identity sim.Identity, 
 }
 
 func (c *Client) manageSubscriptionRequest(source Device, target Device, credential transferCredential, answer UserInputResult) (ServiceEntitlementRequest, ODSAOperation) {
-	reqDevice := manageSubscriptionRequestDevice(c.cfg.Entitlement, source, target)
+	reqDevice := manageSubscriptionRequestDevice(c.transfer.entitlement, source, target)
 	req := c.transferRequest(reqDevice, credential)
-	op := manageSubscriptionOperation(c.cfg.Entitlement, source, target, answer)
+	op := manageSubscriptionOperation(c.transfer.entitlement, source, target, answer)
 	c.addOptionalOperationFields(&op)
 	return req, op
 }
@@ -174,9 +217,9 @@ func (c *Client) AcquireConfigurationWithTemporaryToken(ctx context.Context, ide
 }
 
 func (c *Client) acquireConfiguration(ctx context.Context, identity sim.Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
-	reqDevice := acquireConfigurationRequestDevice(c.cfg.Entitlement, source, target)
+	reqDevice := acquireConfigurationRequestDevice(c.transfer.entitlement, source, target)
 	req := c.transferRequest(reqDevice, credential)
-	op := acquireConfigurationOperation(c.cfg.Entitlement, source, target)
+	op := acquireConfigurationOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.call(ctx, identity, req, op)
 	return resp, err
@@ -192,7 +235,7 @@ func (c *Client) UpdateSubscriptionWithTemporaryToken(ctx context.Context, ident
 
 func (c *Client) updateSubscription(ctx context.Context, identity sim.Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.transferRequest(target, credential)
-	op := updateSubscriptionOperation(c.cfg.Entitlement, source, target)
+	op := updateSubscriptionOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.call(ctx, identity, req, op)
 	if err != nil {
@@ -214,7 +257,7 @@ func (c *Client) AcquireActivationConfigurationWithTemporaryToken(ctx context.Co
 
 func (c *Client) acquireActivationConfiguration(ctx context.Context, identity sim.Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.transferRequest(target, credential)
-	op := activationConfigurationOperation(c.cfg.Entitlement, target)
+	op := activationConfigurationOperation(c.transfer.entitlement, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.call(ctx, identity, req, op)
 	return resp, err
@@ -233,23 +276,29 @@ func (c *Client) call(ctx context.Context, identity sim.Identity, req ServiceEnt
 }
 
 func (c *Client) callRaw(ctx context.Context, identity sim.Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
-	httpReq, err := buildHTTPRequest(ctx, c.cfg.Entitlement, identity, req, op, c.clientTS43(), c.realm())
+	return entitlementTransport{client: c}.callRaw(ctx, identity, req, op)
+}
+
+func (t entitlementTransport) callRaw(ctx context.Context, identity sim.Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
+	c := t.client
+	httpReq, err := buildHTTPRequest(ctx, c.transfer.entitlement, identity, req, op, c.clientTS43(), c.realm())
 	if err != nil {
 		return nil, nil, err
 	}
-	c.cfg.Logger.Debug("TS.43 request", "method", httpReq.Method, "url", httpReq.URL.String(), "auth", authMode(req))
-	body, cookies, err := ts43http.DoRaw(ctx, c.httpClient(), httpReq)
+	c.runtime.logger.Debug("TS.43 request", "method", httpReq.Method, "url", httpReq.URL.String(), "auth", authMode(req))
+	body, cookies, err := ts43http.DoRaw(ctx, t.httpClient(), httpReq)
 	if err != nil {
 		return nil, cookieHeaders(cookies), err
 	}
-	body, cookies, err = c.eapRelay(ctx, identity, body, req, cookies)
+	body, cookies, err = t.eapRelay(ctx, identity, body, req, cookies)
 	if err != nil {
 		return nil, cookieHeaders(cookies), err
 	}
 	return body, cookieHeaders(cookies), nil
 }
 
-func (c *Client) eapRelay(ctx context.Context, identity sim.Identity, body []byte, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
+func (t entitlementTransport) eapRelay(ctx context.Context, identity sim.Identity, body []byte, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
+	c := t.client
 	requestCookies := cookies
 	responseCookies := cookies
 	for range 3 {
@@ -261,7 +310,7 @@ func (c *Client) eapRelay(ctx context.Context, identity sim.Identity, body []byt
 		if err := challenge.UnmarshalText([]byte(packet)); err != nil {
 			return nil, responseCookies, err
 		}
-		akaResp, err := c.cfg.Source.Channel.AuthenticateAKA(ctx, challenge.AuthenticationRequest())
+		akaResp, err := c.transfer.source.Channel.AuthenticateAKA(ctx, challenge.AuthenticationRequest())
 		if err != nil {
 			return nil, responseCookies, err
 		}
@@ -273,7 +322,7 @@ func (c *Client) eapRelay(ctx context.Context, identity sim.Identity, body []byt
 		if err != nil {
 			return nil, responseCookies, err
 		}
-		next, nextCookies, err := c.postRelay(ctx, responseText, req, requestCookies)
+		next, nextCookies, err := t.postRelay(ctx, responseText, req, requestCookies)
 		if err != nil {
 			return nil, responseCookies, err
 		}
@@ -285,11 +334,16 @@ func (c *Client) eapRelay(ctx context.Context, identity sim.Identity, body []byt
 }
 
 func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
+	return entitlementTransport{client: c}.postRelay(ctx, packet, req, cookies)
+}
+
+func (t entitlementTransport) postRelay(ctx context.Context, packet string, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
+	c := t.client
 	data, err := json.Marshal(eapRelayPacket{Packet: packet})
 	if err != nil {
 		return nil, nil, err
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.Entitlement.Server, bytes.NewReader(data))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.transfer.entitlement.Server, bytes.NewReader(data))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -299,8 +353,8 @@ func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitl
 	for _, cookie := range cookies {
 		httpReq.AddCookie(cookie)
 	}
-	c.cfg.Logger.Debug("TS.43 EAP relay", "method", httpReq.Method, "url", httpReq.URL.String())
-	return ts43http.DoRaw(ctx, c.httpClient(), httpReq)
+	c.runtime.logger.Debug("TS.43 EAP relay", "method", httpReq.Method, "url", httpReq.URL.String())
+	return ts43http.DoRaw(ctx, t.httpClient(), httpReq)
 }
 
 func relayResponseAccept(req ServiceEntitlementRequest) string {
@@ -311,11 +365,16 @@ func relayResponseAccept(req ServiceEntitlementRequest) string {
 }
 
 func (c *Client) httpClient() HTTPDoer {
-	if c.cfg.HTTPClient != nil {
-		return c.cfg.HTTPClient
+	return entitlementTransport{client: c}.httpClient()
+}
+
+func (t entitlementTransport) httpClient() HTTPDoer {
+	c := t.client
+	if c.runtime.httpClient != nil {
+		return c.runtime.httpClient
 	}
-	c.cfg.HTTPClient = ts43http.NewHTTPClient(c.cfg.Logger, c.cfg.Entitlement.Timeout)
-	return c.cfg.HTTPClient
+	c.runtime.httpClient = ts43http.NewHTTPClient(c.runtime.logger, c.transfer.entitlement.Timeout)
+	return c.runtime.httpClient
 }
 
 func relayPacket(data []byte) string {
@@ -338,8 +397,8 @@ func (c *Client) baseRequest(device Device, authToken, tempToken string) Service
 		TerminalModel:       device.Model,
 		TerminalSoftware:    device.SoftwareVersion,
 		AppName:             c.appName(),
-		AppVersion:          c.cfg.AppVersion,
-		ProvisioningVersion: c.cfg.Entitlement.ProvisioningVersion,
+		AppVersion:          c.transfer.appVersion,
+		ProvisioningVersion: c.transfer.entitlement.ProvisioningVersion,
 		Accept:              c.accept(),
 	}
 }
@@ -364,7 +423,7 @@ func (c *Client) transferRequest(device Device, credential transferCredential) S
 }
 
 func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
-	companion := c.cfg.Companion
+	companion := c.transfer.companion
 	op.CompanionTerminalID = companion.IMEI
 	op.CompanionTerminalVendor = companion.Vendor
 	op.CompanionTerminalModel = companion.Model
@@ -376,58 +435,58 @@ func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
 }
 
 func (c *Client) clientTS43() string {
-	if c.cfg.ClientTS43 != "" {
-		return c.cfg.ClientTS43
+	if c.transfer.clientTS43 != "" {
+		return c.transfer.clientTS43
 	}
-	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
 		return SamsungODSAClientTS43
 	}
-	return firstNonEmpty(c.cfg.ClientTS43, DefaultODSAClientTS43)
+	return firstNonEmpty(c.transfer.clientTS43, DefaultODSAClientTS43)
 }
 
 func (c *Client) realm() string {
-	return firstNonEmpty(c.cfg.Realm, DefaultEAPAkaRealm)
+	return firstNonEmpty(c.transfer.realm, DefaultEAPAkaRealm)
 }
 
 func (c *Client) appName() string {
-	if c.cfg.Entitlement.AppName != "" {
-		return c.cfg.Entitlement.AppName
+	if c.transfer.entitlement.AppName != "" {
+		return c.transfer.entitlement.AppName
 	}
-	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
 		return AppODSAPrimary
 	}
 	return "androidTransfer"
 }
 
 func (c *Client) accept() string {
-	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
 		return ""
 	}
 	return DefaultResponseAccept
 }
 
 func (c *Client) app() string {
-	if c.cfg.Entitlement.App != "" {
-		return c.cfg.Entitlement.App
+	if c.transfer.entitlement.App != "" {
+		return c.transfer.entitlement.App
 	}
-	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
 		return AppODSAPrimary
 	}
 	return AppODSAPrimary
 }
 
 func (c *Client) requestVersion() string {
-	if c.cfg.Entitlement.RequestVersion != "" {
-		return c.cfg.Entitlement.RequestVersion
+	if c.transfer.entitlement.RequestVersion != "" {
+		return c.transfer.entitlement.RequestVersion
 	}
-	if c.cfg.Entitlement.Channel == EntitlementChannelSamsung {
+	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
 		return "1"
 	}
 	return "0"
 }
 
 func (c *Client) entitlementVersion() string {
-	return firstNonEmpty(c.cfg.Entitlement.Version, "9.0")
+	return firstNonEmpty(c.transfer.entitlement.Version, "9.0")
 }
 
 func oldTerminalEntitlementProtocol(source Device) string {
@@ -457,7 +516,7 @@ func transferTypeUsesTemporaryToken(transferType TransferType) bool {
 }
 
 func (c *Client) usesTemporaryToken() bool {
-	return transferTypeUsesTemporaryToken(c.cfg.Entitlement.TransferType)
+	return transferTypeUsesTemporaryToken(c.transfer.entitlement.TransferType)
 }
 
 func isHTTPStatus(err error, status int) bool {
@@ -513,7 +572,7 @@ func terminalIMEIs(device Device) []string {
 	return append([]string(nil), device.IMEIs...)
 }
 
-func temporaryTokenExpiresAt(value string, _ time.Time) (time.Time, error) {
+func temporaryTokenExpiresAt(value string) (time.Time, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return time.Time{}, errors.New("temporary token expiry is missing")
@@ -532,7 +591,7 @@ func temporaryCredential(token TemporaryToken) transferCredential {
 	return transferCredential{temporary: token, temporaryToken: true}
 }
 
-func authTokenFromResponse(current AuthToken, resp *ODSAResponse, cookies []string) AuthToken {
+func authTokenFromResponse(current AuthToken, resp *ODSAResponse, cookies []string, now time.Time) AuthToken {
 	next := current
 	next.Cookies = cookies
 	if resp.AuthenticationToken == "" {
@@ -541,7 +600,7 @@ func authTokenFromResponse(current AuthToken, resp *ODSAResponse, cookies []stri
 	next.Value = resp.AuthenticationToken
 	next.ExpiresAt = time.Time{}
 	if resp.AuthTokenValidity > 0 {
-		next.ExpiresAt = time.Now().Add(time.Duration(resp.AuthTokenValidity) * time.Second)
+		next.ExpiresAt = now.Add(time.Duration(resp.AuthTokenValidity) * time.Second)
 	}
 	return next
 }

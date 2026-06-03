@@ -527,7 +527,7 @@ func TestCheckWFCEntitlementPackageHelper(t *testing.T) {
 }
 
 func TestCheckWFCEntitlementSendsVoWiFiApp(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			query := req.URL.Query()
 			if got := query.Get("app"); got != AppVoWiFi {
@@ -547,7 +547,7 @@ func TestCheckWFCEntitlementSendsVoWiFiApp(t *testing.T) {
 		}),
 		Source: Endpoint{Channel: fakeChannel{}},
 		Logger: slog.Default(),
-	}}
+	})
 
 	status, err := client.CheckWFCEntitlement(
 		context.Background(),
@@ -564,7 +564,7 @@ func TestCheckWFCEntitlementSendsVoWiFiApp(t *testing.T) {
 }
 
 func TestCheckWFCEntitlementUsesCachedToken(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			query := req.URL.Query()
 			if got := query.Get("IMSI"); got != "310260123456789" {
@@ -583,7 +583,7 @@ func TestCheckWFCEntitlementUsesCachedToken(t *testing.T) {
 		}),
 		Source: Endpoint{Channel: fakeChannel{}},
 		Logger: slog.Default(),
-	}}
+	})
 
 	got, err := client.CheckWFCEntitlementWithToken(
 		context.Background(),
@@ -611,7 +611,7 @@ func TestCheckWFCEntitlementUsesCachedToken(t *testing.T) {
 
 func TestCheckWFCEntitlementFallsBackFromRejectedCachedToken(t *testing.T) {
 	var requests []string
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			query := req.URL.Query()
 			switch {
@@ -634,7 +634,7 @@ func TestCheckWFCEntitlementFallsBackFromRejectedCachedToken(t *testing.T) {
 		}),
 		Source: Endpoint{Channel: akaChannel{}},
 		Logger: slog.Default(),
-	}}
+	})
 
 	got, err := client.CheckWFCEntitlementWithToken(
 		context.Background(),

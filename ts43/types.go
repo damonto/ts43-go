@@ -193,21 +193,23 @@ type ActivationResult struct {
 }
 
 type Result struct {
-	State State
-	Event Event
+	State               State
+	Event               Event
+	ManageSubscription  *ODSAResponse
+	UpdateSubscription  *ODSAResponse
+	Configuration       *ODSAResponse
+	UpdateConfiguration *ODSAResponse
+	DownloadConfig      DownloadConfig
 
-	Offer                         *Offer
-	ManageSubscription            *ODSAResponse
-	UpdateSubscription            *ODSAResponse
-	Configuration                 *ODSAResponse
-	UpdateConfiguration           *ODSAResponse
-	DownloadConfig                DownloadConfig
-	SourceProfileDeletionRequired bool
-	SourceProfileDeleted          bool
-	SourceProfileICCID            string
+	session *transferSession
 }
 
-type Offer struct {
+type transferSession struct {
+	offer              *transferOffer
+	sourceProfileICCID string
+}
+
+type transferOffer struct {
 	SourceIdentity sim.Identity
 	SourceDevice   Device
 	TargetDevice   Device

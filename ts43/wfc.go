@@ -8,13 +8,11 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	ts43http "github.com/damonto/ts43-go/http"
 	"github.com/damonto/ts43-go/sim"
 )
 
@@ -293,16 +291,7 @@ func CheckWFCEntitlement(ctx context.Context, cfg Config, identity sim.Identity,
 }
 
 func CheckWFCEntitlementWithToken(ctx context.Context, cfg Config, identity sim.Identity, device Device, wfc WFCConfig, token AuthToken) (WFCResult, error) {
-	if cfg.Logger == nil {
-		cfg.Logger = slog.Default()
-	}
-	if cfg.Entitlement.Timeout == 0 {
-		cfg.Entitlement.Timeout = 30 * time.Second
-	}
-	if cfg.HTTPClient == nil {
-		cfg.HTTPClient = ts43http.NewHTTPClient(cfg.Logger, cfg.Entitlement.Timeout)
-	}
-	client := &Client{cfg: cfg}
+	client := newClient(cfg)
 	return client.CheckWFCEntitlementWithToken(ctx, identity, device, wfc, token)
 }
 
@@ -329,10 +318,10 @@ func (c *Client) checkWFCEntitlementOnce(ctx context.Context, identity sim.Ident
 		return WFCResult{}, errors.New("wfc entitlement server is required")
 	}
 	next := *c
-	next.cfg.Entitlement = Entitlement{
+	next.transfer.entitlement = Entitlement{
 		Server:  cfg.Server,
 		UsePost: cfg.UsePost,
-		Timeout: c.cfg.Entitlement.Timeout,
+		Timeout: c.transfer.entitlement.Timeout,
 	}
 	req := ServiceEntitlementRequest{
 		EntitlementVersion:  firstNonEmpty(cfg.Version, "2.0"),
@@ -359,7 +348,7 @@ func (c *Client) checkWFCEntitlementOnce(ctx context.Context, identity sim.Ident
 		}
 	}
 	nextToken := token
-	if parsed, err := wfcAuthTokenFromBody(body, token, cookies); err == nil {
+	if parsed, err := wfcAuthTokenFromBody(body, token, cookies, next.now()); err == nil {
 		nextToken = parsed
 	}
 	if emptyBody && cfg.DefaultServiceEntitlementEnabled {
@@ -746,7 +735,7 @@ func (f wfcFields) requireStatusFields() error {
 	return nil
 }
 
-func wfcAuthTokenFromBody(body []byte, current AuthToken, cookies []string) (AuthToken, error) {
+func wfcAuthTokenFromBody(body []byte, current AuthToken, cookies []string, now time.Time) (AuthToken, error) {
 	if len(bytes.TrimSpace(body)) == 0 {
 		return current, nil
 	}
@@ -766,7 +755,7 @@ func wfcAuthTokenFromBody(body []byte, current AuthToken, cookies []string) (Aut
 	next := current
 	next.Value = payload.Token.Token.String()
 	next.Cookies = mergeCookieHeaders(current.Cookies, cookies)
-	next.ExpiresAt = time.Now().Add(time.Duration(wfcAuthTokenValidity(payload.Token.Validity.String())) * time.Second)
+	next.ExpiresAt = now.Add(time.Duration(wfcAuthTokenValidity(payload.Token.Validity.String())) * time.Second)
 	return next, nil
 }
 

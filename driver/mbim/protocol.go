@@ -226,7 +226,7 @@ func (r *SubscriberReadyStatusRequest) Request() *Request {
 type SubscriberReadyStatusResponse struct {
 	ReadyState            uint32
 	SubscriberID          string
-	SimICCID              string
+	SIMICCID              string
 	ReadyInfo             uint32
 	TelephoneNumbersCount uint32
 	TelephoneNumbers      []string
@@ -248,7 +248,7 @@ func (r *SubscriberReadyStatusResponse) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("subscriber ID: %w", err)
 	}
-	r.SimICCID, err = utf16StringAt(data, iccidOffset, iccidSize)
+	r.SIMICCID, err = utf16StringAt(data, iccidOffset, iccidSize)
 	if err != nil {
 		return fmt.Errorf("SIM ICCID: %w", err)
 	}

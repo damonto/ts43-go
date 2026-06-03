@@ -339,10 +339,10 @@ func TestBuildHTTPSamsungRequiresEAPIdentity(t *testing.T) {
 }
 
 func TestBaseRequestUsesSamsungDefaults(t *testing.T) {
-	client := &Client{cfg: Config{
+	client := newClient(Config{
 		AppVersion:  "3.0.00",
 		Entitlement: Entitlement{Channel: EntitlementChannelSamsung, Version: "8.0"},
-	}}
+	})
 
 	req := client.baseRequest(Device{IMEI: "123456789012345"}, "auth", "")
 	if req.App != AppODSAPrimary {

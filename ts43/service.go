@@ -17,21 +17,38 @@ var (
 const sourceProfileDeletedEntitlementProtocol = 1
 
 func (c *Client) Transfer(ctx context.Context) (*Result, error) {
-	identity, err := c.cfg.Source.Channel.Identity(ctx)
+	return transferFlow{client: c}.Transfer(ctx)
+}
+
+func (c *Client) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {
+	return transferFlow{client: c}.Continue(ctx, result, req)
+}
+
+func (c *Client) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
+	return transferFlow{client: c}.CompleteActivation(ctx, result, activation)
+}
+
+type transferFlow struct {
+	client *Client
+}
+
+func (f transferFlow) Transfer(ctx context.Context) (*Result, error) {
+	c := f.client
+	identity, err := c.transfer.source.Channel.Identity(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read source SIM identity: %w", err)
 	}
 	if err := c.discoverEntitlement(*identity); err != nil {
 		return nil, err
 	}
-	source := c.cfg.Source.Device
+	source := c.transfer.source.Device
 	source.ICCID = firstNonEmpty(source.ICCID, identity.ICCID)
-	target := c.cfg.Target.Device
+	target := c.transfer.target.Device
 	tokens, err := c.fetchTransferToken(ctx, *identity, source, target)
 	if err != nil {
 		return nil, err
 	}
-	offer := &Offer{
+	offer := &transferOffer{
 		SourceIdentity: *identity,
 		SourceDevice:   source,
 		TargetDevice:   target,
@@ -42,10 +59,10 @@ func (c *Client) Transfer(ctx context.Context) (*Result, error) {
 }
 
 func (c *Client) discoverEntitlement(identity sim.Identity) error {
-	if c.cfg.Entitlement.Server != "" {
+	if c.transfer.entitlement.Server != "" {
 		return nil
 	}
-	requested := c.cfg.Entitlement
+	requested := c.transfer.entitlement
 	discovered, err := DiscoverEntitlementForChannel(identity, requested.SourceSIMType, requested.Channel)
 	if err != nil {
 		return fmt.Errorf("discover entitlement config: %w", err)
@@ -55,18 +72,20 @@ func (c *Client) discoverEntitlement(identity sim.Identity) error {
 		discovered.Timeout = requested.Timeout
 	}
 	discovered.AutoRetry511Limit = requested.AutoRetry511Limit
-	c.cfg.Entitlement = discovered
+	c.transfer.entitlement = discovered
 	return nil
 }
 
-func (c *Client) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {
+func (f transferFlow) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {
+	c := f.client
 	if result == nil {
 		return nil, errors.New("result is required")
 	}
 	switch result.State {
 	case StatePendingUserInput:
-		if result.Offer == nil {
-			return result, errors.New("offer is required")
+		session, err := requireTransferSession(result)
+		if err != nil {
+			return result, err
 		}
 		if req.UserInput == nil {
 			return result, errors.New("user input is required")
@@ -74,48 +93,50 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 		if req.UserInput.Button == MessageButtonUnknown {
 			return result, errors.New("user input button is required")
 		}
-		return c.activate(ctx, result.Offer, *req.UserInput)
+		return c.activate(ctx, session.offer, *req.UserInput)
 	case StatePendingWebsheet:
-		if result.Offer == nil {
-			return result, errors.New("offer is required")
+		if _, err := requireTransferSession(result); err != nil {
+			return result, err
 		}
 		if req.Websheet == nil {
 			return result, errors.New("websheet result is required")
 		}
 		return c.handleWebsheetResult(ctx, result, *req.Websheet)
 	case StatePendingSourceProfileDeletion:
-		if result.Offer == nil {
-			return result, errors.New("offer is required")
+		session, err := requireTransferSession(result)
+		if err != nil {
+			return result, err
 		}
 		if !req.SourceProfileDeleted {
 			return result, errors.New("source profile deletion confirmation is required")
 		}
-		result.SourceProfileDeleted = true
-		if IsSourceCredentialTransferType(c.cfg.Entitlement.TransferType) {
-			if result.Offer.SourceDevice.EntitlementProtocol == 0 {
-				result.Offer.SourceDevice.EntitlementProtocol = sourceProfileDeletedEntitlementProtocol
+		if IsSourceCredentialTransferType(c.transfer.entitlement.TransferType) {
+			if session.offer.SourceDevice.EntitlementProtocol == 0 {
+				session.offer.SourceDevice.EntitlementProtocol = sourceProfileDeletedEntitlementProtocol
 			}
 			return c.pollAfterSourceProfileDeletion(ctx, result)
 		}
-		return c.activate(ctx, result.Offer, UserInputResult{Button: MessageButtonUnknown})
+		return c.activate(ctx, session.offer, UserInputResult{Button: MessageButtonUnknown})
 	default:
 		return result, fmt.Errorf("state %d cannot continue", result.State)
 	}
 }
 
-func (c *Client) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
+func (f transferFlow) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
+	c := f.client
 	if result == nil {
 		return nil, errors.New("result is required")
 	}
-	if result.Offer == nil {
-		return result, errors.New("offer is required")
+	session, err := requireTransferSession(result)
+	if err != nil {
+		return result, err
 	}
-	offer := result.Offer
+	offer := session.offer
 	if iccid := firstNonEmpty(activation.ICCID, result.DownloadConfig.ProfileICCID); iccid != "" {
 		offer.TargetDevice.ICCID = iccid
 		result.DownloadConfig.ProfileICCID = iccid
 	}
-	if IsSourceCredentialTransferType(c.cfg.Entitlement.TransferType) {
+	if IsSourceCredentialTransferType(c.transfer.entitlement.TransferType) {
 		result.State = StateDone
 		result.Event = DoneEvent{}
 		c.emit(result.Event)
@@ -128,7 +149,7 @@ func (c *Client) CompleteActivation(ctx context.Context, result *Result, activat
 	var update *ODSAResponse
 	for attempt := 0; ; attempt++ {
 		update, err = c.updateSubscription(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, credential)
-		if isHTTPStatus(err, 511) && attempt < c.cfg.Entitlement.AutoRetry511Limit {
+		if isHTTPStatus(err, 511) && attempt < c.transfer.entitlement.AutoRetry511Limit {
 			nextCredential, refreshErr := c.refreshTransferCredential(ctx, offer)
 			if refreshErr != nil {
 				result.UpdateSubscription = update
@@ -187,7 +208,7 @@ func (c *Client) CompleteActivation(ctx context.Context, result *Result, activat
 func (c *Client) fetchTransferToken(ctx context.Context, identity sim.Identity, source, target Device) (TransferTokenResult, error) {
 	for attempt := 0; ; attempt++ {
 		tokens, err := c.fetchTransferTokenOnce(ctx, identity, source, target)
-		if isHTTPStatus(err, 511) && attempt < c.cfg.Entitlement.AutoRetry511Limit {
+		if isHTTPStatus(err, 511) && attempt < c.transfer.entitlement.AutoRetry511Limit {
 			continue
 		}
 		if err != nil {
@@ -209,34 +230,33 @@ func (c *Client) fetchTransferTokenOnce(ctx context.Context, identity sim.Identi
 	return c.transferTokens(ctx, identity, source, target, auth)
 }
 
-func (c *Client) activate(ctx context.Context, offer *Offer, answer UserInputResult) (*Result, error) {
+func (c *Client) activate(ctx context.Context, offer *transferOffer, answer UserInputResult) (*Result, error) {
 	credential, err := c.transferCredential(ctx, offer)
 	if err != nil {
-		return &Result{Offer: offer}, err
+		return &Result{session: &transferSession{offer: offer}}, err
 	}
 	var manage *ODSAResponse
 	for manageAttempt := 0; ; manageAttempt++ {
 		manage, err = c.manageSubscription(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, credential, answer)
-		if isHTTPStatus(err, 511) && manageAttempt < c.cfg.Entitlement.AutoRetry511Limit {
+		if isHTTPStatus(err, 511) && manageAttempt < c.transfer.entitlement.AutoRetry511Limit {
 			nextCredential, refreshErr := c.refreshTransferCredential(ctx, offer)
 			if refreshErr != nil {
-				return &Result{Offer: offer, ManageSubscription: manage}, refreshErr
+				return &Result{ManageSubscription: manage, session: &transferSession{offer: offer}}, refreshErr
 			}
 			credential = nextCredential
 			continue
 		}
 		break
 	}
-	result := &Result{Offer: offer, ManageSubscription: manage}
+	result := &Result{ManageSubscription: manage, session: &transferSession{offer: offer}}
 	if err != nil {
 		return result, err
 	}
 	credential = c.updateTransferCredential(offer, manage, credential)
 	if sourceProfileDeletionRequired(manage) {
-		result.SourceProfileDeletionRequired = true
-		result.SourceProfileICCID = firstNonEmpty(offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID)
+		result.session.sourceProfileICCID = firstNonEmpty(offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID)
 		result.State = StatePendingSourceProfileDeletion
-		result.Event = SourceProfileDeletionEvent{ICCID: result.SourceProfileICCID}
+		result.Event = SourceProfileDeletionEvent{ICCID: result.session.sourceProfileICCID}
 		c.emit(result.Event)
 		return result, nil
 	}
@@ -294,7 +314,11 @@ func (c *Client) activate(ctx context.Context, offer *Offer, answer UserInputRes
 }
 
 func (c *Client) pollAfterSourceProfileDeletion(ctx context.Context, result *Result) (*Result, error) {
-	offer := result.Offer
+	session, err := requireTransferSession(result)
+	if err != nil {
+		return result, err
+	}
+	offer := session.offer
 	credential, err := c.transferCredential(ctx, offer)
 	if err != nil {
 		return result, err
@@ -315,15 +339,15 @@ func (c *Client) pollAfterSourceProfileDeletion(ctx context.Context, result *Res
 	return c.applyDownloadConfiguration(result, configuration.Download)
 }
 
-func (c *Client) pollConfiguration(ctx context.Context, offer *Offer, credential transferCredential) (*ODSAResponse, error) {
-	deadline := c.now().Add(c.cfg.Entitlement.PollTimeout)
+func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, credential transferCredential) (*ODSAResponse, error) {
+	deadline := c.now().Add(c.transfer.entitlement.PollTimeout)
 	retries := 0
 	for {
 		if !c.now().Before(deadline) {
 			return nil, errors.New("acquire configuration timeout")
 		}
 		resp, err := c.acquireConfiguration(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, credential)
-		if isHTTPStatus(err, 511) && retries < c.cfg.Entitlement.AutoRetry511Limit {
+		if isHTTPStatus(err, 511) && retries < c.transfer.entitlement.AutoRetry511Limit {
 			retries++
 			nextCredential, refreshErr := c.refreshTransferCredential(ctx, offer)
 			if refreshErr != nil {
@@ -356,15 +380,15 @@ func (c *Client) pollConfiguration(ctx context.Context, offer *Offer, credential
 	}
 }
 
-func (c *Client) pollActivationConfiguration(ctx context.Context, offer *Offer, credential transferCredential) (*ODSAResponse, error) {
-	deadline := c.now().Add(c.cfg.Entitlement.PollTimeout)
+func (c *Client) pollActivationConfiguration(ctx context.Context, offer *transferOffer, credential transferCredential) (*ODSAResponse, error) {
+	deadline := c.now().Add(c.transfer.entitlement.PollTimeout)
 	retries := 0
 	for {
 		if !c.now().Before(deadline) {
 			return nil, errors.New("activation configuration timeout")
 		}
 		resp, err := c.acquireActivationConfiguration(ctx, offer.SourceIdentity, offer.TargetDevice, credential)
-		if isHTTPStatus(err, 511) && retries < c.cfg.Entitlement.AutoRetry511Limit {
+		if isHTTPStatus(err, 511) && retries < c.transfer.entitlement.AutoRetry511Limit {
 			retries++
 			nextCredential, refreshErr := c.refreshTransferCredential(ctx, offer)
 			if refreshErr != nil {
@@ -397,7 +421,7 @@ func (c *Client) pollActivationConfiguration(ctx context.Context, offer *Offer, 
 	}
 }
 
-func (c *Client) refreshTransferCredential(ctx context.Context, offer *Offer) (transferCredential, error) {
+func (c *Client) refreshTransferCredential(ctx context.Context, offer *transferOffer) (transferCredential, error) {
 	tokens, err := c.fetchTransferToken(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice)
 	if err != nil {
 		return transferCredential{}, fmt.Errorf("refresh transfer credential: %w", err)
@@ -414,7 +438,7 @@ func (c *Client) transferTokens(ctx context.Context, identity sim.Identity, sour
 	return c.AcquireTemporaryToken(ctx, identity, source, target, auth)
 }
 
-func (c *Client) transferCredential(ctx context.Context, offer *Offer) (transferCredential, error) {
+func (c *Client) transferCredential(ctx context.Context, offer *transferOffer) (transferCredential, error) {
 	if c.usesTemporaryToken() {
 		if offer.TemporaryToken.Value != "" {
 			return temporaryCredential(offer.TemporaryToken), nil
@@ -434,15 +458,15 @@ func (c *Client) transferCredentialFromTokens(tokens TransferTokenResult) transf
 	return authCredential(tokens.Auth)
 }
 
-func (c *Client) updateTransferCredential(offer *Offer, resp *ODSAResponse, credential transferCredential) transferCredential {
+func (c *Client) updateTransferCredential(offer *transferOffer, resp *ODSAResponse, credential transferCredential) transferCredential {
 	if resp.AuthenticationToken == "" {
 		return credential
 	}
-	offer.AuthToken = authTokenFromResponse(offer.AuthToken, resp, offer.AuthToken.Cookies)
+	offer.AuthToken = authTokenFromResponse(offer.AuthToken, resp, offer.AuthToken.Cookies, c.now())
 	if c.usesTemporaryToken() {
 		return credential
 	}
-	next := authTokenFromResponse(credential.auth, resp, credential.auth.Cookies)
+	next := authTokenFromResponse(credential.auth, resp, credential.auth.Cookies, c.now())
 	offer.AuthToken = next
 	return authCredential(next)
 }
@@ -479,21 +503,25 @@ func delayedDownloadRequired(resp *ODSAResponse) bool {
 		resp.SubscriptionResult == SubscriptionResultDelayedDownload
 }
 
-func (c *Client) delayedDownloadState(offer *Offer, subscriptionResult SubscriptionResult) (State, Event) {
+func (c *Client) delayedDownloadState(offer *transferOffer, subscriptionResult SubscriptionResult) (State, Event) {
 	event := DelayedDownloadEvent{
 		SourceICCID:        firstNonEmpty(offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID),
 		TargetEID:          offer.TargetDevice.EID,
 		TargetIMEI:         offer.TargetDevice.IMEI,
 		SubscriptionResult: subscriptionResult,
 	}
-	if c.cfg.Entitlement.UseSMDSDelayedDownload {
+	if c.transfer.entitlement.UseSMDSDelayedDownload {
 		return StatePendingSMDSDiscovery, SMDSDiscoveryEvent(event)
 	}
 	return StatePendingDelayedDownload, event
 }
 
 func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig) (*Result, error) {
-	cfg = completeDownloadConfig(cfg, result.Offer.TargetDevice)
+	session, err := requireTransferSession(result)
+	if err != nil {
+		return result, err
+	}
+	cfg = completeDownloadConfig(cfg, session.offer.TargetDevice)
 	if cfg.ActivationCode == "" && cfg.SMDPFQDN == "" {
 		return result, errDownloadInfoMissing
 	}
@@ -502,6 +530,13 @@ func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig) 
 	result.Event = DownloadReadyEvent{Config: result.DownloadConfig}
 	c.emit(result.Event)
 	return result, nil
+}
+
+func requireTransferSession(result *Result) (*transferSession, error) {
+	if result == nil || result.session == nil || result.session.offer == nil {
+		return nil, errors.New("transfer session is required")
+	}
+	return result.session, nil
 }
 
 func completeDownloadConfig(cfg DownloadConfig, target Device) DownloadConfig {
@@ -513,7 +548,7 @@ func completeDownloadConfig(cfg DownloadConfig, target Device) DownloadConfig {
 
 func (c *Client) pollInterval(resp *ODSAResponse) (time.Duration, bool) {
 	if !resp.PollingIntervalSet {
-		return c.cfg.Entitlement.PollInterval, c.cfg.Entitlement.PollInterval > 0
+		return c.transfer.entitlement.PollInterval, c.transfer.entitlement.PollInterval > 0
 	}
 	if resp.PollingInterval <= 0 {
 		return 0, false
@@ -529,15 +564,15 @@ func (c *Client) pollInterval(resp *ODSAResponse) (time.Duration, bool) {
 }
 
 func (c *Client) now() time.Time {
-	if c.cfg.Now != nil {
-		return c.cfg.Now()
+	if c.runtime.now != nil {
+		return c.runtime.now()
 	}
 	return time.Now()
 }
 
 func (c *Client) sleep(ctx context.Context, d time.Duration) error {
-	if c.cfg.Sleep != nil {
-		return c.cfg.Sleep(ctx, d)
+	if c.runtime.sleep != nil {
+		return c.runtime.sleep(ctx, d)
 	}
 	timer := time.NewTimer(d)
 	defer timer.Stop()
@@ -550,11 +585,11 @@ func (c *Client) sleep(ctx context.Context, d time.Duration) error {
 }
 
 func (c *Client) emit(event Event) {
-	if c.cfg.Events == nil {
+	if c.runtime.events == nil {
 		return
 	}
 	select {
-	case c.cfg.Events <- event:
+	case c.runtime.events <- event:
 	default:
 	}
 }
