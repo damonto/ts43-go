@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	sgp22 "github.com/damonto/euicc-go/v2"
-	"github.com/damonto/ts43-go/ts43"
+	"github.com/damonto/ts43-go"
 )
 
 func TestChooseReader(t *testing.T) {
@@ -593,9 +593,6 @@ type fakeProfileDeletionClient struct {
 }
 
 func (f *fakeProfileDeletionClient) DisableProfile(identifier any, refresh bool) error {
-	if !refresh {
-		return errors.New("refresh is false")
-	}
 	iccid, ok := identifier.(sgp22.ICCID)
 	if !ok {
 		return errors.New("identifier is not ICCID")

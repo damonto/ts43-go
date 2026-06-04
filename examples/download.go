@@ -11,7 +11,7 @@ import (
 
 	"github.com/damonto/euicc-go/lpa"
 	sgp22 "github.com/damonto/euicc-go/v2"
-	"github.com/damonto/ts43-go/ts43"
+	"github.com/damonto/ts43-go"
 )
 
 func downloadTS43Profile(ctx context.Context, reader *bufio.Reader, w io.Writer, client *lpa.Client, cfg ts43.DownloadConfig) (string, error) {

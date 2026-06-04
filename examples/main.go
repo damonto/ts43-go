@@ -15,8 +15,9 @@ import (
 
 	lpaccid "github.com/damonto/euicc-go/driver/ccid"
 	"github.com/damonto/euicc-go/lpa"
-	sourceccid "github.com/damonto/ts43-go/driver/ccid"
-	"github.com/damonto/ts43-go/ts43"
+	"github.com/damonto/ts43-go"
+	sourceccid "github.com/damonto/uicc-go/ccid"
+	sourceusim "github.com/damonto/uicc-go/usim"
 )
 
 type cliOptions struct {
@@ -72,28 +73,48 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 		return err
 	}
 
-	reader := bufio.NewReader(stdin)
-	source, err := sourceccid.New()
-	if err != nil {
-		return openCCIDError("source", err)
-	}
-	defer func() {
-		if closeErr := source.Disconnect(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close source reader: %w", closeErr))
-		}
-	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	sourceReaders, err := source.ListReaders()
+	reader := bufio.NewReader(stdin)
+	sourceReaders, err := sourceccid.ListReaders(ctx)
 	if err != nil {
+		if ccidUnavailable(err) {
+			return openCCIDError("source", err)
+		}
 		return fmt.Errorf("list source readers: %w", err)
 	}
 	sourceReader, err := chooseReader(reader, stdout, sourceReaders, opts.SourceReader, "source")
 	if err != nil {
 		return fmt.Errorf("choose source reader: %w", err)
 	}
-	if err := source.SetReader(sourceReader); err != nil {
-		return fmt.Errorf("select source reader: %w", err)
+
+	sourceCardReader, err := sourceccid.Open(ctx, sourceReader)
+	if err != nil {
+		return openCCIDError("source reader", err)
 	}
+	sourceUSIMReader, err := sourceusim.NewReader(sourceCardReader)
+	if err != nil {
+		_ = sourceCardReader.Close()
+		return fmt.Errorf("create source USIM reader: %w", err)
+	}
+	sourceCard, err := sourceusim.New(ctx, sourceUSIMReader, logger)
+	if err != nil {
+		_ = sourceUSIMReader.Close()
+		return fmt.Errorf("load source USIM: %w", err)
+	}
+	sourceChannel, err := ts43.NewSource(sourceCard)
+	if err != nil {
+		_ = sourceCard.Close()
+		return fmt.Errorf("create source channel: %w", err)
+	}
+	defer func() {
+		if sourceChannel != nil {
+			if closeErr := sourceChannel.Close(); closeErr != nil {
+				err = errors.Join(err, fmt.Errorf("close source reader: %w", closeErr))
+			}
+		}
+	}()
 
 	target, err := lpaccid.New()
 	if err != nil {
@@ -147,9 +168,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 		if sourceLPAClient != nil {
 			return sourceLPAClient, nil
 		}
-		if err := source.Disconnect(); err != nil {
+		if sourceChannel == nil {
+			return nil, errors.New("source TS.43 reader is already closed")
+		}
+		if err := sourceChannel.Close(); err != nil {
 			return nil, fmt.Errorf("close source TS.43 reader before source LPA: %w", err)
 		}
+		sourceChannel = nil
 		channel, err := lpaccid.New()
 		if err != nil {
 			return nil, err
@@ -199,7 +224,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 			UseSMDSDelayedDownload:    opts.UseSMDSDelayedDownload,
 		},
 		Source: ts43.Endpoint{
-			Channel: source,
+			Channel: sourceChannel,
 			Device:  opts.SourceDevice,
 		},
 		Target: ts43.Endpoint{
@@ -210,8 +235,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 		return fmt.Errorf("create TS.43 client: %w", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	return runTransfer(ctx, reader, stdout, client, lpaClient, sourceLPA)
 }
 
@@ -311,21 +334,11 @@ func printReaders(w io.Writer) error {
 }
 
 func listCCIDReaders() (_ []string, err error) {
-	channel, err := sourceccid.New()
+	readers, err := sourceccid.ListReaders(context.Background())
 	if err != nil {
 		if ccidUnavailable(err) {
 			return nil, errCCIDUnavailable
 		}
-		return nil, fmt.Errorf("open CCID context: %w", err)
-	}
-	defer func() {
-		if closeErr := channel.Disconnect(); closeErr != nil {
-			err = errors.Join(err, fmt.Errorf("close reader list context: %w", closeErr))
-		}
-	}()
-
-	readers, err := channel.ListReaders()
-	if err != nil {
 		return nil, fmt.Errorf("list readers: %w", err)
 	}
 	return readers, nil

@@ -1,22 +1,26 @@
 # ts43-go
 
-Private Go module for TS.43 eSIM Transfer flows. This repository contains the TS.43 client and the source-SIM driver pieces it needs; LPA/profile download code is intentionally left to the integrating application.
+Private Go module for TS.43 eSIM Transfer flows. This repository contains the TS.43 client and the source-SIM adapter it needs; UICC transports and LPA/profile download code are intentionally left to integrating modules.
 
 ## Features
 
 - TS.43 entitlement and carrier-managed eSIM transfer state machine.
 - EAP-AKA relay using source SIM identity and AKA authentication.
 - User-input, websheet, delayed-download, SM-DS discovery, and activation-polling states.
-- Minimal APDU request/response helpers, SIM identity, EAP-AKA, TS.43 HTTP, HTTP logging, and source-SIM drivers used by the TS.43 flow.
+- TS.43 EAP-AKA relay helpers, HTTP client behavior, and a small source-SIM adapter over `github.com/damonto/uicc-go`.
 
 ## Packages
 
-- `ts43`: TS.43 client, transfer state machine, request/response models, and websheet callback types.
-- `sim`: SIM identity and EAP-AKA helpers needed by TS.43 authentication.
-- `apdu`: minimal APDU request/response helpers used by source-SIM file reads.
-- `http`: TS.43 HTTP client, raw response handling, and HTTP status errors.
-- `driver`: minimal HTTP logging transport used by `http`.
-- `driver/at`, `driver/ccid`, `driver/mbim`, `driver/qmi`: source-SIM drivers for identity lookup and AKA authentication.
+- root package: TS.43 client, transfer state machine, request/response models, websheet callback types, EAP-AKA relay helpers, HTTP client behavior, and the `uicc-go/usim.Card` source adapter.
+
+Source-SIM transports live in `github.com/damonto/uicc-go`. Open the reader there, load a `usim.Card`, then adapt it for TS.43:
+
+```go
+tx, err := ccid.Open(ctx, readerName)
+reader, err := usim.NewReader(tx)
+card, err := usim.New(ctx, reader, logger)
+channel, err := ts43.NewSource(card)
+```
 
 ## Example
 

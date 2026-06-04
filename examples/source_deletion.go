@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	sgp22 "github.com/damonto/euicc-go/v2"
-	"github.com/damonto/ts43-go/ts43"
+	"github.com/damonto/ts43-go"
 )
 
 var errSourceProfileDeletionDeclined = errors.New("source profile deletion declined")

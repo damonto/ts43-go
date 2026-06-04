@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/damonto/ts43-go/ts43"
+	"github.com/damonto/ts43-go"
 )
 
 func ts43Websheet(reader *bufio.Reader, w io.Writer, event ts43.WebsheetEvent) (*ts43.WebsheetResult, error) {
