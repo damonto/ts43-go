@@ -4,7 +4,7 @@ go 1.26.3
 
 require (
 	github.com/damonto/euicc-go v1.1.2
-	github.com/damonto/uicc-go v0.0.0-20260604115552-4e040f0d9597
+	github.com/damonto/uicc-go v0.0.0-20260611123120-01e3637ef8da
 )
 
 replace github.com/damonto/ts43-go => ..
