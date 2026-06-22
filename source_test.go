@@ -18,13 +18,18 @@ var usimAID = []byte{0xA0, 0x00, 0x00, 0x00, 0x87, 0x10, 0x02}
 
 type fakeReader struct {
 	authPayload []byte
+	adPayload   []byte
 	closed      bool
 }
 
 func newTestChannel(t *testing.T, authPayload []byte) *Source {
+	return newTestChannelWithAD(t, authPayload, []byte{0x00, 0x00, 0x00, 0x03})
+}
+
+func newTestChannelWithAD(t *testing.T, authPayload, adPayload []byte) *Source {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	card, err := usim.New(context.Background(), &fakeReader{authPayload: authPayload}, logger)
+	card, err := usim.New(context.Background(), &fakeReader{authPayload: authPayload, adPayload: adPayload}, logger)
 	if err != nil {
 		t.Fatalf("usim.New() error = %v", err)
 	}
@@ -61,7 +66,7 @@ func (r *fakeReader) ReadTransparent(_ context.Context, req usimcard.Transparent
 	case string([]byte{0x6F, 0x07}):
 		return []byte{0x08, 0x09, 0x10, 0x10, 0x10, 0x32, 0x54, 0x76, 0x98}, nil
 	case string([]byte{0x6F, 0xAD}):
-		return []byte{0x00, 0x00, 0x00, 0x03}, nil
+		return slices.Clone(r.adPayload), nil
 	case string([]byte{0x6F, 0x3E}):
 		return []byte{0xAA, 0xBB}, nil
 	default:
@@ -88,11 +93,13 @@ func (r *fakeReader) Close() error {
 
 func TestChannelIdentity(t *testing.T) {
 	tests := []struct {
-		name string
-		want *Identity
+		name      string
+		adPayload []byte
+		want      *Identity
 	}{
 		{
-			name: "loaded USIM identity",
+			name:      "loaded USIM identity",
+			adPayload: []byte{0x00, 0x00, 0x00, 0x03},
 			want: &Identity{
 				ICCID: "8986000000000000000",
 				IMSI:  "001010123456789",
@@ -101,11 +108,22 @@ func TestChannelIdentity(t *testing.T) {
 				GID1:  "AABB",
 			},
 		},
+		{
+			name:      "two-digit source MNC is passed through",
+			adPayload: []byte{0x00, 0x00, 0x00, 0x02},
+			want: &Identity{
+				ICCID: "8986000000000000000",
+				IMSI:  "001010123456789",
+				MCC:   "001",
+				MNC:   "01",
+				GID1:  "AABB",
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			channel := newTestChannel(t, []byte{0xDB, 0x01, 0x01, 0x01, 0x02, 0x01, 0x03})
+			channel := newTestChannelWithAD(t, []byte{0xDB, 0x01, 0x01, 0x01, 0x02, 0x01, 0x03}, tt.adPayload)
 			got, err := channel.Identity(context.Background())
 			if err != nil {
 				t.Fatalf("Identity() error = %v", err)

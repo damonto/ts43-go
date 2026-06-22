@@ -51,6 +51,18 @@ func TestDiscoverEntitlement(t *testing.T) {
 			},
 		},
 		{
+			name:     "Austrian two-digit MNC carrier key",
+			identity: Identity{MCC: "232", MNC: "05"},
+			want: Entitlement{
+				Server:       "https://esim-es-open-prod-3at.esimcloud.net/3at/prod/executeGSMAActions",
+				TransferType: TransferTypeTemporaryToken,
+				PollInterval: time.Minute,
+				PollTimeout:  10 * time.Minute,
+				AppName:      "androidTransfer",
+				Version:      "11.0",
+			},
+		},
+		{
 			name:          "pSIM transfer type",
 			identity:      Identity{MCC: "230", MNC: "03"},
 			sourceSIMType: SIMTypePSIM,

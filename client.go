@@ -361,10 +361,6 @@ func relayResponseAccept(req ServiceEntitlementRequest) string {
 	return eapRelayAccept(req.Accept)
 }
 
-func (c *Client) httpClient() HTTPDoer {
-	return entitlementTransport{client: c}.httpClient()
-}
-
 func (t entitlementTransport) httpClient() HTTPDoer {
 	c := t.client
 	if c.runtime.httpClient != nil {

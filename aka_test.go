@@ -7,6 +7,40 @@ import (
 	"testing"
 )
 
+func TestIMSIEAPIdentityFormatsMNC(t *testing.T) {
+	tests := []struct {
+		name   string
+		mccmnc string
+		imsi   string
+		want   string
+	}{
+		{
+			name:   "pads two digit MNC for realm",
+			mccmnc: "23410",
+			imsi:   "234101234567890",
+			want:   "0234101234567890@nai.epc.mnc010.mcc234.3gppnetwork.org",
+		},
+		{
+			name:   "keeps three digit MNC",
+			mccmnc: "310260",
+			imsi:   "310260123456789",
+			want:   "0310260123456789@nai.epc.mnc260.mcc310.3gppnetwork.org",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IMSIEAPIdentity(tt.mccmnc, tt.imsi, DefaultEAPAkaRealm)
+			if err != nil {
+				t.Fatalf("IMSIEAPIdentity() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("IMSIEAPIdentity() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestRespondToChallengeMatchesAndroidVector(t *testing.T) {
 	tests := []struct {
 		name      string
