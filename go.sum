@@ -1,4 +1,4 @@
-github.com/damonto/uicc-go v0.0.0-20260622025011-5cf36d6c8626 h1:jcUx6ygMhU27ca9qn0qX3rZCa1956YYJcn/1NUhX8XQ=
-github.com/damonto/uicc-go v0.0.0-20260622025011-5cf36d6c8626/go.mod h1:4il4tcO0GJ2Bn8827RWDiMxNOnQpEApy3pwKliaR9uc=
+github.com/damonto/uicc-go v0.0.0-20260629073618-7ddada6bb13e h1:YrNe3AsNxKoKrcLlyDnleDyytFT1q7q4bAbmUCroxaY=
+github.com/damonto/uicc-go v0.0.0-20260629073618-7ddada6bb13e/go.mod h1:4il4tcO0GJ2Bn8827RWDiMxNOnQpEApy3pwKliaR9uc=
 golang.org/x/sys v0.46.0 h1:noSf2Fq6F8DBgS+LysIkx7rIExoNHJsxOAtPp4rthXw=
 golang.org/x/sys v0.46.0/go.mod h1:4GL1E5IUh+htKOUEOaiffhrAeqysfVGipDYzABqnCmw=
