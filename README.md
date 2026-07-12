@@ -7,18 +7,18 @@ Private Go module for TS.43 eSIM Transfer flows. This repository contains the TS
 - TS.43 entitlement and carrier-managed eSIM transfer state machine.
 - EAP-AKA relay using source SIM identity and AKA authentication.
 - User-input, websheet, delayed-download, SM-DS discovery, and activation-polling states.
-- TS.43 EAP-AKA relay helpers, HTTP client behavior, and a small source-SIM adapter over `github.com/damonto/uicc-go`.
+- TS.43 EAP-AKA relay helpers, HTTP client behavior, and a small source-SIM adapter over `github.com/damonto/wwan-go`.
 
 ## Packages
 
-- root package: TS.43 client, transfer state machine, request/response models, websheet callback types, EAP-AKA relay helpers, HTTP client behavior, and the `uicc-go/usim.Card` source adapter.
+- root package: TS.43 client, transfer state machine, request/response models, websheet callback types, EAP-AKA relay helpers, HTTP client behavior, and the `wwan-go/sim.Card` source adapter.
 
-Source-SIM transports live in `github.com/damonto/uicc-go`. Open the reader there, load a `usim.Card`, then adapt it for TS.43:
+Source-SIM transports live in `github.com/damonto/wwan-go`. Open the reader there, load a `sim.Card`, then adapt it for TS.43:
 
 ```go
 tx, err := ccid.Open(ctx, readerName)
-reader, err := usim.NewReader(tx)
-card, err := usim.New(ctx, reader, logger)
+reader, err := sim.NewReader(tx)
+card, err := sim.New(ctx, reader, logger)
 channel, err := ts43.NewSource(card)
 ```
 

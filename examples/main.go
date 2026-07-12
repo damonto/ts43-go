@@ -16,8 +16,8 @@ import (
 	lpaccid "github.com/damonto/euicc-go/driver/ccid"
 	"github.com/damonto/euicc-go/lpa"
 	"github.com/damonto/ts43-go"
-	sourceccid "github.com/damonto/uicc-go/ccid"
-	sourceusim "github.com/damonto/uicc-go/usim"
+	sourceccid "github.com/damonto/wwan-go/ccid"
+	sourcesim "github.com/damonto/wwan-go/sim"
 )
 
 type cliOptions struct {
@@ -93,15 +93,15 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	if err != nil {
 		return openCCIDError("source reader", err)
 	}
-	sourceUSIMReader, err := sourceusim.NewReader(sourceCardReader)
+	sourceSIMReader, err := sourcesim.NewReader(sourceCardReader)
 	if err != nil {
 		_ = sourceCardReader.Close()
-		return fmt.Errorf("create source USIM reader: %w", err)
+		return fmt.Errorf("create source SIM reader: %w", err)
 	}
-	sourceCard, err := sourceusim.New(ctx, sourceUSIMReader, logger)
+	sourceCard, err := sourcesim.New(ctx, sourceSIMReader, logger)
 	if err != nil {
-		_ = sourceUSIMReader.Close()
-		return fmt.Errorf("load source USIM: %w", err)
+		_ = sourceSIMReader.Close()
+		return fmt.Errorf("load source SIM: %w", err)
 	}
 	sourceChannel, err := ts43.NewSource(sourceCard)
 	if err != nil {

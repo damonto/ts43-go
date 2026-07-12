@@ -4,17 +4,17 @@ import (
 	"context"
 	"errors"
 
-	"github.com/damonto/uicc-go/usim"
+	"github.com/damonto/wwan-go/sim"
 )
 
 // ErrAuthenticationRejected reports a USIM AKA authentication reject.
 var ErrAuthenticationRejected = errors.New("source SIM authentication rejected")
 
 type Source struct {
-	card *usim.Card
+	card *sim.Card
 }
 
-func NewSource(card *usim.Card) (*Source, error) {
+func NewSource(card *sim.Card) (*Source, error) {
 	if card == nil {
 		return nil, errors.New("creating source channel: USIM card is nil")
 	}

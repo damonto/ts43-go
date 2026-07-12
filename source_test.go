@@ -9,9 +9,9 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/damonto/uicc-go/usim"
-	usimcard "github.com/damonto/uicc-go/usim/card"
-	"github.com/damonto/uicc-go/usim/simfile"
+	"github.com/damonto/wwan-go/sim"
+	simcard "github.com/damonto/wwan-go/sim/card"
+	"github.com/damonto/wwan-go/sim/simfile"
 )
 
 var usimAID = []byte{0xA0, 0x00, 0x00, 0x00, 0x87, 0x10, 0x02}
@@ -29,9 +29,9 @@ func newTestChannel(t *testing.T, authPayload []byte) *Source {
 func newTestChannelWithAD(t *testing.T, authPayload, adPayload []byte) *Source {
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	card, err := usim.New(context.Background(), &fakeReader{authPayload: authPayload, adPayload: adPayload}, logger)
+	card, err := sim.New(context.Background(), &fakeReader{authPayload: authPayload, adPayload: adPayload}, logger)
 	if err != nil {
-		t.Fatalf("usim.New() error = %v", err)
+		t.Fatalf("sim.New() error = %v", err)
 	}
 	channel, err := NewSource(card)
 	if err != nil {
@@ -40,11 +40,11 @@ func newTestChannelWithAD(t *testing.T, authPayload, adPayload []byte) *Source {
 	return channel
 }
 
-func (r *fakeReader) ListApplications(context.Context) ([]usimcard.Application, error) {
-	return []usimcard.Application{{AID: slices.Clone(usimAID), Label: "USIM"}}, nil
+func (r *fakeReader) ListApplications(context.Context) ([]simcard.Application, error) {
+	return []simcard.Application{{AID: slices.Clone(usimAID), Label: "USIM"}}, nil
 }
 
-func (r *fakeReader) FileAttributes(_ context.Context, file usimcard.FileRef) (usimcard.FileAttributes, error) {
+func (r *fakeReader) FileAttributes(_ context.Context, file simcard.FileRef) (simcard.FileAttributes, error) {
 	switch string(file.Path) {
 	case string([]byte{0x2F, 0xE2}):
 		return transparentAttrs(10), nil
@@ -55,11 +55,11 @@ func (r *fakeReader) FileAttributes(_ context.Context, file usimcard.FileRef) (u
 	case string([]byte{0x6F, 0x3E}):
 		return transparentAttrs(2), nil
 	default:
-		return usimcard.FileAttributes{}, errors.New("file not found")
+		return simcard.FileAttributes{}, errors.New("file not found")
 	}
 }
 
-func (r *fakeReader) ReadTransparent(_ context.Context, req usimcard.TransparentRead) ([]byte, error) {
+func (r *fakeReader) ReadTransparent(_ context.Context, req simcard.TransparentRead) ([]byte, error) {
 	switch string(req.File.Path) {
 	case string([]byte{0x2F, 0xE2}):
 		return []byte{0x98, 0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0}, nil
@@ -74,16 +74,16 @@ func (r *fakeReader) ReadTransparent(_ context.Context, req usimcard.Transparent
 	}
 }
 
-func (r *fakeReader) ReadRecord(context.Context, usimcard.RecordRead) ([]byte, error) {
+func (r *fakeReader) ReadRecord(context.Context, simcard.RecordRead) ([]byte, error) {
 	return nil, errors.New("file not found")
 }
 
-func (r *fakeReader) Authenticate3G(context.Context, usimcard.AuthenticateRequest) ([]byte, error) {
+func (r *fakeReader) Authenticate3G(context.Context, simcard.AuthenticateRequest) ([]byte, error) {
 	return slices.Clone(r.authPayload), nil
 }
 
-func (r *fakeReader) SMSPPDownload(context.Context, usimcard.SMSPPDownloadRequest) (usimcard.SMSPPDownloadResponse, error) {
-	return usimcard.SMSPPDownloadResponse{}, errors.New("not implemented")
+func (r *fakeReader) SMSPPDownload(context.Context, simcard.SMSPPDownloadRequest) (simcard.SMSPPDownloadResponse, error) {
+	return simcard.SMSPPDownloadResponse{}, errors.New("not implemented")
 }
 
 func (r *fakeReader) Close() error {
@@ -185,7 +185,7 @@ func TestChannelAuthenticateAKA(t *testing.T) {
 func TestNewRejectsNilCard(t *testing.T) {
 	tests := []struct {
 		name string
-		card *usim.Card
+		card *sim.Card
 	}{
 		{name: "nil"},
 	}
@@ -198,8 +198,8 @@ func TestNewRejectsNilCard(t *testing.T) {
 	}
 }
 
-func transparentAttrs(size uint16) usimcard.FileAttributes {
-	return usimcard.FileAttributes{
+func transparentAttrs(size uint16) simcard.FileAttributes {
+	return simcard.FileAttributes{
 		FileStructure: simfile.StructureTransparent,
 		FileSize:      size,
 	}
