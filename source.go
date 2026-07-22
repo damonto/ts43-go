@@ -31,6 +31,8 @@ func (c *Source) Identity(ctx context.Context) (*Identity, error) {
 		MCC:   c.card.MCC(),
 		MNC:   c.card.MNC(),
 		GID1:  c.card.GID1(),
+		GID2:  c.card.GID2(),
+		SPN:   c.card.SPN(),
 	}, nil
 }
 

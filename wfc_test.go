@@ -44,6 +44,19 @@ func TestDiscoverWFC(t *testing.T) {
 			},
 		},
 		{
+			name:     "SPN match wins over MCCMNC candidates",
+			identity: Identity{MCC: "204", MNC: "04", SPN: "U.S. CELLULAR"},
+			want: WFCConfig{
+				CarrierName:        "uscc_us",
+				Server:             "https://aes.mnc580.mcc311.pub.3gppnetwork.org/rcs-entitlement",
+				App:                AppVoWiFi,
+				Version:            "2.0",
+				ClientTS43:         DefaultWFCClientTS43,
+				ShowVoWiFiWebview:  true,
+				WebsheetClientName: "VoWiFiWebServiceFlow",
+			},
+		},
+		{
 			name:     "missing MCCMNC",
 			identity: Identity{MCC: "999", MNC: "99"},
 			wantErr:  ErrWFCConfigNotFound,

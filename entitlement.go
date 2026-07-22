@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
+	"slices"
 	"time"
 )
 
@@ -29,6 +29,9 @@ var (
 type entitlementRecord struct {
 	MCCMNC                                     string  `json:"mccmnc"`
 	GID1                                       *string `json:"gid1"`
+	GID2                                       *string `json:"gid2"`
+	SPN                                        *string `json:"spn"`
+	IMSIPrefixXPattern                         *string `json:"imsiPrefixXpattern"`
 	CarrierName                                string  `json:"carrierName"`
 	Channel                                    string  `json:"channel"`
 	EntitlementServer                          string  `json:"entitlementServer"`
@@ -70,7 +73,7 @@ func DiscoverEntitlementForChannel(identity Identity, sourceSIMType SIMType, cha
 	if channel == "" {
 		return discoverEntitlementAuto(records, identity, sourceSIMType)
 	}
-	record, err := selectEntitlementRecord(records, mccmnc(identity), identity.GID1, normalizeEntitlementChannel(channel))
+	record, err := selectEntitlementRecord(records, identity, normalizeEntitlementChannel(channel))
 	if err != nil {
 		return Entitlement{}, err
 	}
@@ -80,7 +83,7 @@ func DiscoverEntitlementForChannel(identity Identity, sourceSIMType SIMType, cha
 func discoverEntitlementAuto(records []entitlementRecord, identity Identity, sourceSIMType SIMType) (Entitlement, error) {
 	var unsupported error
 	for _, channel := range []EntitlementChannel{EntitlementChannelGoogle, EntitlementChannelSamsung} {
-		record, err := selectEntitlementRecord(records, mccmnc(identity), identity.GID1, channel)
+		record, err := selectEntitlementRecord(records, identity, channel)
 		if errors.Is(err, ErrEntitlementNotFound) {
 			continue
 		}
@@ -102,37 +105,45 @@ func discoverEntitlementAuto(records []entitlementRecord, identity Identity, sou
 	return Entitlement{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccmnc(identity))
 }
 
-func selectEntitlementRecord(records []entitlementRecord, mccmnc, gid1 string, channel EntitlementChannel) (entitlementRecord, error) {
-	var fallback []entitlementRecord
-	var gidMatches []entitlementRecord
+func selectEntitlementRecord(records []entitlementRecord, identity Identity, channel EntitlementChannel) (entitlementRecord, error) {
+	var matches []entitlementRecord
+	bestScore := -1
 	for _, record := range records {
-		if record.MCCMNC != mccmnc {
-			continue
-		}
 		if normalizeEntitlementChannel(EntitlementChannel(record.Channel)) != channel {
 			continue
 		}
-		if record.GID1 == nil {
-			fallback = append(fallback, record)
+		score, ok := record.match().score(identity)
+		if !ok || score < bestScore {
 			continue
 		}
-		if gid1 != "" && strings.EqualFold(*record.GID1, gid1) {
-			gidMatches = append(gidMatches, record)
+		if score > bestScore {
+			matches = matches[:0]
+			bestScore = score
 		}
+		if slices.ContainsFunc(matches, func(match entitlementRecord) bool {
+			return match.CarrierName == record.CarrierName && match.EntitlementServer == record.EntitlementServer
+		}) {
+			continue
+		}
+		matches = append(matches, record)
 	}
-	if len(gidMatches) == 1 {
-		return gidMatches[0], nil
+	if len(matches) == 1 {
+		return matches[0], nil
 	}
-	if len(gidMatches) > 1 {
-		return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s GID1 %s", ErrEntitlementAmbiguous, mccmnc, gid1)
+	if len(matches) > 1 {
+		return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementAmbiguous, mccmnc(identity))
 	}
-	if len(fallback) == 1 {
-		return fallback[0], nil
+	return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccmnc(identity))
+}
+
+func (r entitlementRecord) match() carrierMatch {
+	return carrierMatch{
+		MCCMNC:             r.MCCMNC,
+		GID1:               r.GID1,
+		GID2:               r.GID2,
+		SPN:                r.SPN,
+		IMSIPrefixXPattern: r.IMSIPrefixXPattern,
 	}
-	if len(fallback) > 1 {
-		return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementAmbiguous, mccmnc)
-	}
-	return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccmnc)
 }
 
 func (r entitlementRecord) entitlement(sourceSIMType SIMType) (Entitlement, error) {

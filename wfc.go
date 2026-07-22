@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -150,6 +151,9 @@ type WFCResult struct {
 type wfcRecord struct {
 	MCCMNC                           string  `json:"mccmnc"`
 	GID1                             *string `json:"gid1"`
+	GID2                             *string `json:"gid2"`
+	SPN                              *string `json:"spn"`
+	IMSIPrefixXPattern               *string `json:"imsiPrefixXpattern"`
 	CarrierName                      string  `json:"carrierName"`
 	EntitlementServer                string  `json:"entitlementServer"`
 	App                              string  `json:"app"`
@@ -171,41 +175,49 @@ func DiscoverWFC(identity Identity) (WFCConfig, error) {
 	if err := json.Unmarshal(wfcJSON, &records); err != nil {
 		return WFCConfig{}, fmt.Errorf("parse WFC config: %w", err)
 	}
-	record, err := selectWFCRecord(records, mccmnc(identity), identity.GID1)
+	record, err := selectWFCRecord(records, identity)
 	if err != nil {
 		return WFCConfig{}, err
 	}
 	return record.config(), nil
 }
 
-func selectWFCRecord(records []wfcRecord, mccmnc, gid1 string) (wfcRecord, error) {
-	var fallback []wfcRecord
-	var gidMatches []wfcRecord
+func selectWFCRecord(records []wfcRecord, identity Identity) (wfcRecord, error) {
+	var matches []wfcRecord
+	bestScore := -1
 	for _, record := range records {
-		if record.MCCMNC != mccmnc {
+		score, ok := record.match().score(identity)
+		if !ok || score < bestScore {
 			continue
 		}
-		if record.GID1 == nil {
-			fallback = append(fallback, record)
+		if score > bestScore {
+			matches = matches[:0]
+			bestScore = score
+		}
+		if slices.ContainsFunc(matches, func(match wfcRecord) bool {
+			return match.CarrierName == record.CarrierName
+		}) {
 			continue
 		}
-		if gid1 != "" && strings.EqualFold(*record.GID1, gid1) {
-			gidMatches = append(gidMatches, record)
-		}
+		matches = append(matches, record)
 	}
-	if len(gidMatches) == 1 {
-		return gidMatches[0], nil
+	if len(matches) == 1 {
+		return matches[0], nil
 	}
-	if len(gidMatches) > 1 {
-		return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s GID1 %s", ErrWFCConfigAmbiguous, mccmnc, gid1)
+	if len(matches) > 1 {
+		return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigAmbiguous, mccmnc(identity))
 	}
-	if len(fallback) == 1 {
-		return fallback[0], nil
+	return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigNotFound, mccmnc(identity))
+}
+
+func (r wfcRecord) match() carrierMatch {
+	return carrierMatch{
+		MCCMNC:             r.MCCMNC,
+		GID1:               r.GID1,
+		GID2:               r.GID2,
+		SPN:                r.SPN,
+		IMSIPrefixXPattern: r.IMSIPrefixXPattern,
 	}
-	if len(fallback) > 1 {
-		return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigAmbiguous, mccmnc)
-	}
-	return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigNotFound, mccmnc)
 }
 
 func (r wfcRecord) config() WFCConfig {

@@ -251,7 +251,7 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s -source-imei IMEI -target-imei IMEI [flags]\n", fs.Name())
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "When -server is omitted, the TS.43 entitlement config is discovered from the source SIM MCC/MNC/GID1.")
+		fmt.Fprintln(stderr, "When -server is omitted, the TS.43 entitlement config is discovered from the source SIM MCC/MNC/IMSI/GID1/GID2/SPN.")
 		fmt.Fprintln(stderr, "Use -source-psim for pSIM sources so discovery can select the carrier pSIM transfer type.")
 		fmt.Fprintln(stderr, "The selected source reader is treated as the source profile; no source profile list is built.")
 		fmt.Fprintln(stderr, "")

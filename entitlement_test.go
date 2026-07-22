@@ -39,6 +39,17 @@ func TestDiscoverEntitlement(t *testing.T) {
 			},
 		},
 		{
+			name:     "GID1 and GID2 match wins over MCCMNC fallback",
+			identity: Identity{MCC: "311", MNC: "480", GID1: "ba01570000000000", GID2: "b100000000000000"},
+			want: Entitlement{
+				Server:       "https://spc-ecs.myvzw.com:443/",
+				TransferType: TransferTypeTS43V8,
+				PollInterval: 2 * time.Minute,
+				PollTimeout:  10 * time.Minute,
+				Version:      "8.0",
+			},
+		},
+		{
 			name:     "unique MCCMNC fallback",
 			identity: Identity{MCC: "310", MNC: "260"},
 			want: Entitlement{
@@ -63,8 +74,8 @@ func TestDiscoverEntitlement(t *testing.T) {
 			},
 		},
 		{
-			name:          "pSIM transfer type",
-			identity:      Identity{MCC: "230", MNC: "03"},
+			name:          "pSIM transfer type selected by SPN",
+			identity:      Identity{MCC: "230", MNC: "03", SPN: "Vodafone CZ"},
 			sourceSIMType: SIMTypePSIM,
 			want: Entitlement{
 				Server:       "https://es-cz.multiopco.entitlement.vodafone.com:5452/DEGDROIDInterfaceTS43",
@@ -77,8 +88,8 @@ func TestDiscoverEntitlement(t *testing.T) {
 			},
 		},
 		{
-			name:     "eSIM transfer type",
-			identity: Identity{MCC: "230", MNC: "03"},
+			name:     "eSIM transfer type selected by SPN",
+			identity: Identity{MCC: "230", MNC: "03", SPN: "Vodafone CZ"},
 			want: Entitlement{
 				Server:       "https://es-cz.multiopco.entitlement.vodafone.com:5452/DEGDROIDInterfaceTS43",
 				UsePost:      true,
@@ -90,9 +101,47 @@ func TestDiscoverEntitlement(t *testing.T) {
 			},
 		},
 		{
-			name:     "ambiguous MCCMNC fallback",
+			name:     "IMSI prefix wildcard selects carrier",
+			identity: Identity{MCC: "262", MNC: "03", IMSI: "262032931234567"},
+			want: Entitlement{
+				Server:                 "https://aes.mnc023.mcc262.pub.3gppnetwork.org/",
+				TransferType:           TransferTypeTemporaryToken,
+				PollInterval:           2 * time.Minute,
+				PollTimeout:            10 * time.Minute,
+				UseTempTokenConversion: true,
+				AppName:                "androidTransfer",
+				Version:                "9.0",
+			},
+		},
+		{
+			name:     "IMSI and SPN conditions match together",
+			identity: Identity{MCC: "262", MNC: "02", IMSI: "262021910123456", SPN: "Vodafone.de"},
+			want: Entitlement{
+				Server:       "https://es-de.vodafone.com:5445/DEGDROIDInterfaceTS43",
+				UsePost:      true,
+				TransferType: TransferTypeReusableActivationCode,
+				PollInterval: time.Minute,
+				PollTimeout:  5 * time.Minute,
+				AppName:      "androidTransfer",
+				Version:      "9.0",
+			},
+		},
+		{
+			name:     "SPN without required IMSI does not match",
+			identity: Identity{MCC: "262", MNC: "02", SPN: "Vodafone.de"},
+			wantErr:  ErrEntitlementNotFound,
+		},
+		{
+			name:     "missing SPN falls back to Samsung",
 			identity: Identity{MCC: "208", MNC: "01"},
-			wantErr:  ErrEntitlementAmbiguous,
+			want: Entitlement{
+				Server:       "https://des.orange.fr",
+				TransferType: TransferTypeTemporaryToken,
+				PollInterval: time.Minute,
+				PollTimeout:  10 * time.Minute,
+				AppName:      "ap2009",
+				Version:      "9.0",
+			},
 		},
 		{
 			name:     "missing MCCMNC",
@@ -127,6 +176,9 @@ func TestDiscoverEntitlement(t *testing.T) {
 			if got.UsePost != tt.want.UsePost {
 				t.Fatalf("UsePost = %t, want %t", got.UsePost, tt.want.UsePost)
 			}
+			if got.UseTempTokenConversion != tt.want.UseTempTokenConversion {
+				t.Fatalf("UseTempTokenConversion = %t, want %t", got.UseTempTokenConversion, tt.want.UseTempTokenConversion)
+			}
 			if got.PollInterval != tt.want.PollInterval {
 				t.Fatalf("PollInterval = %s, want %s", got.PollInterval, tt.want.PollInterval)
 			}
@@ -140,6 +192,70 @@ func TestDiscoverEntitlement(t *testing.T) {
 				t.Fatalf("Version = %q, want %q", got.Version, tt.want.Version)
 			}
 		})
+	}
+}
+
+func TestSelectEntitlementRecordIdentityMatching(t *testing.T) {
+	gid1 := "AA"
+	gid2 := "BB"
+	spn := "Example"
+	records := []entitlementRecord{
+		{MCCMNC: "00101", CarrierName: "fallback", EntitlementServer: "fallback", Channel: "google"},
+		{MCCMNC: "00101", GID1: &gid1, CarrierName: "gid1", EntitlementServer: "gid1", Channel: "google"},
+		{MCCMNC: "00101", GID1: &gid1, GID2: &gid2, CarrierName: "gid12", EntitlementServer: "gid12", Channel: "google"},
+		{MCCMNC: "00101", SPN: &spn, CarrierName: "spn", EntitlementServer: "spn", Channel: "google"},
+	}
+	tests := []struct {
+		name     string
+		identity Identity
+		want     string
+		wantErr  error
+	}{
+		{
+			name:     "most specific GID1 and GID2 match wins",
+			identity: Identity{MCC: "001", MNC: "01", GID1: "aa", GID2: "bb"},
+			want:     "gid12",
+		},
+		{
+			name:     "SPN match wins over MCCMNC fallback",
+			identity: Identity{MCC: "001", MNC: "01", SPN: "Example"},
+			want:     "spn",
+		},
+		{
+			name:     "mismatched specific fields use fallback",
+			identity: Identity{MCC: "001", MNC: "01", GID1: "CC"},
+			want:     "fallback",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := selectEntitlementRecord(records, tt.identity, EntitlementChannelGoogle)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("selectEntitlementRecord() error = %v, want %v", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("selectEntitlementRecord() error = %v", err)
+			}
+			if got.CarrierName != tt.want {
+				t.Fatalf("CarrierName = %q, want %q", got.CarrierName, tt.want)
+			}
+		})
+	}
+}
+
+func TestSelectEntitlementRecordEqualSpecificityIsAmbiguous(t *testing.T) {
+	first := "AA"
+	second := "AA"
+	records := []entitlementRecord{
+		{MCCMNC: "00101", GID1: &first, CarrierName: "first", EntitlementServer: "first", Channel: "google"},
+		{MCCMNC: "00101", GID1: &second, CarrierName: "second", EntitlementServer: "second", Channel: "google"},
+	}
+	_, err := selectEntitlementRecord(records, Identity{MCC: "001", MNC: "01", GID1: "aa"}, EntitlementChannelGoogle)
+	if !errors.Is(err, ErrEntitlementAmbiguous) {
+		t.Fatalf("selectEntitlementRecord() error = %v, want %v", err, ErrEntitlementAmbiguous)
 	}
 }
 
@@ -240,6 +356,12 @@ func TestDiscoverEntitlementAutoChannel(t *testing.T) {
 			wantServer:  "https://ts43.eas3.msg.t-mobile.com/google/",
 		},
 		{
+			name:        "Google specific match beats Samsung fallback",
+			identity:    Identity{MCC: "208", MNC: "01", SPN: "Orange F"},
+			wantChannel: EntitlementChannelGoogle,
+			wantServer:  "https://des.orange.fr",
+		},
+		{
 			name:        "falls back to Samsung when Google has no carrier key",
 			identity:    Identity{MCC: "450", MNC: "05"},
 			wantChannel: EntitlementChannelSamsung,
@@ -259,5 +381,16 @@ func TestDiscoverEntitlementAutoChannel(t *testing.T) {
 				t.Fatalf("Server = %q, want %q", got.Server, tt.wantServer)
 			}
 		})
+	}
+}
+
+func TestDiscoverEntitlementSamsungTeliaHalebopIsAmbiguous(t *testing.T) {
+	_, err := DiscoverEntitlementForChannel(
+		Identity{MCC: "240", MNC: "01"},
+		SIMTypeESIM,
+		EntitlementChannelSamsung,
+	)
+	if !errors.Is(err, ErrEntitlementAmbiguous) {
+		t.Fatalf("DiscoverEntitlementForChannel() error = %v, want %v", err, ErrEntitlementAmbiguous)
 	}
 }

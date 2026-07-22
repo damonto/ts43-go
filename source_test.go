@@ -54,6 +54,10 @@ func (r *fakeReader) FileAttributes(_ context.Context, file simcard.FileRef) (si
 		return transparentAttrs(4), nil
 	case string([]byte{0x6F, 0x3E}):
 		return transparentAttrs(2), nil
+	case string([]byte{0x6F, 0x3F}):
+		return transparentAttrs(2), nil
+	case string([]byte{0x6F, 0x46}):
+		return transparentAttrs(9), nil
 	default:
 		return simcard.FileAttributes{}, errors.New("file not found")
 	}
@@ -69,6 +73,10 @@ func (r *fakeReader) ReadTransparent(_ context.Context, req simcard.TransparentR
 		return slices.Clone(r.adPayload), nil
 	case string([]byte{0x6F, 0x3E}):
 		return []byte{0xAA, 0xBB}, nil
+	case string([]byte{0x6F, 0x3F}):
+		return []byte{0xCC, 0xDD}, nil
+	case string([]byte{0x6F, 0x46}):
+		return []byte{0x00, 'g', 'i', 'f', 'f', 'g', 'a', 'f', 'f', 0xFF}, nil
 	default:
 		return nil, errors.New("file not found")
 	}
@@ -106,6 +114,8 @@ func TestChannelIdentity(t *testing.T) {
 				MCC:   "001",
 				MNC:   "010",
 				GID1:  "AABB",
+				GID2:  "CCDD",
+				SPN:   "giffgaff",
 			},
 		},
 		{
@@ -117,6 +127,8 @@ func TestChannelIdentity(t *testing.T) {
 				MCC:   "001",
 				MNC:   "01",
 				GID1:  "AABB",
+				GID2:  "CCDD",
+				SPN:   "giffgaff",
 			},
 		},
 	}
