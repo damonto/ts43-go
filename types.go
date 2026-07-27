@@ -21,7 +21,10 @@ const (
 )
 
 type Config struct {
-	Logger      *slog.Logger
+	Logger *slog.Logger
+	// HTTPClient performs TS.43 requests. New clones and configures a standard
+	// *http.Client whose Transport is nil or *http.Transport. Other implementations
+	// are used unchanged and must provide TS.43-compatible TLS settings.
 	HTTPClient  HTTPDoer
 	Entitlement Entitlement
 	Source      Endpoint

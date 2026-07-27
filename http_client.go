@@ -15,14 +15,44 @@ type RoundTripper struct {
 	log *loggingTransport
 }
 
+type idleConnectionsCloser interface {
+	CloseIdleConnections()
+}
+
 func NewRoundTripper(logger *slog.Logger) RoundTripper {
+	return newRoundTripper(logger, nil)
+}
+
+func newRoundTripper(logger *slog.Logger, transport nethttp.RoundTripper) RoundTripper {
 	return RoundTripper{
-		log: newLoggingTransport(logger, newTransport()),
+		log: newLoggingTransport(logger, ts43Transport(transport)),
 	}
+}
+
+func withTS43Transport(logger *slog.Logger, doer HTTPDoer) HTTPDoer {
+	client, ok := doer.(*nethttp.Client)
+	if !ok {
+		return doer
+	}
+	switch client.Transport.(type) {
+	case nil, *nethttp.Transport:
+	default:
+		return client
+	}
+	clone := *client
+	clone.Transport = newRoundTripper(logger, client.Transport)
+	return &clone
 }
 
 func (r RoundTripper) RoundTrip(req *nethttp.Request) (*nethttp.Response, error) {
 	return r.log.RoundTrip(req)
+}
+
+func (r RoundTripper) CloseIdleConnections() {
+	closer, ok := r.log.transport.(idleConnectionsCloser)
+	if ok {
+		closer.CloseIdleConnections()
+	}
 }
 
 type loggingTransport struct {
@@ -85,10 +115,17 @@ func responseBody(response *nethttp.Response) ([]byte, error) {
 	return body, nil
 }
 
-func newTransport() nethttp.RoundTripper {
-	transport := nethttp.DefaultTransport.(*nethttp.Transport).Clone()
-	transport.TLSClientConfig = ts43TLSConfig(transport.TLSClientConfig)
-	return transport
+func ts43Transport(transport nethttp.RoundTripper) nethttp.RoundTripper {
+	if transport == nil {
+		transport = nethttp.DefaultTransport
+	}
+	httpTransport, ok := transport.(*nethttp.Transport)
+	if !ok {
+		return transport
+	}
+	httpTransport = httpTransport.Clone()
+	httpTransport.TLSClientConfig = ts43TLSConfig(httpTransport.TLSClientConfig)
+	return httpTransport
 }
 
 func ts43TLSConfig(cfg *tls.Config) *tls.Config {
@@ -97,16 +134,18 @@ func ts43TLSConfig(cfg *tls.Config) *tls.Config {
 	} else {
 		cfg = cfg.Clone()
 	}
-	cfg.CipherSuites = []uint16{
-		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-		// Some carrier TS.43 endpoints still only negotiate TLS 1.2 RSA key exchange.
-		tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-		tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	if cfg.CipherSuites == nil {
+		cfg.CipherSuites = []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			// Some carrier TS.43 endpoints still only negotiate TLS 1.2 RSA key exchange.
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+		}
 	}
 	return cfg
 }
@@ -115,6 +154,15 @@ func NewHTTPClient(logger *slog.Logger, timeout time.Duration) *nethttp.Client {
 	return &nethttp.Client{
 		Timeout:   timeout,
 		Transport: NewRoundTripper(logger),
+	}
+}
+
+// CloseIdleConnections closes idle connections held by the client's HTTP transport.
+// It does nothing when the configured HTTP client does not support the operation.
+func (c *Client) CloseIdleConnections() {
+	closer, ok := c.runtime.httpClient.(idleConnectionsCloser)
+	if ok {
+		closer.CloseIdleConnections()
 	}
 }
 

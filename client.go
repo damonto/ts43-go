@@ -80,6 +80,10 @@ func newClient(cfg Config) *Client {
 	if cfg.Entitlement.Timeout == 0 {
 		cfg.Entitlement.Timeout = defaultEntitlementTimeout
 	}
+	cfg.HTTPClient = withTS43Transport(cfg.Logger, cfg.HTTPClient)
+	if cfg.HTTPClient == nil {
+		cfg.HTTPClient = NewHTTPClient(cfg.Logger, cfg.Entitlement.Timeout)
+	}
 	if cfg.Entitlement.PollInterval == 0 {
 		cfg.Entitlement.PollInterval = time.Minute
 	}
@@ -283,7 +287,7 @@ func (t entitlementTransport) callRaw(ctx context.Context, identity Identity, re
 		return nil, nil, err
 	}
 	c.runtime.logger.Debug("TS.43 request", "method", httpReq.Method, "url", httpReq.URL.String(), "auth", authMode(req))
-	body, cookies, err := DoRaw(ctx, t.httpClient(), httpReq)
+	body, cookies, err := DoRaw(ctx, t.client.runtime.httpClient, httpReq)
 	if err != nil {
 		return nil, cookieHeaders(cookies), err
 	}
@@ -351,7 +355,7 @@ func (t entitlementTransport) postRelay(ctx context.Context, packet string, req 
 		httpReq.AddCookie(cookie)
 	}
 	c.runtime.logger.Debug("TS.43 EAP relay", "method", httpReq.Method, "url", httpReq.URL.String())
-	return DoRaw(ctx, t.httpClient(), httpReq)
+	return DoRaw(ctx, t.client.runtime.httpClient, httpReq)
 }
 
 func relayResponseAccept(req ServiceEntitlementRequest) string {
@@ -359,15 +363,6 @@ func relayResponseAccept(req ServiceEntitlementRequest) string {
 		return firstNonEmpty(req.Accept, WFCResponseAccept)
 	}
 	return eapRelayAccept(req.Accept)
-}
-
-func (t entitlementTransport) httpClient() HTTPDoer {
-	c := t.client
-	if c.runtime.httpClient != nil {
-		return c.runtime.httpClient
-	}
-	c.runtime.httpClient = NewHTTPClient(c.runtime.logger, c.transfer.entitlement.Timeout)
-	return c.runtime.httpClient
 }
 
 func relayPacket(data []byte) string {
