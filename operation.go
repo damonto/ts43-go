@@ -15,7 +15,10 @@ func checkEligibilityOperation(entitlement Entitlement, source, target Device) O
 }
 
 func manageSubscriptionRequestDevice(entitlement Entitlement, source, target Device) Device {
-	if IsSourceCredentialTransferType(entitlement.TransferType) || entitlement.TransferType == TransferTypeTemporaryToken {
+	if samsungDigitalizedTransfer(entitlement) {
+		return target
+	}
+	if transferUsesSourceCredential(entitlement) || entitlement.TransferType == TransferTypeTemporaryToken {
 		return source
 	}
 	return target
@@ -29,10 +32,15 @@ func manageSubscriptionOperation(entitlement Entitlement, source, target Device,
 }
 
 func acquireConfigurationRequestDevice(entitlement Entitlement, source, target Device) Device {
-	if IsSourceCredentialTransferType(entitlement.TransferType) {
+	if transferUsesSourceCredential(entitlement) {
 		return source
 	}
 	return target
+}
+
+func transferUsesSourceCredential(entitlement Entitlement) bool {
+	return !samsungDigitalizedTransfer(entitlement) &&
+		IsSourceCredentialTransferType(entitlement.TransferType)
 }
 
 func acquireConfigurationOperation(entitlement Entitlement, source, target Device) ODSAOperation {

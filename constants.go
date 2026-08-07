@@ -22,10 +22,12 @@ func (op Operation) MarshalText() ([]byte, error) { return []byte(op.String()), 
 type OperationType int
 
 const (
-	OperationTypeOmit                 OperationType = -1
-	OperationTypeSamsungD2DTransfer   OperationType = 0
-	OperationTypeTransferSubscription OperationType = 3
-	OperationTypeUpdateSubscription   OperationType = 4
+	OperationTypeOmit                      OperationType = -1
+	OperationTypeSamsungD2DTransfer        OperationType = 0
+	OperationTypeSamsungUnsubscribe        OperationType = 1
+	OperationTypeSamsungChangeSubscription OperationType = 2
+	OperationTypeTransferSubscription      OperationType = 3
+	OperationTypeUpdateSubscription        OperationType = 4
 )
 
 func (t OperationType) String() string { return strconv.Itoa(int(t)) }
@@ -61,7 +63,10 @@ const (
 	TransferTypeReusableActivationCode TransferType = 3
 	TransferTypeTS43V8                 TransferType = 6
 
-	TransferTypeOldTerminalIDs               TransferType = 7
+	TransferTypeOldTerminalIDs TransferType = 7
+	// TransferTypeReusableActivationCodeSMDP requires LPA metadata lookup and
+	// source-profile deletion, which cannot be performed through TS.43 alone.
+	TransferTypeReusableActivationCodeSMDP   TransferType = 8
 	TransferTypeTemporaryTokenOldTerminalIDs TransferType = 9
 	TransferTypeTemporaryTokenVariant11      TransferType = 11
 )
@@ -86,6 +91,9 @@ type OperationResult int
 const (
 	OperationResultUnknown OperationResult = 0
 	OperationResultSuccess OperationResult = 1
+	// OperationResultGoogleDelayedDownload is specific to the GMS flow. Samsung
+	// assigns the same value to an invalid message response.
+	OperationResultGoogleDelayedDownload OperationResult = 104
 )
 
 func (r OperationResult) String() string {

@@ -25,9 +25,12 @@ type ODSAResponse struct {
 	AuthenticationToken   string
 	AuthTokenValidity     int
 	Download              DownloadConfig
-	Message               Message
-	Websheet              Websheet
-	Raw                   []byte
+	// DownloadInfoPresent reports whether the response contained a DownloadInfo
+	// characteristic, including one whose fields were empty or incomplete.
+	DownloadInfoPresent bool
+	Message             Message
+	Websheet            Websheet
+	Raw                 []byte
 }
 
 func (r *ODSAResponse) UnmarshalBinary(data []byte) error {
@@ -493,10 +496,15 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 	var download downloadFields
 	switch {
 	case app.Download != nil:
+		r.DownloadInfoPresent = true
 		download = *app.Download
 	case primary.Download != nil:
+		r.DownloadInfoPresent = true
 		download = *primary.Download
+	default:
+		r.DownloadInfoPresent = false
 	}
+	r.Download = DownloadConfig{}
 	var message messageFields
 	switch {
 	case app.Message != nil:

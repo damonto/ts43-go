@@ -28,23 +28,29 @@ type Config struct {
 	HTTPClient  HTTPDoer
 	Entitlement Entitlement
 	Source      Endpoint
-	Target      Endpoint
-	Companion   Device
-	Events      chan<- Event
-	AppVersion  string
-	ClientTS43  string
-	Realm       string
-	Now         func() time.Time
-	Sleep       func(context.Context, time.Duration) error
+	// Target.Channel is required to refresh credentials with the activated
+	// target profile when a post-download request returns HTTP 511.
+	Target     Endpoint
+	Companion  Device
+	Events     chan<- Event
+	AppVersion string
+	ClientTS43 string
+	Realm      string
+	Now        func() time.Time
+	Sleep      func(context.Context, time.Duration) error
 }
 
 type Entitlement struct {
-	Server                  string
-	Channel                 EntitlementChannel
-	UsePost                 bool
-	Timeout                 time.Duration
-	SourceSIMType           SIMType
-	TransferType            TransferType
+	Server        string
+	Channel       EntitlementChannel
+	UsePost       bool
+	Timeout       time.Duration
+	SourceSIMType SIMType
+	TransferType  TransferType
+	// SamsungSubscriptionType is the Samsung ODA subscription intent used to
+	// derive ManageSubscription operation_type. Its zero value is inferred from
+	// SourceSIMType for transfer flows.
+	SamsungSubscriptionType SamsungSubscriptionType
 	UseTempTokenConversion  bool
 	SetTargetTerminalFields bool
 	// RestrictOldTerminalFields mirrors the GMS Ljotr.Q feature flag. When it
@@ -62,6 +68,26 @@ type Entitlement struct {
 	RequestVersion         string
 	Version                string
 }
+
+// SamsungSubscriptionType identifies the Samsung ODA subscription intent.
+// It is independent of Google's carrier-config TransferType values.
+type SamsungSubscriptionType uint8
+
+const (
+	SamsungSubscriptionUnspecified SamsungSubscriptionType = iota
+	SamsungSubscriptionD2DTransfer
+	SamsungSubscriptionDigitalizedSIM
+	SamsungSubscriptionUnsubscribe
+	SamsungSubscriptionUnsubscribe4FF
+	SamsungSubscriptionChange
+	SamsungSubscriptionChange4FF
+	SamsungSubscriptionTransferOpenID
+	SamsungSubscriptionTransferSMSOTP
+	SamsungSubscriptionRemoteAKATransfer
+	SamsungSubscriptionContinueTemporaryToken
+	SamsungSubscriptionUpdate
+	samsungSubscriptionTypeCount
+)
 
 type Endpoint struct {
 	Channel Channel

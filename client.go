@@ -54,12 +54,19 @@ type eapRelayPacket struct {
 }
 
 type entitlementTransport struct {
-	client *Client
+	client  *Client
+	channel Channel
 }
 
 const defaultEntitlementTimeout = 30 * time.Second
 
 func New(cfg *Config) (*Client, error) {
+	if cfg == nil {
+		return nil, errors.New("config is required")
+	}
+	if err := validateSamsungSubscriptionType(cfg.Entitlement); err != nil {
+		return nil, err
+	}
 	if cfg.Source.Device.IMEI == "" {
 		return nil, errors.New("source IMEI is required")
 	}
@@ -114,12 +121,16 @@ func newClient(cfg Config) *Client {
 }
 
 func (c *Client) Authenticate(ctx context.Context, identity Identity, device Device) (AuthToken, error) {
+	return c.authenticate(ctx, c.transfer.source.Channel, identity, device)
+}
+
+func (c *Client) authenticate(ctx context.Context, channel Channel, identity Identity, device Device) (AuthToken, error) {
 	req := c.baseRequest(device, "", "")
 	op := ODSAOperation{}
-	resp, cookies, err := c.call(ctx, identity, req, op)
+	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) {
 		req.OmitEAPID = true
-		resp, cookies, err = c.call(ctx, identity, req, op)
+		resp, cookies, err = c.callWithChannel(ctx, channel, identity, req, op)
 	}
 	if err != nil {
 		return AuthToken{}, err
@@ -135,10 +146,14 @@ func (c *Client) Authenticate(ctx context.Context, identity Identity, device Dev
 }
 
 func (c *Client) AcquireTemporaryToken(ctx context.Context, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
+	return c.acquireTemporaryToken(ctx, c.transfer.source.Channel, identity, source, target, auth)
+}
+
+func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
 	req := c.authRequest(source, auth)
 	op := temporaryTokenOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
-	resp, cookies, err := c.call(ctx, identity, req, op)
+	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
 		return TransferTokenResult{}, err
 	}
@@ -168,10 +183,14 @@ func (c *Client) AcquireTemporaryToken(ctx context.Context, identity Identity, s
 }
 
 func (c *Client) CheckEligibility(ctx context.Context, identity Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
+	return c.checkEligibility(ctx, c.transfer.source.Channel, identity, source, auth, target)
+}
+
+func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
 	req := c.authRequest(source, auth)
 	op := checkEligibilityOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
-	resp, cookies, err := c.call(ctx, identity, req, op)
+	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
 		return AuthToken{}, err
 	}
@@ -195,7 +214,7 @@ func (c *Client) manageSubscription(ctx context.Context, identity Identity, sour
 	if err != nil {
 		return resp, err
 	}
-	if !manageSubscriptionAccepted(resp) {
+	if !manageSubscriptionAccepted(c.transfer.entitlement, resp) {
 		return resp, &CarrierDeniedError{Operation: OperationManage, Result: resp}
 	}
 	return resp, nil
@@ -235,14 +254,18 @@ func (c *Client) UpdateSubscriptionWithTemporaryToken(ctx context.Context, ident
 }
 
 func (c *Client) updateSubscription(ctx context.Context, identity Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
+	return c.updateSubscriptionOnChannel(ctx, c.transfer.source.Channel, identity, source, target, credential)
+}
+
+func (c *Client) updateSubscriptionOnChannel(ctx context.Context, channel Channel, identity Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.transferRequest(target, credential)
 	op := updateSubscriptionOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
-	resp, _, err := c.call(ctx, identity, req, op)
+	resp, _, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
 		return resp, err
 	}
-	if !subscriptionUpdateAccepted(resp) {
+	if !subscriptionUpdateAccepted(c.transfer.entitlement, resp) {
 		return resp, &CarrierDeniedError{Operation: OperationManage, Result: resp}
 	}
 	return resp, nil
@@ -257,15 +280,23 @@ func (c *Client) AcquireActivationConfigurationWithTemporaryToken(ctx context.Co
 }
 
 func (c *Client) acquireActivationConfiguration(ctx context.Context, identity Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
+	return c.acquireActivationConfigurationOnChannel(ctx, c.transfer.source.Channel, identity, target, credential)
+}
+
+func (c *Client) acquireActivationConfigurationOnChannel(ctx context.Context, channel Channel, identity Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.transferRequest(target, credential)
 	op := activationConfigurationOperation(c.transfer.entitlement, target)
 	c.addOptionalOperationFields(&op)
-	resp, _, err := c.call(ctx, identity, req, op)
+	resp, _, err := c.callWithChannel(ctx, channel, identity, req, op)
 	return resp, err
 }
 
 func (c *Client) call(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) (*ODSAResponse, []string, error) {
-	body, cookies, err := c.callRaw(ctx, identity, req, op)
+	return c.callWithChannel(ctx, c.transfer.source.Channel, identity, req, op)
+}
+
+func (c *Client) callWithChannel(ctx context.Context, channel Channel, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) (*ODSAResponse, []string, error) {
+	body, cookies, err := c.callRawWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
 		return nil, cookies, err
 	}
@@ -277,7 +308,11 @@ func (c *Client) call(ctx context.Context, identity Identity, req ServiceEntitle
 }
 
 func (c *Client) callRaw(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
-	return entitlementTransport{client: c}.callRaw(ctx, identity, req, op)
+	return c.callRawWithChannel(ctx, c.transfer.source.Channel, identity, req, op)
+}
+
+func (c *Client) callRawWithChannel(ctx context.Context, channel Channel, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
+	return entitlementTransport{client: c, channel: channel}.callRaw(ctx, identity, req, op)
 }
 
 func (t entitlementTransport) callRaw(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
@@ -311,7 +346,10 @@ func (t entitlementTransport) eapRelay(ctx context.Context, identity Identity, b
 		if err := challenge.UnmarshalText([]byte(packet)); err != nil {
 			return nil, responseCookies, err
 		}
-		akaResp, err := c.transfer.source.Channel.AuthenticateAKA(ctx, challenge.AuthenticationRequest())
+		if t.channel == nil {
+			return nil, responseCookies, errors.New("EAP-AKA channel is required")
+		}
+		akaResp, err := t.channel.AuthenticateAKA(ctx, challenge.AuthenticationRequest())
 		if err != nil {
 			return nil, responseCookies, err
 		}
@@ -349,8 +387,11 @@ func (t entitlementTransport) postRelay(ctx context.Context, packet string, req 
 		return nil, nil, err
 	}
 	httpReq.Header.Set("Content-Type", EAPRelayContentType)
-	httpReq.Header.Set("Accept", relayResponseAccept(req))
-	httpReq.Header.Set("User-Agent", userAgent(req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
+	httpReq.Header.Set("Accept", relayResponseAccept(c.transfer.entitlement, req))
+	httpReq.Header.Set("User-Agent", userAgent(c.transfer.entitlement, req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
+	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
+		httpReq.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	}
 	for _, cookie := range cookies {
 		httpReq.AddCookie(cookie)
 	}
@@ -358,7 +399,10 @@ func (t entitlementTransport) postRelay(ctx context.Context, packet string, req 
 	return DoRaw(ctx, t.client.runtime.httpClient, httpReq)
 }
 
-func relayResponseAccept(req ServiceEntitlementRequest) string {
+func relayResponseAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
+	if entitlement.Channel == EntitlementChannelSamsung {
+		return EAPRelayContentType + ", " + WFCResponseAccept
+	}
 	if req.App == AppVoWiFi || req.ClientTS43 == DefaultWFCClientTS43 {
 		return firstNonEmpty(req.Accept, WFCResponseAccept)
 	}
@@ -504,7 +548,20 @@ func transferTypeUsesTemporaryToken(transferType TransferType) bool {
 }
 
 func (c *Client) usesTemporaryToken() bool {
-	return transferTypeUsesTemporaryToken(c.transfer.entitlement.TransferType)
+	entitlement := c.transfer.entitlement
+	return samsungDigitalizedTempToken4FF(entitlement) ||
+		transferTypeUsesTemporaryToken(entitlement.TransferType)
+}
+
+func validateSamsungSubscriptionType(entitlement Entitlement) error {
+	subscriptionType := entitlement.SamsungSubscriptionType
+	if subscriptionType >= samsungSubscriptionTypeCount {
+		return fmt.Errorf("Samsung subscription type %d is invalid", subscriptionType)
+	}
+	if subscriptionType != SamsungSubscriptionUnspecified && entitlement.Channel != EntitlementChannelSamsung {
+		return errors.New("Samsung subscription type requires the Samsung entitlement channel")
+	}
+	return nil
 }
 
 func isHTTPStatus(err error, status int) bool {
@@ -512,7 +569,10 @@ func isHTTPStatus(err error, status int) bool {
 	return errors.As(err, &httpErr) && httpErr.StatusCode == status
 }
 
-func manageSubscriptionAccepted(resp *ODSAResponse) bool {
+func manageSubscriptionAccepted(entitlement Entitlement, resp *ODSAResponse) bool {
+	if googleDelayedDownloadRequired(entitlement, resp) {
+		return true
+	}
 	if resp.OperationResult != OperationResultSuccess {
 		return false
 	}
@@ -532,9 +592,17 @@ func manageSubscriptionAccepted(resp *ODSAResponse) bool {
 	}
 }
 
-func subscriptionUpdateAccepted(resp *ODSAResponse) bool {
+func googleDelayedDownloadRequired(entitlement Entitlement, resp *ODSAResponse) bool {
+	return entitlement.Channel != EntitlementChannelSamsung &&
+		resp.OperationResult == OperationResultGoogleDelayedDownload
+}
+
+func subscriptionUpdateAccepted(entitlement Entitlement, resp *ODSAResponse) bool {
 	if resp.OperationResult != OperationResultSuccess {
 		return false
+	}
+	if entitlement.Channel != EntitlementChannelSamsung {
+		return resp.SubscriptionResult == SubscriptionResultDone
 	}
 	switch resp.SubscriptionResult {
 	case SubscriptionResultDone, SubscriptionResultDelayedDownload, SubscriptionResultDismiss:

@@ -73,7 +73,7 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 	if err := addAuthIdentity(params, identity, req, realm); err != nil {
 		return nil, err
 	}
-	addCommon(params, req)
+	addCommon(params, entitlement, req)
 	if op.Operation != "" {
 		addOperation(params, op)
 	}
@@ -113,7 +113,10 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 		clientTS43 = req.ClientTS43
 	}
 	httpReq.Header.Set("Accept", accept)
-	httpReq.Header.Set("User-Agent", userAgent(req, clientTS43))
+	httpReq.Header.Set("User-Agent", userAgent(entitlement, req, clientTS43))
+	if entitlement.Channel == EntitlementChannelSamsung {
+		httpReq.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	}
 	for _, cookie := range req.Cookies {
 		if cookie != "" {
 			httpReq.Header.Add("Cookie", cookie)
@@ -125,6 +128,9 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 func requestAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
 	accept := responseAccept(entitlement, req)
 	if initialEAPRequest(req) {
+		if entitlement.Channel == EntitlementChannelSamsung {
+			return EAPRelayContentType
+		}
 		return eapRelayAccept(accept)
 	}
 	return accept
@@ -243,17 +249,29 @@ func addAuthIdentity(params url.Values, identity Identity, req ServiceEntitlemen
 	return nil
 }
 
-func addCommon(params url.Values, req ServiceEntitlementRequest) {
+func addCommon(params url.Values, entitlement Entitlement, req ServiceEntitlementRequest) {
 	version := req.RequestVersion
 	if version == "" {
 		version = "0"
 	}
+	vendor := req.TerminalVendor
+	model := req.TerminalModel
+	software := req.TerminalSoftware
+	if entitlement.Channel == EntitlementChannelSamsung {
+		if samsungVendorTruncated(req.EntitlementVersion) {
+			vendor = truncate(vendor, 4)
+		}
+	} else {
+		vendor = truncate(vendor, 4)
+		model = truncate(model, 10)
+		software = truncate(software, 20)
+	}
 	setFields(params,
 		formField{"terminal_id", req.TerminalID},
 		formField{"app", req.App},
-		formField{"terminal_vendor", truncate(req.TerminalVendor, 4)},
-		formField{"terminal_model", truncate(req.TerminalModel, 10)},
-		formField{"terminal_sw_version", truncate(req.TerminalSoftware, 20)},
+		formField{"terminal_vendor", vendor},
+		formField{"terminal_model", model},
+		formField{"terminal_sw_version", software},
 		formField{"vers", version},
 		formField{"entitlement_version", req.EntitlementVersion},
 	)
@@ -263,6 +281,12 @@ func addCommon(params url.Values, req ServiceEntitlementRequest) {
 		formField{"app_name", req.AppName},
 		formField{"provisioning_version", req.ProvisioningVersion},
 	)
+}
+
+func samsungVendorTruncated(version string) bool {
+	major, _, _ := strings.Cut(version, ".")
+	n, err := strconv.Atoi(major)
+	return err == nil && n >= 5
 }
 
 func addOperation(params url.Values, op ODSAOperation) {
@@ -339,9 +363,19 @@ func operationTargets(ops []Operation) string {
 	return strings.Join(targets, ",")
 }
 
-func userAgent(req ServiceEntitlementRequest, clientTS43 string) string {
+func userAgent(entitlement Entitlement, req ServiceEntitlementRequest, clientTS43 string) string {
 	if clientTS43 == "" {
 		clientTS43 = DefaultODSAClientTS43
+	}
+	if entitlement.Channel == EntitlementChannelSamsung {
+		if !strings.HasPrefix(clientTS43, "client-") {
+			clientTS43 = "client-" + clientTS43
+		}
+		return fmt.Sprintf("PRD-TS43 %s %s OS-Android/%s",
+			req.TerminalModel,
+			clientTS43,
+			req.TerminalSoftware,
+		)
 	}
 	return fmt.Sprintf("PRD-TS43 term-%s/%s %s/%s OS-Android/%s",
 		truncate(req.TerminalVendor, 4),

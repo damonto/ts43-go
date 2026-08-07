@@ -19,8 +19,8 @@ func samsungCheckEligibilityOperation(source, target Device) ODSAOperation {
 }
 
 func samsungManageSubscriptionOperation(entitlement Entitlement, source, target Device, answer UserInputResult) ODSAOperation {
-	op := baseManageSubscriptionOperation(samsungManageSubscriptionOperationType(entitlement.TransferType), answer)
-	if IsSourceCredentialTransferType(entitlement.TransferType) {
+	op := baseManageSubscriptionOperation(samsungManageSubscriptionOperationType(entitlement), answer)
+	if transferUsesSourceCredential(entitlement) {
 		op.TargetTerminalID = target.IMEI
 		op.TargetTerminalEID = target.EID
 		op.TerminalICCID = source.ICCID
@@ -43,7 +43,7 @@ func samsungAcquireConfigurationOperation(entitlement Entitlement, source, targe
 		Operation:     OperationAcquireConf,
 		OperationType: OperationTypeOmit,
 	}
-	if IsSourceCredentialTransferType(entitlement.TransferType) {
+	if transferUsesSourceCredential(entitlement) {
 		op.TargetTerminalID = target.IMEI
 		op.TerminalEID = firstNonEmpty(source.EID, target.EID)
 		op.TerminalICCID = source.ICCID
@@ -75,35 +75,61 @@ func samsungActivationConfigurationOperation(target Device) ODSAOperation {
 		Operation:           OperationAcquireConf,
 		OperationType:       OperationTypeOmit,
 		TerminalEID:         target.EID,
+		TerminalICCID:       target.ICCID,
 		TargetTerminalID:    target.IMEI,
 		TargetTerminalICCID: target.ICCID,
 	}
 }
 
-func samsungManageSubscriptionOperationType(transferType TransferType) OperationType {
-	switch transferType {
-	case TransferTypeReusableActivationCode, TransferTypeTS43V8, TransferTypeOldTerminalIDs, TransferTypeTemporaryTokenOldTerminalIDs, TransferTypeTemporaryTokenVariant11:
+func samsungManageSubscriptionOperationType(entitlement Entitlement) OperationType {
+	switch samsungSubscriptionIntent(entitlement) {
+	case SamsungSubscriptionUnsubscribe, SamsungSubscriptionUnsubscribe4FF:
+		return OperationTypeSamsungUnsubscribe
+	case SamsungSubscriptionChange, SamsungSubscriptionChange4FF:
+		return OperationTypeSamsungChangeSubscription
+	case SamsungSubscriptionDigitalizedSIM,
+		SamsungSubscriptionTransferOpenID,
+		SamsungSubscriptionTransferSMSOTP,
+		SamsungSubscriptionRemoteAKATransfer,
+		SamsungSubscriptionContinueTemporaryToken:
 		return OperationTypeTransferSubscription
+	case SamsungSubscriptionUpdate:
+		return OperationTypeUpdateSubscription
 	default:
 		return OperationTypeSamsungD2DTransfer
 	}
 }
 
 func samsungDigitalizedTempToken4FF(entitlement Entitlement) bool {
-	return entitlement.Channel == EntitlementChannelSamsung &&
-		entitlement.TransferType == TransferTypeTemporaryTokenOldTerminalIDs &&
+	return samsungDigitalizedTransfer(entitlement) &&
 		entitlement.UseTempTokenConversion
 }
 
+func samsungDigitalizedTransfer(entitlement Entitlement) bool {
+	return entitlement.Channel == EntitlementChannelSamsung &&
+		samsungSubscriptionIntent(entitlement) == SamsungSubscriptionDigitalizedSIM
+}
+
+func samsungSubscriptionIntent(entitlement Entitlement) SamsungSubscriptionType {
+	if entitlement.SamsungSubscriptionType != SamsungSubscriptionUnspecified {
+		return entitlement.SamsungSubscriptionType
+	}
+	if entitlement.SourceSIMType == SIMTypePSIM {
+		return SamsungSubscriptionDigitalizedSIM
+	}
+	return SamsungSubscriptionD2DTransfer
+}
+
 func setSamsungAcquireConfigurationEID(op *ODSAOperation, entitlement Entitlement, target Device) {
-	switch entitlement.TransferType {
-	case TransferTypeOldTerminalIDs:
+	usesTargetEID := entitlement.TransferType == TransferTypeOldTerminalIDs ||
+		(samsungDigitalizedTransfer(entitlement) && !samsungDigitalizedTempToken4FF(entitlement))
+	if usesTargetEID {
 		op.TerminalEID = ""
 		op.TargetTerminalEID = target.EID
-	default:
-		op.TerminalEID = target.EID
-		op.TargetTerminalEID = ""
+		return
 	}
+	op.TerminalEID = target.EID
+	op.TargetTerminalEID = ""
 }
 
 func addSamsungOldTerminalFields(op *ODSAOperation, source Device) {
