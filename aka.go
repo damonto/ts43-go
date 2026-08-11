@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 const (
@@ -25,6 +26,8 @@ const (
 
 	securityContextSuccess     = 0xdb
 	securityContextSyncFailure = 0xdc
+
+	maxAKAValueLength = 1<<8 - 1
 )
 
 type AKARequest struct {
@@ -33,18 +36,22 @@ type AKARequest struct {
 }
 
 func (r AKARequest) MarshalBinary() ([]byte, error) {
+	return r.AppendBinary(nil)
+}
+
+func (r AKARequest) AppendBinary(dst []byte) ([]byte, error) {
 	if len(r.Rand) != 16 {
-		return nil, fmt.Errorf("RAND length %d, want 16", len(r.Rand))
+		return dst, fmt.Errorf("RAND length %d, want 16", len(r.Rand))
 	}
 	if len(r.Autn) != 16 {
-		return nil, fmt.Errorf("AUTN length %d, want 16", len(r.Autn))
+		return dst, fmt.Errorf("AUTN length %d, want 16", len(r.Autn))
 	}
-	out := make([]byte, 0, 34)
-	out = append(out, byte(len(r.Rand)))
-	out = append(out, r.Rand...)
-	out = append(out, byte(len(r.Autn)))
-	out = append(out, r.Autn...)
-	return out, nil
+	dst = slices.Grow(dst, 34)
+	dst = append(dst, byte(len(r.Rand)))
+	dst = append(dst, r.Rand...)
+	dst = append(dst, byte(len(r.Autn)))
+	dst = append(dst, r.Autn...)
+	return dst, nil
 }
 
 func (r *AKARequest) UnmarshalBinary(data []byte) error {
@@ -83,9 +90,9 @@ type AKAChallenge struct {
 	Autn       []byte
 }
 
-func IMSIEAPIdentity(mccmnc, imsi, realm string) (string, error) {
-	if len(mccmnc) < 5 {
-		return "", fmt.Errorf("MCCMNC length %d, want at least 5", len(mccmnc))
+func IMSIEAPIdentity(mccMNC, imsi, realm string) (string, error) {
+	if len(mccMNC) < 5 {
+		return "", fmt.Errorf("MCCMNC length %d, want at least 5", len(mccMNC))
 	}
 	if imsi == "" {
 		return "", errors.New("IMSI is required")
@@ -93,8 +100,8 @@ func IMSIEAPIdentity(mccmnc, imsi, realm string) (string, error) {
 	if realm == "" {
 		return "", errors.New("realm is required")
 	}
-	mcc := mccmnc[:3]
-	mnc := mccmnc[3:]
+	mcc := mccMNC[:3]
+	mnc := mccMNC[3:]
 	if len(mnc) == 2 {
 		mnc = "0" + mnc
 	}
@@ -110,11 +117,18 @@ func (c *AKAChallenge) UnmarshalText(text []byte) error {
 }
 
 func (c AKAChallenge) MarshalText() ([]byte, error) {
-	data, err := c.MarshalBinary()
+	return c.AppendText(nil)
+}
+
+func (c AKAChallenge) AppendText(dst []byte) ([]byte, error) {
+	data, err := c.AppendBinary(nil)
 	if err != nil {
-		return nil, err
+		return dst, err
 	}
-	return []byte(base64.StdEncoding.EncodeToString(data)), nil
+	start := len(dst)
+	dst = append(dst, make([]byte, base64.StdEncoding.EncodedLen(len(data)))...)
+	base64.StdEncoding.Encode(dst[start:], data)
+	return dst, nil
 }
 
 func (c *AKAChallenge) UnmarshalBinary(data []byte) error {
@@ -173,23 +187,29 @@ func (c *AKAChallenge) UnmarshalBinary(data []byte) error {
 }
 
 func (c AKAChallenge) MarshalBinary() ([]byte, error) {
+	return c.AppendBinary(nil)
+}
+
+func (c AKAChallenge) AppendBinary(dst []byte) ([]byte, error) {
 	if len(c.Rand) != 16 {
-		return nil, fmt.Errorf("AT_RAND length %d, want 16", len(c.Rand))
+		return dst, fmt.Errorf("AT_RAND length %d, want 16", len(c.Rand))
 	}
 	if len(c.Autn) != 16 {
-		return nil, fmt.Errorf("AT_AUTN length %d, want 16", len(c.Autn))
+		return dst, fmt.Errorf("AT_AUTN length %d, want 16", len(c.Autn))
 	}
-	msg := make([]byte, 8, 48)
-	msg[0] = eapCodeRequest
-	msg[1] = c.Identifier
-	msg[4] = eapTypeAKA
-	msg[5] = akaSubtypeChallenge
-	msg = append(msg, attributeRand, 0x05, 0x00, 0x00)
-	msg = append(msg, c.Rand...)
-	msg = append(msg, attributeAutn, 0x05, 0x00, 0x00)
-	msg = append(msg, c.Autn...)
-	binary.BigEndian.PutUint16(msg[2:4], uint16(len(msg)))
-	return msg, nil
+	dst = slices.Grow(dst, 48)
+	start := len(dst)
+	dst = append(dst, make([]byte, 8)...)
+	dst[start] = eapCodeRequest
+	dst[start+1] = c.Identifier
+	dst[start+4] = eapTypeAKA
+	dst[start+5] = akaSubtypeChallenge
+	dst = append(dst, attributeRand, 0x05, 0x00, 0x00)
+	dst = append(dst, c.Rand...)
+	dst = append(dst, attributeAutn, 0x05, 0x00, 0x00)
+	dst = append(dst, c.Autn...)
+	binary.BigEndian.PutUint16(dst[start+2:start+4], uint16(len(dst)-start))
+	return dst, nil
 }
 
 func (c *AKAChallenge) AuthenticationRequest() *AKARequest {
@@ -238,29 +258,44 @@ func (r *AKAResponse) UnmarshalBinary(data []byte) error {
 }
 
 func (r AKAResponse) MarshalBinary() ([]byte, error) {
+	return r.AppendBinary(nil)
+}
+
+func (r AKAResponse) AppendBinary(dst []byte) ([]byte, error) {
 	if len(r.Auts) > 0 {
 		if len(r.Auts) != 14 {
-			return nil, fmt.Errorf("AUTS length %d, want 14", len(r.Auts))
+			return dst, fmt.Errorf("AUTS length %d, want 14", len(r.Auts))
 		}
-		out := []byte{securityContextSyncFailure, byte(len(r.Auts))}
-		return append(out, r.Auts...), nil
+		dst = slices.Grow(dst, 2+len(r.Auts))
+		dst = append(dst, securityContextSyncFailure, byte(len(r.Auts)))
+		return append(dst, r.Auts...), nil
 	}
 	if len(r.Res) == 0 {
-		return nil, errors.New("RES is required")
+		return dst, errors.New("RES is required")
+	}
+	if len(r.Res) > maxAKAValueLength {
+		return dst, fmt.Errorf("RES length %d exceeds %d", len(r.Res), maxAKAValueLength)
 	}
 	if len(r.CK) == 0 {
-		return nil, errors.New("CK is required")
+		return dst, errors.New("CK is required")
+	}
+	if len(r.CK) > maxAKAValueLength {
+		return dst, fmt.Errorf("CK length %d exceeds %d", len(r.CK), maxAKAValueLength)
 	}
 	if len(r.IK) == 0 {
-		return nil, errors.New("IK is required")
+		return dst, errors.New("IK is required")
 	}
-	out := []byte{securityContextSuccess, byte(len(r.Res))}
-	out = append(out, r.Res...)
-	out = append(out, byte(len(r.CK)))
-	out = append(out, r.CK...)
-	out = append(out, byte(len(r.IK)))
-	out = append(out, r.IK...)
-	return out, nil
+	if len(r.IK) > maxAKAValueLength {
+		return dst, fmt.Errorf("IK length %d exceeds %d", len(r.IK), maxAKAValueLength)
+	}
+	dst = slices.Grow(dst, 4+len(r.Res)+len(r.CK)+len(r.IK))
+	dst = append(dst, securityContextSuccess, byte(len(r.Res)))
+	dst = append(dst, r.Res...)
+	dst = append(dst, byte(len(r.CK)))
+	dst = append(dst, r.CK...)
+	dst = append(dst, byte(len(r.IK)))
+	dst = append(dst, r.IK...)
+	return dst, nil
 }
 
 func valueLength(data []byte, off int, field string) ([]byte, int, error) {

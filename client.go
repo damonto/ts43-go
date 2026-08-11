@@ -145,8 +145,8 @@ func (c *Client) authenticate(ctx context.Context, channel Channel, identity Ide
 	return AuthToken{Value: resp.AuthenticationToken, ExpiresAt: expires, Cookies: cookies}, nil
 }
 
-func (c *Client) AcquireTemporaryToken(ctx context.Context, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
-	return c.acquireTemporaryToken(ctx, c.transfer.source.Channel, identity, source, target, auth)
+func (c *Client) AcquireTemporaryToken(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (TransferTokenResult, error) {
+	return c.acquireTemporaryToken(ctx, c.transfer.source.Channel, req.Identity, req.Source, req.Target, auth)
 }
 
 func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
@@ -182,8 +182,8 @@ func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, ide
 	}, nil
 }
 
-func (c *Client) CheckEligibility(ctx context.Context, identity Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
-	return c.checkEligibility(ctx, c.transfer.source.Channel, identity, source, auth, target)
+func (c *Client) CheckEligibility(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (AuthToken, error) {
+	return c.checkEligibility(ctx, c.transfer.source.Channel, req.Identity, req.Source, auth, req.Target)
 }
 
 func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
@@ -200,12 +200,12 @@ func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity
 	return authTokenFromResponse(auth, resp, mergeCookieHeaders(auth.Cookies, cookies), c.now()), nil
 }
 
-func (c *Client) ManageSubscription(ctx context.Context, identity Identity, source Device, target Device, auth AuthToken, answer UserInputResult) (*ODSAResponse, error) {
-	return c.manageSubscription(ctx, identity, source, target, authCredential(auth), answer)
+func (c *Client) ManageSubscription(ctx context.Context, req ManageSubscriptionRequest, auth AuthToken) (*ODSAResponse, error) {
+	return c.manageSubscription(ctx, req.Identity, req.Source, req.Target, authCredential(auth), req.UserInput)
 }
 
-func (c *Client) ManageSubscriptionWithTemporaryToken(ctx context.Context, identity Identity, source Device, target Device, token TemporaryToken, answer UserInputResult) (*ODSAResponse, error) {
-	return c.manageSubscription(ctx, identity, source, target, temporaryCredential(token), answer)
+func (c *Client) ManageSubscriptionWithTemporaryToken(ctx context.Context, req ManageSubscriptionRequest, token TemporaryToken) (*ODSAResponse, error) {
+	return c.manageSubscription(ctx, req.Identity, req.Source, req.Target, temporaryCredential(token), req.UserInput)
 }
 
 func (c *Client) manageSubscription(ctx context.Context, identity Identity, source Device, target Device, credential transferCredential, answer UserInputResult) (*ODSAResponse, error) {
@@ -228,12 +228,12 @@ func (c *Client) manageSubscriptionRequest(source Device, target Device, credent
 	return req, op
 }
 
-func (c *Client) AcquireConfiguration(ctx context.Context, identity Identity, source Device, target Device, auth AuthToken) (*ODSAResponse, error) {
-	return c.acquireConfiguration(ctx, identity, source, target, authCredential(auth))
+func (c *Client) AcquireConfiguration(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (*ODSAResponse, error) {
+	return c.acquireConfiguration(ctx, req.Identity, req.Source, req.Target, authCredential(auth))
 }
 
-func (c *Client) AcquireConfigurationWithTemporaryToken(ctx context.Context, identity Identity, source Device, target Device, token TemporaryToken) (*ODSAResponse, error) {
-	return c.acquireConfiguration(ctx, identity, source, target, temporaryCredential(token))
+func (c *Client) AcquireConfigurationWithTemporaryToken(ctx context.Context, req SubscriptionTransferRequest, token TemporaryToken) (*ODSAResponse, error) {
+	return c.acquireConfiguration(ctx, req.Identity, req.Source, req.Target, temporaryCredential(token))
 }
 
 func (c *Client) acquireConfiguration(ctx context.Context, identity Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
@@ -245,12 +245,12 @@ func (c *Client) acquireConfiguration(ctx context.Context, identity Identity, so
 	return resp, err
 }
 
-func (c *Client) UpdateSubscription(ctx context.Context, identity Identity, source Device, target Device, auth AuthToken) (*ODSAResponse, error) {
-	return c.updateSubscription(ctx, identity, source, target, authCredential(auth))
+func (c *Client) UpdateSubscription(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (*ODSAResponse, error) {
+	return c.updateSubscription(ctx, req.Identity, req.Source, req.Target, authCredential(auth))
 }
 
-func (c *Client) UpdateSubscriptionWithTemporaryToken(ctx context.Context, identity Identity, source Device, target Device, token TemporaryToken) (*ODSAResponse, error) {
-	return c.updateSubscription(ctx, identity, source, target, temporaryCredential(token))
+func (c *Client) UpdateSubscriptionWithTemporaryToken(ctx context.Context, req SubscriptionTransferRequest, token TemporaryToken) (*ODSAResponse, error) {
+	return c.updateSubscription(ctx, req.Identity, req.Source, req.Target, temporaryCredential(token))
 }
 
 func (c *Client) updateSubscription(ctx context.Context, identity Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
@@ -271,12 +271,12 @@ func (c *Client) updateSubscriptionOnChannel(ctx context.Context, channel Channe
 	return resp, nil
 }
 
-func (c *Client) AcquireActivationConfiguration(ctx context.Context, identity Identity, target Device, auth AuthToken) (*ODSAResponse, error) {
-	return c.acquireActivationConfiguration(ctx, identity, target, authCredential(auth))
+func (c *Client) AcquireActivationConfiguration(ctx context.Context, req ActivationConfigurationRequest, auth AuthToken) (*ODSAResponse, error) {
+	return c.acquireActivationConfiguration(ctx, req.Identity, req.Target, authCredential(auth))
 }
 
-func (c *Client) AcquireActivationConfigurationWithTemporaryToken(ctx context.Context, identity Identity, target Device, token TemporaryToken) (*ODSAResponse, error) {
-	return c.acquireActivationConfiguration(ctx, identity, target, temporaryCredential(token))
+func (c *Client) AcquireActivationConfigurationWithTemporaryToken(ctx context.Context, req ActivationConfigurationRequest, token TemporaryToken) (*ODSAResponse, error) {
+	return c.acquireActivationConfiguration(ctx, req.Identity, req.Target, temporaryCredential(token))
 }
 
 func (c *Client) acquireActivationConfiguration(ctx context.Context, identity Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
@@ -353,7 +353,7 @@ func (t entitlementTransport) eapRelay(ctx context.Context, identity Identity, b
 		if err != nil {
 			return nil, responseCookies, err
 		}
-		eapID, err := IMSIEAPIdentity(mccmnc(identity), identity.IMSI, c.realm())
+		eapID, err := IMSIEAPIdentity(mccMNC(identity), identity.IMSI, c.realm())
 		if err != nil {
 			return nil, responseCookies, err
 		}
@@ -477,7 +477,7 @@ func (c *Client) clientTS43() string {
 }
 
 func (c *Client) realm() string {
-	return firstNonEmpty(c.transfer.realm, DefaultEAPAkaRealm)
+	return firstNonEmpty(c.transfer.realm, DefaultEAPAKARealm)
 }
 
 func (c *Client) appName() string {

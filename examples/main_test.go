@@ -66,7 +66,7 @@ func TestChooseReader(t *testing.T) {
 				t.Fatalf("chooseReader error = %v", err)
 			}
 			if got != tt.want {
-				t.Fatalf("chooseReader = %q, want %q", got, tt.want)
+				t.Errorf("chooseReader = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -74,40 +74,7 @@ func TestChooseReader(t *testing.T) {
 
 func TestReaderDisplayName(t *testing.T) {
 	if got := readerDisplayName(1, "ACS ACR39U ICC Reader 00 00"); got != "2. ACS ACR39U ICC Reader 00 00" {
-		t.Fatalf("readerDisplayName = %q", got)
-	}
-}
-
-func TestCCIDUnavailable(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{
-			name: "windows no service",
-			err:  errors.New("scardEstablishContext() returned 0x8010001D [scard failure: 0x8010001D (SCARD_E_NO_SERVICE) (Service not available.)]"),
-			want: true,
-		},
-		{
-			name: "code only",
-			err:  errors.New("scardEstablishContext() returned 0x8010001D"),
-			want: true,
-		},
-		{
-			name: "other pcsc error",
-			err:  errors.New("scardConnect() returned 0x80100069"),
-		},
-		{
-			name: "nil",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := ccidUnavailable(tt.err); got != tt.want {
-				t.Fatalf("ccidUnavailable = %t, want %t", got, tt.want)
-			}
-		})
+		t.Errorf("readerDisplayName = %q", got)
 	}
 }
 
@@ -124,10 +91,10 @@ func TestParseFlagsTransferType(t *testing.T) {
 		t.Fatalf("parseFlags error = %v", err)
 	}
 	if got.SourceSIMType != ts43.SIMTypePSIM {
-		t.Fatalf("SourceSIMType = %v, want %v", got.SourceSIMType, ts43.SIMTypePSIM)
+		t.Errorf("SourceSIMType = %v, want %v", got.SourceSIMType, ts43.SIMTypePSIM)
 	}
 	if got.TransferType != 2 {
-		t.Fatalf("TransferType = %d, want 2", got.TransferType)
+		t.Errorf("TransferType = %d, want 2", got.TransferType)
 	}
 }
 
@@ -146,16 +113,16 @@ func TestParseFlagsConversion(t *testing.T) {
 		t.Fatalf("parseFlags error = %v", err)
 	}
 	if got.SourceSIMType != ts43.SIMTypePSIM {
-		t.Fatalf("SourceSIMType = %v, want %v", got.SourceSIMType, ts43.SIMTypePSIM)
+		t.Errorf("SourceSIMType = %v, want %v", got.SourceSIMType, ts43.SIMTypePSIM)
 	}
 	if !got.UseTempTokenConversion {
-		t.Fatal("UseTempTokenConversion = false, want true")
+		t.Error("UseTempTokenConversion = false, want true")
 	}
 	if !got.SetTargetTerminalFields {
-		t.Fatal("SetTargetTerminalFields = false, want true")
+		t.Error("SetTargetTerminalFields = false, want true")
 	}
 	if !got.RestrictOldTerminalFields {
-		t.Fatal("RestrictOldTerminalFields = false, want true")
+		t.Error("RestrictOldTerminalFields = false, want true")
 	}
 }
 
@@ -165,7 +132,7 @@ func TestValidateAllowsDiscoveryWithoutServer(t *testing.T) {
 		TargetDevice: ts43.Device{IMEI: "222222222222222"},
 	}
 	if err := opts.validate(); err != nil {
-		t.Fatalf("validate() error = %v", err)
+		t.Errorf("validate() error = %v", err)
 	}
 }
 
@@ -176,7 +143,7 @@ func TestValidateAllowsExplicitServer(t *testing.T) {
 		TargetDevice: ts43.Device{IMEI: "222222222222222"},
 	}
 	if err := opts.validate(); err != nil {
-		t.Fatalf("validate() error = %v", err)
+		t.Errorf("validate() error = %v", err)
 	}
 }
 
@@ -235,7 +202,7 @@ func TestChooseReaderWithDefaultRejectsUnavailableReader(t *testing.T) {
 				t.Fatalf("chooseReaderWithDefault error = %v", err)
 			}
 			if got != tt.want {
-				t.Fatalf("chooseReaderWithDefault = %q, want %q", got, tt.want)
+				t.Errorf("chooseReaderWithDefault = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -270,7 +237,7 @@ func TestDefaultReaderIndex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := defaultReaderIndex(tt.readers, tt.unavailable); got != tt.want {
-				t.Fatalf("defaultReaderIndex = %d, want %d", got, tt.want)
+				t.Errorf("defaultReaderIndex = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -325,13 +292,13 @@ func TestTS43ActivationCode(t *testing.T) {
 				t.Fatalf("ts43ActivationCode error = %v", err)
 			}
 			if got.SMDP.Host != tt.wantSMDP {
-				t.Fatalf("SMDP host = %q, want %q", got.SMDP.Host, tt.wantSMDP)
+				t.Errorf("SMDP host = %q, want %q", got.SMDP.Host, tt.wantSMDP)
 			}
 			if got.MatchingID != tt.wantMatching {
-				t.Fatalf("MatchingID = %q, want %q", got.MatchingID, tt.wantMatching)
+				t.Errorf("MatchingID = %q, want %q", got.MatchingID, tt.wantMatching)
 			}
 			if got.IMEI != tt.wantIMEI {
-				t.Fatalf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
+				t.Errorf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
 			}
 		})
 	}
@@ -347,14 +314,14 @@ func TestNotificationSequenceHelpers(t *testing.T) {
 	}
 
 	if got := maxNotificationSequence(notifications); got != 9 {
-		t.Fatalf("maxNotificationSequence = %d, want 9", got)
+		t.Errorf("maxNotificationSequence = %d, want 9", got)
 	}
 	after := notificationsAfter(notifications, 5)
 	if len(after) != 2 {
 		t.Fatalf("notificationsAfter length = %d, want 2", len(after))
 	}
 	if after[0].SequenceNumber != 7 || after[1].SequenceNumber != 9 {
-		t.Fatalf("notificationsAfter sequence = [%d %d], want [7 9]", after[0].SequenceNumber, after[1].SequenceNumber)
+		t.Errorf("notificationsAfter sequence = [%d %d], want [7 9]", after[0].SequenceNumber, after[1].SequenceNumber)
 	}
 }
 
@@ -381,7 +348,7 @@ func TestConfirmSourceProfileDeletion(t *testing.T) {
 				t.Fatalf("confirmSourceProfileDeletion error = %v", err)
 			}
 			if got != tt.want {
-				t.Fatalf("confirmSourceProfileDeletion = %t, want %t", got, tt.want)
+				t.Errorf("confirmSourceProfileDeletion = %t, want %t", got, tt.want)
 			}
 		})
 	}
@@ -502,16 +469,16 @@ func TestDeleteSourceProfile(t *testing.T) {
 			err := deleteSourceProfile(reader, &out, fake, tt.event)
 			if tt.wantDecline {
 				if !errors.Is(err, errSourceProfileDeletionDeclined) {
-					t.Fatalf("deleteSourceProfile error = %v, want errSourceProfileDeletionDeclined", err)
+					t.Errorf("deleteSourceProfile error = %v, want errSourceProfileDeletionDeclined", err)
 				}
 				if len(fake.deleted) != 0 {
-					t.Fatalf("deleted profiles = %v, want none", fake.deleted)
+					t.Errorf("deleted profiles = %v, want none", fake.deleted)
 				}
 				return
 			}
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("deleteSourceProfile error = %v, want containing %q", err, tt.wantErr)
+					t.Errorf("deleteSourceProfile error = %v, want containing %q", err, tt.wantErr)
 				}
 				return
 			}
@@ -519,17 +486,17 @@ func TestDeleteSourceProfile(t *testing.T) {
 				t.Fatalf("deleteSourceProfile error = %v", err)
 			}
 			if !slices.Equal(fake.disabled, tt.wantDisabled) {
-				t.Fatalf("disabled profiles = %v, want %v", fake.disabled, tt.wantDisabled)
+				t.Errorf("disabled profiles = %v, want %v", fake.disabled, tt.wantDisabled)
 			}
 			if !slices.Equal(fake.deleted, tt.wantDeleted) {
-				t.Fatalf("deleted profiles = %v, want %v", fake.deleted, tt.wantDeleted)
+				t.Errorf("deleted profiles = %v, want %v", fake.deleted, tt.wantDeleted)
 			}
 			if !slices.Equal(fake.handled, tt.wantHandled) {
-				t.Fatalf("handled notifications = %v, want %v", fake.handled, tt.wantHandled)
+				t.Errorf("handled notifications = %v, want %v", fake.handled, tt.wantHandled)
 			}
 			for _, filters := range fake.listFilters {
 				if !slices.Equal(filters, []sgp22.NotificationEvent{sgp22.NotificationEventDelete}) {
-					t.Fatalf("ListNotification filters = %v, want delete only", filters)
+					t.Errorf("ListNotification filters = %v, want delete only", filters)
 				}
 			}
 		})
@@ -572,10 +539,10 @@ func TestHTTPSURL(t *testing.T) {
 				t.Fatalf("httpsURL error = %v", err)
 			}
 			if got.Scheme != "https" {
-				t.Fatalf("scheme = %q, want https", got.Scheme)
+				t.Errorf("scheme = %q, want https", got.Scheme)
 			}
 			if got.Host != tt.wantHost {
-				t.Fatalf("host = %q, want %q", got.Host, tt.wantHost)
+				t.Errorf("host = %q, want %q", got.Host, tt.wantHost)
 			}
 		})
 	}
@@ -713,22 +680,22 @@ func TestParseWebsheetCallback(t *testing.T) {
 				t.Fatalf("parseWebsheetCallback error = %v", err)
 			}
 			if got.Event != tt.wantEvent {
-				t.Fatalf("Event = %d, want %d", got.Event, tt.wantEvent)
+				t.Errorf("Event = %d, want %d", got.Event, tt.wantEvent)
 			}
 			if got.ActivationCode != tt.wantActivation {
-				t.Fatalf("ActivationCode = %q, want %q", got.ActivationCode, tt.wantActivation)
+				t.Errorf("ActivationCode = %q, want %q", got.ActivationCode, tt.wantActivation)
 			}
 			if got.SMDPFQDN != tt.wantSMDP {
-				t.Fatalf("SMDPFQDN = %q, want %q", got.SMDPFQDN, tt.wantSMDP)
+				t.Errorf("SMDPFQDN = %q, want %q", got.SMDPFQDN, tt.wantSMDP)
 			}
 			if got.ICCID != tt.wantICCID {
-				t.Fatalf("ICCID = %q, want %q", got.ICCID, tt.wantICCID)
+				t.Errorf("ICCID = %q, want %q", got.ICCID, tt.wantICCID)
 			}
 			if got.IMEI != tt.wantIMEI {
-				t.Fatalf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
+				t.Errorf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
 			}
 			if got.NextAction != tt.wantNext {
-				t.Fatalf("NextAction = %q, want %q", got.NextAction, tt.wantNext)
+				t.Errorf("NextAction = %q, want %q", got.NextAction, tt.wantNext)
 			}
 		})
 	}

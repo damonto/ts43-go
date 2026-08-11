@@ -53,10 +53,10 @@ func TestCarrierMatchScore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, ok := tt.match.score(tt.identity)
 			if ok != tt.ok {
-				t.Fatalf("score() matched = %t, want %t", ok, tt.ok)
+				t.Errorf("score() matched = %t, want %t", ok, tt.ok)
 			}
 			if ok && got != tt.want {
-				t.Fatalf("score() = %d, want %d", got, tt.want)
+				t.Errorf("score() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -80,7 +80,7 @@ func TestEmbeddedCarrierConfigsIncludeIdentityFields(t *testing.T) {
 			for i, record := range records {
 				for _, field := range wantFields {
 					if _, ok := record[field]; !ok {
-						t.Fatalf("record %d is missing %q", i, field)
+						t.Errorf("record %d is missing %q", i, field)
 					}
 				}
 			}

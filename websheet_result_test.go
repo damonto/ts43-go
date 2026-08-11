@@ -60,22 +60,22 @@ func TestWebsheetResultUnmarshalText(t *testing.T) {
 				t.Fatalf("UnmarshalText error = %v", err)
 			}
 			if got.Event != tt.wantEvent {
-				t.Fatalf("Event = %d, want %d", got.Event, tt.wantEvent)
+				t.Errorf("Event = %d, want %d", got.Event, tt.wantEvent)
 			}
 			if got.ActivationCode != tt.wantActivation {
-				t.Fatalf("ActivationCode = %q, want %q", got.ActivationCode, tt.wantActivation)
+				t.Errorf("ActivationCode = %q, want %q", got.ActivationCode, tt.wantActivation)
 			}
 			if got.SMDPFQDN != tt.wantSMDP {
-				t.Fatalf("SMDPFQDN = %q, want %q", got.SMDPFQDN, tt.wantSMDP)
+				t.Errorf("SMDPFQDN = %q, want %q", got.SMDPFQDN, tt.wantSMDP)
 			}
 			if got.ICCID != tt.wantICCID {
-				t.Fatalf("ICCID = %q, want %q", got.ICCID, tt.wantICCID)
+				t.Errorf("ICCID = %q, want %q", got.ICCID, tt.wantICCID)
 			}
 			if got.IMEI != tt.wantIMEI {
-				t.Fatalf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
+				t.Errorf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
 			}
 			if got.NextAction != tt.wantNext {
-				t.Fatalf("NextAction = %q, want %q", got.NextAction, tt.wantNext)
+				t.Errorf("NextAction = %q, want %q", got.NextAction, tt.wantNext)
 			}
 		})
 	}

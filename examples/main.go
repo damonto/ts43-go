@@ -43,8 +43,6 @@ type cliOptions struct {
 	TargetDevice              ts43.Device
 }
 
-var errCCIDUnavailable = errors.New("CCID unavailable")
-
 func main() {
 	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -79,9 +77,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	reader := bufio.NewReader(stdin)
 	sourceReaders, err := sourceccid.ListReaders(ctx)
 	if err != nil {
-		if ccidUnavailable(err) {
-			return openCCIDError("source", err)
-		}
 		return fmt.Errorf("list source readers: %w", err)
 	}
 	sourceReader, err := chooseReader(reader, stdout, sourceReaders, opts.SourceReader, "source")
@@ -95,18 +90,27 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	}
 	sourceSIMReader, err := sourcesim.NewReader(sourceCardReader)
 	if err != nil {
-		_ = sourceCardReader.Close()
-		return fmt.Errorf("create source SIM reader: %w", err)
+		resultErr := fmt.Errorf("create source SIM reader: %w", err)
+		if closeErr := sourceCardReader.Close(); closeErr != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("close source card reader: %w", closeErr))
+		}
+		return resultErr
 	}
 	sourceCard, err := sourcesim.New(ctx, sourceSIMReader, logger)
 	if err != nil {
-		_ = sourceSIMReader.Close()
-		return fmt.Errorf("load source SIM: %w", err)
+		resultErr := fmt.Errorf("load source SIM: %w", err)
+		if closeErr := sourceSIMReader.Close(); closeErr != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("close source SIM reader: %w", closeErr))
+		}
+		return resultErr
 	}
 	sourceChannel, err := ts43.NewSource(sourceCard)
 	if err != nil {
-		_ = sourceCard.Close()
-		return fmt.Errorf("create source channel: %w", err)
+		resultErr := fmt.Errorf("create source channel: %w", err)
+		if closeErr := sourceCard.Close(); closeErr != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("close source card: %w", closeErr))
+		}
+		return resultErr
 	}
 	defer func() {
 		if sourceChannel != nil {
@@ -186,8 +190,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 			Timeout: opts.Timeout,
 		})
 		if err != nil {
-			_ = disconnectCCID(channel)
-			return nil, err
+			resultErr := fmt.Errorf("create source LPA client: %w", err)
+			if closeErr := disconnectCCID(channel); closeErr != nil {
+				resultErr = errors.Join(resultErr, fmt.Errorf("close source LPA reader: %w", closeErr))
+			}
+			return nil, resultErr
 		}
 		sourceLPAChannel = channel
 		sourceLPAClient = sourceClient
@@ -321,9 +328,6 @@ func logLevel(debug bool) slog.Level {
 
 func printReaders(w io.Writer) error {
 	readers, err := listCCIDReaders()
-	if errors.Is(err, errCCIDUnavailable) {
-		return nil
-	}
 	if err != nil {
 		return err
 	}
@@ -333,18 +337,15 @@ func printReaders(w io.Writer) error {
 	return nil
 }
 
-func listCCIDReaders() (_ []string, err error) {
+func listCCIDReaders() ([]string, error) {
 	readers, err := sourceccid.ListReaders(context.Background())
 	if err != nil {
-		if ccidUnavailable(err) {
-			return nil, errCCIDUnavailable
-		}
 		return nil, fmt.Errorf("list readers: %w", err)
 	}
 	return readers, nil
 }
 
-func disconnectCCID(channel any) error {
+func disconnectCCID(channel lpaccid.CCID) error {
 	disconnecter, ok := channel.(interface{ Disconnect() error })
 	if !ok {
 		return nil
@@ -353,18 +354,7 @@ func disconnectCCID(channel any) error {
 }
 
 func openCCIDError(role string, err error) error {
-	if ccidUnavailable(err) {
-		return fmt.Errorf("open %s CCID context: %w", role, errCCIDUnavailable)
-	}
 	return fmt.Errorf("open %s CCID context: %w", role, err)
-}
-
-func ccidUnavailable(err error) bool {
-	if err == nil {
-		return false
-	}
-	text := err.Error()
-	return strings.Contains(text, "SCARD_E_NO_SERVICE") || strings.Contains(text, "0x8010001D")
 }
 
 func chooseReader(reader *bufio.Reader, w io.Writer, readers []string, requested, label string) (string, error) {

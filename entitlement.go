@@ -102,7 +102,7 @@ func discoverEntitlementAuto(records []entitlementRecord, identity Identity, sou
 	if unsupported != nil {
 		return Entitlement{}, unsupported
 	}
-	return Entitlement{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccmnc(identity))
+	return Entitlement{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccMNC(identity))
 }
 
 func selectEntitlementRecord(records []entitlementRecord, identity Identity, channel EntitlementChannel) (entitlementRecord, error) {
@@ -131,9 +131,9 @@ func selectEntitlementRecord(records []entitlementRecord, identity Identity, cha
 		return matches[0], nil
 	}
 	if len(matches) > 1 {
-		return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementAmbiguous, mccmnc(identity))
+		return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementAmbiguous, mccMNC(identity))
 	}
-	return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccmnc(identity))
+	return entitlementRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccMNC(identity))
 }
 
 func (r entitlementRecord) match() carrierMatch {

@@ -160,7 +160,7 @@ func TestDiscoverEntitlement(t *testing.T) {
 			got, err := DiscoverEntitlement(tt.identity, tt.sourceSIMType)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
-					t.Fatalf("DiscoverEntitlement() error = %v, want %v", err, tt.wantErr)
+					t.Errorf("DiscoverEntitlement() error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}
@@ -168,28 +168,28 @@ func TestDiscoverEntitlement(t *testing.T) {
 				t.Fatalf("DiscoverEntitlement() error = %v", err)
 			}
 			if got.Server != tt.want.Server {
-				t.Fatalf("Server = %q, want %q", got.Server, tt.want.Server)
+				t.Errorf("Server = %q, want %q", got.Server, tt.want.Server)
 			}
 			if got.TransferType != tt.want.TransferType {
-				t.Fatalf("TransferType = %v, want %v", got.TransferType, tt.want.TransferType)
+				t.Errorf("TransferType = %v, want %v", got.TransferType, tt.want.TransferType)
 			}
 			if got.UsePost != tt.want.UsePost {
-				t.Fatalf("UsePost = %t, want %t", got.UsePost, tt.want.UsePost)
+				t.Errorf("UsePost = %t, want %t", got.UsePost, tt.want.UsePost)
 			}
 			if got.UseTempTokenConversion != tt.want.UseTempTokenConversion {
-				t.Fatalf("UseTempTokenConversion = %t, want %t", got.UseTempTokenConversion, tt.want.UseTempTokenConversion)
+				t.Errorf("UseTempTokenConversion = %t, want %t", got.UseTempTokenConversion, tt.want.UseTempTokenConversion)
 			}
 			if got.PollInterval != tt.want.PollInterval {
-				t.Fatalf("PollInterval = %s, want %s", got.PollInterval, tt.want.PollInterval)
+				t.Errorf("PollInterval = %s, want %s", got.PollInterval, tt.want.PollInterval)
 			}
 			if got.PollTimeout != tt.want.PollTimeout {
-				t.Fatalf("PollTimeout = %s, want %s", got.PollTimeout, tt.want.PollTimeout)
+				t.Errorf("PollTimeout = %s, want %s", got.PollTimeout, tt.want.PollTimeout)
 			}
 			if got.AppName != tt.want.AppName {
-				t.Fatalf("AppName = %q, want %q", got.AppName, tt.want.AppName)
+				t.Errorf("AppName = %q, want %q", got.AppName, tt.want.AppName)
 			}
 			if got.Version != tt.want.Version {
-				t.Fatalf("Version = %q, want %q", got.Version, tt.want.Version)
+				t.Errorf("Version = %q, want %q", got.Version, tt.want.Version)
 			}
 		})
 	}
@@ -232,7 +232,7 @@ func TestSelectEntitlementRecordIdentityMatching(t *testing.T) {
 			got, err := selectEntitlementRecord(records, tt.identity, EntitlementChannelGoogle)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
-					t.Fatalf("selectEntitlementRecord() error = %v, want %v", err, tt.wantErr)
+					t.Errorf("selectEntitlementRecord() error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}
@@ -240,7 +240,7 @@ func TestSelectEntitlementRecordIdentityMatching(t *testing.T) {
 				t.Fatalf("selectEntitlementRecord() error = %v", err)
 			}
 			if got.CarrierName != tt.want {
-				t.Fatalf("CarrierName = %q, want %q", got.CarrierName, tt.want)
+				t.Errorf("CarrierName = %q, want %q", got.CarrierName, tt.want)
 			}
 		})
 	}
@@ -255,7 +255,7 @@ func TestSelectEntitlementRecordEqualSpecificityIsAmbiguous(t *testing.T) {
 	}
 	_, err := selectEntitlementRecord(records, Identity{MCC: "001", MNC: "01", GID1: "aa"}, EntitlementChannelGoogle)
 	if !errors.Is(err, ErrEntitlementAmbiguous) {
-		t.Fatalf("selectEntitlementRecord() error = %v, want %v", err, ErrEntitlementAmbiguous)
+		t.Errorf("selectEntitlementRecord() error = %v, want %v", err, ErrEntitlementAmbiguous)
 	}
 }
 
@@ -305,37 +305,37 @@ func TestDiscoverEntitlementForSamsungChannel(t *testing.T) {
 				t.Fatalf("DiscoverEntitlementForChannel() error = %v", err)
 			}
 			if got.Server != tt.want.Server {
-				t.Fatalf("Server = %q, want %q", got.Server, tt.want.Server)
+				t.Errorf("Server = %q, want %q", got.Server, tt.want.Server)
 			}
 			if got.Channel != tt.want.Channel {
-				t.Fatalf("Channel = %q, want %q", got.Channel, tt.want.Channel)
+				t.Errorf("Channel = %q, want %q", got.Channel, tt.want.Channel)
 			}
 			if got.TransferType != tt.want.TransferType {
-				t.Fatalf("TransferType = %v, want %v", got.TransferType, tt.want.TransferType)
+				t.Errorf("TransferType = %v, want %v", got.TransferType, tt.want.TransferType)
 			}
 			if got.SourceSIMType != tt.sourceSIMType {
-				t.Fatalf("SourceSIMType = %v, want %v", got.SourceSIMType, tt.sourceSIMType)
+				t.Errorf("SourceSIMType = %v, want %v", got.SourceSIMType, tt.sourceSIMType)
 			}
 			if got.SetTargetTerminalFields != tt.want.SetTargetTerminalFields {
-				t.Fatalf("SetTargetTerminalFields = %t, want %t", got.SetTargetTerminalFields, tt.want.SetTargetTerminalFields)
+				t.Errorf("SetTargetTerminalFields = %t, want %t", got.SetTargetTerminalFields, tt.want.SetTargetTerminalFields)
 			}
 			if got.App != tt.want.App {
-				t.Fatalf("App = %q, want %q", got.App, tt.want.App)
+				t.Errorf("App = %q, want %q", got.App, tt.want.App)
 			}
 			if got.AppName != tt.want.AppName {
-				t.Fatalf("AppName = %q, want %q", got.AppName, tt.want.AppName)
+				t.Errorf("AppName = %q, want %q", got.AppName, tt.want.AppName)
 			}
 			if got.ProvisioningVersion != tt.want.ProvisioningVersion {
-				t.Fatalf("ProvisioningVersion = %q, want %q", got.ProvisioningVersion, tt.want.ProvisioningVersion)
+				t.Errorf("ProvisioningVersion = %q, want %q", got.ProvisioningVersion, tt.want.ProvisioningVersion)
 			}
 			if got.RequestVersion != tt.want.RequestVersion {
-				t.Fatalf("RequestVersion = %q, want %q", got.RequestVersion, tt.want.RequestVersion)
+				t.Errorf("RequestVersion = %q, want %q", got.RequestVersion, tt.want.RequestVersion)
 			}
 			if got.Version != tt.want.Version {
-				t.Fatalf("Version = %q, want %q", got.Version, tt.want.Version)
+				t.Errorf("Version = %q, want %q", got.Version, tt.want.Version)
 			}
 			if got.Timeout != tt.want.Timeout {
-				t.Fatalf("Timeout = %s, want %s", got.Timeout, tt.want.Timeout)
+				t.Errorf("Timeout = %s, want %s", got.Timeout, tt.want.Timeout)
 			}
 		})
 	}
@@ -375,10 +375,10 @@ func TestDiscoverEntitlementAutoChannel(t *testing.T) {
 				t.Fatalf("DiscoverEntitlement() error = %v", err)
 			}
 			if got.Channel != tt.wantChannel {
-				t.Fatalf("Channel = %q, want %q", got.Channel, tt.wantChannel)
+				t.Errorf("Channel = %q, want %q", got.Channel, tt.wantChannel)
 			}
 			if got.Server != tt.wantServer {
-				t.Fatalf("Server = %q, want %q", got.Server, tt.wantServer)
+				t.Errorf("Server = %q, want %q", got.Server, tt.wantServer)
 			}
 		})
 	}
@@ -391,6 +391,6 @@ func TestDiscoverEntitlementSamsungTeliaHalebopIsAmbiguous(t *testing.T) {
 		EntitlementChannelSamsung,
 	)
 	if !errors.Is(err, ErrEntitlementAmbiguous) {
-		t.Fatalf("DiscoverEntitlementForChannel() error = %v, want %v", err, ErrEntitlementAmbiguous)
+		t.Errorf("DiscoverEntitlementForChannel() error = %v, want %v", err, ErrEntitlementAmbiguous)
 	}
 }

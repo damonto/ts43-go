@@ -17,7 +17,7 @@ const (
 	DefaultODSAClientTS43 = "client-Primary-ODSA"
 	SamsungODSAClientTS43 = "Primary-ODSA"
 	DefaultWFCClientTS43  = "client-IMS-Entitlement"
-	DefaultEAPAkaRealm    = "nai.epc"
+	DefaultEAPAKARealm    = "nai.epc"
 )
 
 type Config struct {
@@ -145,6 +145,24 @@ func (UserInputEvent) ts43Event() {}
 type UserInputResult struct {
 	Response string
 	Button   MessageButton
+}
+
+type SubscriptionTransferRequest struct {
+	Identity Identity
+	Source   Device
+	Target   Device
+}
+
+type ManageSubscriptionRequest struct {
+	Identity  Identity
+	Source    Device
+	Target    Device
+	UserInput UserInputResult
+}
+
+type ActivationConfigurationRequest struct {
+	Identity Identity
+	Target   Device
 }
 
 type WebsheetEvent struct {

@@ -8,11 +8,11 @@ replace github.com/damonto/ts43-go => ..
 
 require (
 	github.com/damonto/ts43-go v0.0.0
-	github.com/damonto/wwan-go v0.0.0-20260712111944-804e974bca78
+	github.com/damonto/wwan-go v0.0.0-20260731153740-68483b6b3dd9
 )
 
 require (
 	github.com/ElMostafaIdrassi/goscard v1.0.0 // indirect
 	github.com/ebitengine/purego v0.10.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )

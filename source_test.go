@@ -23,6 +23,7 @@ type fakeReader struct {
 }
 
 func newTestChannel(t *testing.T, authPayload []byte) *Source {
+	t.Helper()
 	return newTestChannelWithAD(t, authPayload, []byte{0x00, 0x00, 0x00, 0x03})
 }
 
@@ -141,7 +142,7 @@ func TestChannelIdentity(t *testing.T) {
 				t.Fatalf("Identity() error = %v", err)
 			}
 			if *got != *tt.want {
-				t.Fatalf("Identity() = %+v, want %+v", got, tt.want)
+				t.Errorf("Identity() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -180,7 +181,7 @@ func TestChannelAuthenticateAKA(t *testing.T) {
 			})
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
-					t.Fatalf("AuthenticateAKA() error = %v, want %v", err, tt.wantErr)
+					t.Errorf("AuthenticateAKA() error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}
@@ -188,7 +189,7 @@ func TestChannelAuthenticateAKA(t *testing.T) {
 				t.Fatalf("AuthenticateAKA() error = %v", err)
 			}
 			if !slices.Equal(got.Res, tt.want.Res) || !slices.Equal(got.CK, tt.want.CK) || !slices.Equal(got.IK, tt.want.IK) || !slices.Equal(got.Auts, tt.want.Auts) {
-				t.Fatalf("AuthenticateAKA() = %+v, want %+v", got, tt.want)
+				t.Errorf("AuthenticateAKA() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -204,7 +205,7 @@ func TestNewRejectsNilCard(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := NewSource(tt.card); err == nil {
-				t.Fatal("NewSource() error = nil, want non-nil")
+				t.Error("NewSource() error = nil, want non-nil")
 			}
 		})
 	}

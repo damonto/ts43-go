@@ -12,7 +12,7 @@ type Identity struct {
 	SPN   string
 }
 
-func mccmnc(i Identity) string {
+func mccMNC(i Identity) string {
 	return i.MCC + i.MNC
 }
 
@@ -25,7 +25,7 @@ type carrierMatch struct {
 }
 
 func (m carrierMatch) score(identity Identity) (int, bool) {
-	if m.MCCMNC != mccmnc(identity) {
+	if m.MCCMNC != mccMNC(identity) {
 		return 0, false
 	}
 

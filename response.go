@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -334,7 +335,7 @@ func (f *primaryFields) set(name, value string) {
 
 type downloadFields struct {
 	ProfileActivationCode stringField `json:"ProfileActivationCode"`
-	ProfileSmdpAddress    stringField `json:"ProfileSmdpAddress"`
+	ProfileSMDPAddress    stringField `json:"ProfileSmdpAddress"`
 	ProfileICCID          stringField `json:"ProfileIccid"`
 	SubscriptionService   stringField `json:"SubscriptionServiceURL"`
 	MatchingID            stringField `json:"MatchingID"`
@@ -373,7 +374,7 @@ func (f *downloadFields) set(name, value string) {
 	case "ProfileActivationCode":
 		f.ProfileActivationCode = stringField(value)
 	case "ProfileSmdpAddress":
-		f.ProfileSmdpAddress = stringField(value)
+		f.ProfileSMDPAddress = stringField(value)
 	case "ProfileIccid":
 		f.ProfileICCID = stringField(value)
 	case "SubscriptionServiceURL":
@@ -470,6 +471,42 @@ func (f stringField) String() string {
 	return string(f)
 }
 
+type optionalInt struct {
+	value int
+	set   bool
+}
+
+func (n optionalInt) MarshalText() ([]byte, error) { return n.AppendText(nil) }
+
+func (n optionalInt) AppendText(dst []byte) ([]byte, error) {
+	if !n.set {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(n.value), 10), nil
+}
+
+func (n *optionalInt) UnmarshalText(text []byte) error {
+	value := strings.TrimSpace(string(text))
+	if value == "" {
+		*n = optionalInt{}
+		return nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return err
+	}
+	*n = optionalInt{value: parsed, set: true}
+	return nil
+}
+
+func parseOptionalInt(value string) (optionalInt, error) {
+	var parsed optionalInt
+	if err := parsed.UnmarshalText([]byte(value)); err != nil {
+		return optionalInt{}, err
+	}
+	return parsed, nil
+}
+
 type xmlParam struct {
 	Name  string `xml:"name,attr"`
 	Value string `xml:"value,attr"`
@@ -535,16 +572,32 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 		pollingInterval = app.PollingInterval.String()
 		pollingIntervalUnit = app.PollingIntervalUnit.String()
 	}
-	r.PollingIntervalSet = strings.TrimSpace(pollingInterval) != ""
-	r.PollingInterval = atoi(pollingInterval)
-	r.PollingIntervalUnit = atoi(pollingIntervalUnit)
+	pollingIntervalValue, err := parseOptionalInt(pollingInterval)
+	if err != nil {
+		return fmt.Errorf("parse polling interval: %w", err)
+	}
+	pollingIntervalUnitValue, err := parseOptionalInt(pollingIntervalUnit)
+	if err != nil {
+		return fmt.Errorf("parse polling interval unit: %w", err)
+	}
+	registerNotifStatus, err := parseOptionalInt(app.RegisterNotifStatus.String())
+	if err != nil {
+		return fmt.Errorf("parse register notification status: %w", err)
+	}
+	authTokenValidity, err := parseOptionalInt(token.Validity.String())
+	if err != nil {
+		return fmt.Errorf("parse authentication token validity: %w", err)
+	}
+	r.PollingIntervalSet = pollingIntervalValue.set
+	r.PollingInterval = pollingIntervalValue.value
+	r.PollingIntervalUnit = pollingIntervalUnitValue.value
 	r.TemporaryToken = app.TemporaryToken.String()
 	r.TemporaryTokenExpiry = app.TemporaryTokenExpiry.String()
 	r.OperationTargets = splitOperations(app.OperationTargets.String())
-	r.RegisterNotifStatus = atoi(app.RegisterNotifStatus.String())
+	r.RegisterNotifStatus = registerNotifStatus.value
 	r.GeneralErrorText = app.GeneralErrorText.String()
 	r.AuthenticationToken = token.Token.String()
-	r.AuthTokenValidity = atoi(token.Validity.String())
+	r.AuthTokenValidity = authTokenValidity.value
 	r.Message = message.message()
 	if r.SubscriptionResult == SubscriptionResultContinueToWebsheet {
 		r.Websheet = Websheet{
@@ -554,7 +607,7 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 		}
 	}
 	r.Download.ActivationCode = activationCodeField(download.ProfileActivationCode.String())
-	smdp := download.ProfileSmdpAddress.String()
+	smdp := download.ProfileSMDPAddress.String()
 	if smdp == "" {
 		smdp = download.SubscriptionService.String()
 	}
@@ -577,11 +630,6 @@ func (m messageFields) message() Message {
 		AcceptFreeTextValidation:                encodedPrefixedField(m.AcceptFreeTextValidation.String()),
 		AcceptFreeTextValidationFailedErrorText: m.AcceptFreeTextValidationFailedText.String(),
 	}
-}
-
-func atoi(s string) int {
-	n, _ := strconv.Atoi(strings.TrimSpace(s))
-	return n
 }
 
 func one(s string) bool {

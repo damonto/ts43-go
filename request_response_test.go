@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -39,19 +40,19 @@ func TestBuildHTTPRequest(t *testing.T) {
 				},
 				ODSAOperation{Operation: OperationCheck, OperationType: OperationTypeOmit},
 				DefaultODSAClientTS43,
-				DefaultEAPAkaRealm,
+				DefaultEAPAKARealm,
 			)
 			if err != nil {
 				t.Fatalf("buildHTTPRequest() error = %v", err)
 			}
 			if req.Method != tt.method {
-				t.Fatalf("method = %s, want %s", req.Method, tt.method)
+				t.Errorf("method = %s, want %s", req.Method, tt.method)
 			}
 			if req.Header.Get("Accept") != EAPRelayContentType+", "+DefaultResponseAccept {
-				t.Fatalf("Accept = %q", req.Header.Get("Accept"))
+				t.Errorf("Accept = %q", req.Header.Get("Accept"))
 			}
 			if req.Header.Get("User-Agent") == "" {
-				t.Fatal("User-Agent is empty")
+				t.Error("User-Agent is empty")
 			}
 		})
 	}
@@ -77,13 +78,13 @@ func TestBuildHTTPRequestOmitsUnsetMessageButton(t *testing.T) {
 			OperationTargets: []Operation{OperationManage, OperationAcquireConf},
 		},
 		DefaultODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if err != nil {
 		t.Fatalf("buildHTTPRequest() error = %v", err)
 	}
 	if got := req.URL.Query().Get("MSG_btn"); got != "" {
-		t.Fatalf("MSG_btn = %q, want empty", got)
+		t.Errorf("MSG_btn = %q, want empty", got)
 	}
 }
 
@@ -112,13 +113,13 @@ func TestBuildHTTPSendsConfiguredApp(t *testing.T) {
 				},
 				ODSAOperation{},
 				DefaultODSAClientTS43,
-				DefaultEAPAkaRealm,
+				DefaultEAPAKARealm,
 			)
 			if err != nil {
 				t.Fatalf("buildHTTPRequest() error = %v", err)
 			}
 			if got := req.URL.Query().Get("app"); got != tt.want {
-				t.Fatalf("app = %q, want %q", got, tt.want)
+				t.Errorf("app = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -143,32 +144,32 @@ func TestBuildHTTPSendsSamsungInitialAuthFields(t *testing.T) {
 		},
 		ODSAOperation{},
 		SamsungODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if err != nil {
 		t.Fatalf("buildHTTPRequest() error = %v", err)
 	}
 	query := req.URL.Query()
 	if got := query.Get("app"); got != AppODSAPrimary {
-		t.Fatalf("app = %q, want %q", got, AppODSAPrimary)
+		t.Errorf("app = %q, want %q", got, AppODSAPrimary)
 	}
 	if got := query.Get("vers"); got != "1" {
-		t.Fatalf("vers = %q, want 1", got)
+		t.Errorf("vers = %q, want 1", got)
 	}
 	if got := query.Get("app_name"); got != AppODSAPrimary {
-		t.Fatalf("app_name = %q, want %q", got, AppODSAPrimary)
+		t.Errorf("app_name = %q, want %q", got, AppODSAPrimary)
 	}
 	if got := query.Get("provisioning_version"); got != "5.0" {
-		t.Fatalf("provisioning_version = %q, want 5.0", got)
+		t.Errorf("provisioning_version = %q, want 5.0", got)
 	}
 	if got := req.Header.Get("Accept"); got != EAPRelayContentType {
-		t.Fatalf("Accept = %q, want %q", got, EAPRelayContentType)
+		t.Errorf("Accept = %q, want %q", got, EAPRelayContentType)
 	}
 	if got, want := req.Header.Get("Accept-Language"), "en-US,en;q=0.5"; got != want {
-		t.Fatalf("Accept-Language = %q, want %q", got, want)
+		t.Errorf("Accept-Language = %q, want %q", got, want)
 	}
 	if got, want := req.Header.Get("User-Agent"), "PRD-TS43 SM-S938B client-Primary-ODSA OS-Android/16"; got != want {
-		t.Fatalf("User-Agent = %q, want %q", got, want)
+		t.Errorf("User-Agent = %q, want %q", got, want)
 	}
 }
 
@@ -190,14 +191,14 @@ func TestBuildHTTPSendsSamsungOperationAppFields(t *testing.T) {
 		},
 		ODSAOperation{Operation: OperationManage},
 		SamsungODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if err != nil {
 		t.Fatalf("buildHTTPRequest() error = %v", err)
 	}
 	query := req.URL.Query()
 	if got := query.Get("app"); got != AppODSAPrimary {
-		t.Fatalf("app = %q, want %q", got, AppODSAPrimary)
+		t.Errorf("app = %q, want %q", got, AppODSAPrimary)
 	}
 }
 
@@ -258,20 +259,20 @@ func TestBuildHTTPShapesCommonDeviceFieldsByChannel(t *testing.T) {
 				},
 				ODSAOperation{},
 				DefaultODSAClientTS43,
-				DefaultEAPAkaRealm,
+				DefaultEAPAKARealm,
 			)
 			if err != nil {
 				t.Fatalf("buildHTTPRequest() error = %v", err)
 			}
 			query := req.URL.Query()
 			if got := query.Get("terminal_vendor"); got != tt.wantVendor {
-				t.Fatalf("terminal_vendor = %q, want %q", got, tt.wantVendor)
+				t.Errorf("terminal_vendor = %q, want %q", got, tt.wantVendor)
 			}
 			if got := query.Get("terminal_model"); got != tt.wantModel {
-				t.Fatalf("terminal_model = %q, want %q", got, tt.wantModel)
+				t.Errorf("terminal_model = %q, want %q", got, tt.wantModel)
 			}
 			if got := query.Get("terminal_sw_version"); got != tt.wantSoftware {
-				t.Fatalf("terminal_sw_version = %q, want %q", got, tt.wantSoftware)
+				t.Errorf("terminal_sw_version = %q, want %q", got, tt.wantSoftware)
 			}
 		})
 	}
@@ -311,7 +312,7 @@ func TestEAPRelayAccept(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := eapRelayAccept(tt.accept); got != tt.want {
-				t.Fatalf("eapRelayAccept() = %q, want %q", got, tt.want)
+				t.Errorf("eapRelayAccept() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -334,24 +335,24 @@ func TestBuildHTTPUsesSamsungResponseAcceptAfterAuthentication(t *testing.T) {
 		},
 		ODSAOperation{Operation: OperationManage},
 		SamsungODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if err != nil {
 		t.Fatalf("buildHTTPRequest() error = %v", err)
 	}
 	if got := req.Header.Get("Accept"); got != SamsungResponseAccept {
-		t.Fatalf("Accept = %q, want %q", got, SamsungResponseAccept)
+		t.Errorf("Accept = %q, want %q", got, SamsungResponseAccept)
 	}
 	query := req.URL.Query()
-	want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)
+	want, err := terminalIMSIEAPBase64(identity, DefaultEAPAKARealm)
 	if err != nil {
 		t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
 	}
 	if got := query.Get("IMSI"); got != want {
-		t.Fatalf("IMSI = %q, want %q", got, want)
+		t.Errorf("IMSI = %q, want %q", got, want)
 	}
 	if got := query.Get("terminal_imsieapbase64"); got != "" {
-		t.Fatalf("terminal_imsieapbase64 = %q, want empty", got)
+		t.Errorf("terminal_imsieapbase64 = %q, want empty", got)
 	}
 }
 
@@ -383,13 +384,13 @@ func TestBuildHTTPSamsungEAPIdentityOperationScope(t *testing.T) {
 				},
 				ODSAOperation{Operation: tt.operation},
 				SamsungODSAClientTS43,
-				DefaultEAPAkaRealm,
+				DefaultEAPAKARealm,
 			)
 			if err != nil {
 				t.Fatalf("buildHTTPRequest() error = %v", err)
 			}
 			if got := req.URL.Query().Get("IMSI") != ""; got != tt.wantIMSI {
-				t.Fatalf("IMSI present = %v, want %v", got, tt.wantIMSI)
+				t.Errorf("IMSI present = %v, want %v", got, tt.wantIMSI)
 			}
 		})
 	}
@@ -408,10 +409,10 @@ func TestBuildHTTPSamsungRequiresEAPIdentity(t *testing.T) {
 		},
 		ODSAOperation{Operation: OperationManage},
 		SamsungODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if err == nil {
-		t.Fatal("buildHTTPRequest() error = nil")
+		t.Error("buildHTTPRequest() error = nil")
 	}
 }
 
@@ -423,13 +424,13 @@ func TestBaseRequestUsesSamsungDefaults(t *testing.T) {
 
 	req := client.baseRequest(Device{IMEI: "123456789012345"}, "auth", "")
 	if req.App != AppODSAPrimary {
-		t.Fatalf("App = %q, want %q", req.App, AppODSAPrimary)
+		t.Errorf("App = %q, want %q", req.App, AppODSAPrimary)
 	}
 	if req.AppName != AppODSAPrimary {
-		t.Fatalf("AppName = %q, want %q", req.AppName, AppODSAPrimary)
+		t.Errorf("AppName = %q, want %q", req.AppName, AppODSAPrimary)
 	}
 	if req.RequestVersion != "1" {
-		t.Fatalf("RequestVersion = %q, want 1", req.RequestVersion)
+		t.Errorf("RequestVersion = %q, want 1", req.RequestVersion)
 	}
 }
 
@@ -447,10 +448,10 @@ func TestBuildHTTPRequiresApp(t *testing.T) {
 		},
 		ODSAOperation{},
 		DefaultODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if !errors.Is(err, errAppRequired) {
-		t.Fatalf("buildHTTPRequest() error = %v, want %v", err, errAppRequired)
+		t.Errorf("buildHTTPRequest() error = %v, want %v", err, errAppRequired)
 	}
 }
 
@@ -475,13 +476,13 @@ func TestBuildHTTPRequestSendsExplicitRejectedMessageButton(t *testing.T) {
 			MessageButtonSet: true,
 		},
 		DefaultODSAClientTS43,
-		DefaultEAPAkaRealm,
+		DefaultEAPAKARealm,
 	)
 	if err != nil {
 		t.Fatalf("buildHTTPRequest() error = %v", err)
 	}
 	if got := req.URL.Query().Get("MSG_btn"); got != MessageButtonRejected.String() {
-		t.Fatalf("MSG_btn = %q, want %s", got, MessageButtonRejected)
+		t.Errorf("MSG_btn = %q, want %s", got, MessageButtonRejected)
 	}
 }
 
@@ -527,7 +528,7 @@ func TestBuildHTTPRequestsSendsExtendedFields(t *testing.T) {
 					CompanionTerminalEID:          "89049032000001000000000000000001",
 				},
 				DefaultODSAClientTS43,
-				DefaultEAPAkaRealm,
+				DefaultEAPAKARealm,
 			)
 			if err != nil {
 				t.Fatalf("buildHTTPRequest() error = %v", err)
@@ -550,17 +551,17 @@ func TestBuildHTTPRequestsSendsExtendedFields(t *testing.T) {
 			}
 			for key, value := range want {
 				if fields[key] != value {
-					t.Fatalf("%s = %q, want %q", key, fields[key], value)
+					t.Errorf("%s = %q, want %q", key, fields[key], value)
 				}
 			}
 			if tt.post {
 				if fields["target_terminal_imeis"] != "333333333333333" {
-					t.Fatalf("target_terminal_imeis = %q, want last JSON value", fields["target_terminal_imeis"])
+					t.Errorf("target_terminal_imeis = %q, want last JSON value", fields["target_terminal_imeis"])
 				}
 			} else {
 				values := req.URL.Query()["target_terminal_imeis"]
 				if len(values) != 2 || values[0] != "222222222222222" || values[1] != "333333333333333" {
-					t.Fatalf("target_terminal_imeis values = %v, want repeated query parameters", values)
+					t.Errorf("target_terminal_imeis values = %v, want repeated query parameters", values)
 				}
 			}
 		})
@@ -605,10 +606,65 @@ func TestODSAResponseDownloadConfig(t *testing.T) {
 				t.Fatalf("UnmarshalBinary() error = %v", err)
 			}
 			if got.Download != tt.want {
-				t.Fatalf("Download = %+v, want %+v", got.Download, tt.want)
+				t.Errorf("Download = %+v, want %+v", got.Download, tt.want)
 			}
 			if got.DownloadInfoPresent != tt.wantPresent {
-				t.Fatalf("DownloadInfoPresent = %t, want %t", got.DownloadInfoPresent, tt.wantPresent)
+				t.Errorf("DownloadInfoPresent = %t, want %t", got.DownloadInfoPresent, tt.wantPresent)
+			}
+		})
+	}
+}
+
+func TestOptionalIntUnmarshalText(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    optionalInt
+		wantErr bool
+	}{
+		{name: "empty", input: "  ", want: optionalInt{}},
+		{name: "zero", input: "0", want: optionalInt{value: 0, set: true}},
+		{name: "positive", input: " 42 ", want: optionalInt{value: 42, set: true}},
+		{name: "invalid", input: "forty-two", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got optionalInt
+			err := got.UnmarshalText([]byte(tt.input))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("UnmarshalText(%q) error = %v, wantErr %t", tt.input, err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("UnmarshalText(%q) = %+v, want %+v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestODSAResponseRejectsInvalidIntegers(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantContext string
+	}{
+		{name: "polling interval", body: `{"PollingInterval":"invalid"}`, wantContext: "parse polling interval"},
+		{name: "polling interval unit", body: `{"PollingIntervalUnit":"invalid"}`, wantContext: "parse polling interval unit"},
+		{name: "register notification status", body: `{"RegisterNotifStatus":"invalid"}`, wantContext: "parse register notification status"},
+		{name: "authentication token validity", body: `{"TOKEN":{"Validity":"invalid"}}`, wantContext: "parse authentication token validity"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var response ODSAResponse
+			err := response.UnmarshalBinary([]byte(tt.body))
+			if err == nil {
+				t.Fatalf("UnmarshalBinary(%s) error = nil, want error", tt.body)
+			}
+			var numErr *strconv.NumError
+			if !errors.As(err, &numErr) {
+				t.Errorf("UnmarshalBinary(%s) error = %T, want *strconv.NumError in chain", tt.body, err)
+			}
+			if !strings.Contains(err.Error(), tt.wantContext) {
+				t.Errorf("UnmarshalBinary(%s) error = %q, want context %q", tt.body, err, tt.wantContext)
 			}
 		})
 	}
@@ -623,13 +679,13 @@ func TestODSAResponseMessageAndWebsheet(t *testing.T) {
 		t.Fatalf("UnmarshalBinary() error = %v", err)
 	}
 	if got.SubscriptionResult != SubscriptionResultRequiresUserInput {
-		t.Fatalf("SubscriptionResult = %s, want %s", got.SubscriptionResult, SubscriptionResultRequiresUserInput)
+		t.Errorf("SubscriptionResult = %s, want %s", got.SubscriptionResult, SubscriptionResultRequiresUserInput)
 	}
 	if got.Message.Text != "Enter PIN" || !got.Message.AcceptButton || !got.Message.AcceptFreeText {
-		t.Fatalf("Message = %+v", got.Message)
+		t.Errorf("Message = %+v", got.Message)
 	}
 	if got.Message.AcceptFreeTextValidation != `^\d{4}$` {
-		t.Fatalf("AcceptFreeTextValidation = %q", got.Message.AcceptFreeTextValidation)
+		t.Errorf("AcceptFreeTextValidation = %q", got.Message.AcceptFreeTextValidation)
 	}
 }
 

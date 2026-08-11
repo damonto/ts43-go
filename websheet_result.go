@@ -12,7 +12,7 @@ type websheetCallbackPayload struct {
 	Source             string `json:"source"`
 	Event              string `json:"event"`
 	ActivationCode     string `json:"activationCode"`
-	DefaultSmdpAddress string `json:"defaultSmdpAddress"`
+	DefaultSMDPAddress string `json:"defaultSmdpAddress"`
 	SMDPFQDN           string `json:"smdpFqdn"`
 	ICCID              string `json:"iccid"`
 	IMEI               string `json:"imei"`
@@ -67,7 +67,7 @@ func websheetResultFromJSON(line string, vowifiCallback bool) (WebsheetResult, e
 	}
 	values := url.Values{}
 	values.Set("activationCode", payload.ActivationCode)
-	values.Set("defaultSmdpAddress", firstNonEmpty(payload.DefaultSmdpAddress, payload.SMDPFQDN))
+	values.Set("defaultSmdpAddress", firstNonEmpty(payload.DefaultSMDPAddress, payload.SMDPFQDN))
 	values.Set("iccid", payload.ICCID)
 	values.Set("imei", payload.IMEI)
 	values.Set("nextAction", payload.NextAction)

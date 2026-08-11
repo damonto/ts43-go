@@ -1,9 +1,11 @@
 package ts43
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 const (
@@ -17,7 +19,22 @@ type Operation string
 
 func (op Operation) String() string { return string(op) }
 
-func (op Operation) MarshalText() ([]byte, error) { return []byte(op.String()), nil }
+func (op Operation) MarshalText() ([]byte, error) { return op.AppendText(nil) }
+
+func (op Operation) AppendText(dst []byte) ([]byte, error) {
+	if !utf8.ValidString(op.String()) {
+		return dst, errors.New("marshal operation: invalid UTF-8")
+	}
+	return append(dst, op...), nil
+}
+
+func (op *Operation) UnmarshalText(text []byte) error {
+	if !utf8.Valid(text) {
+		return errors.New("unmarshal operation: invalid UTF-8")
+	}
+	*op = Operation(text)
+	return nil
+}
 
 type OperationType int
 
@@ -32,7 +49,24 @@ const (
 
 func (t OperationType) String() string { return strconv.Itoa(int(t)) }
 
-func (t OperationType) MarshalText() ([]byte, error) { return []byte(t.String()), nil }
+func (t OperationType) MarshalText() ([]byte, error) { return t.AppendText(nil) }
+
+func (t OperationType) AppendText(dst []byte) ([]byte, error) {
+	return strconv.AppendInt(dst, int64(t), 10), nil
+}
+
+func (t *OperationType) UnmarshalText(text []byte) error {
+	n, ok, err := enumInteger(text)
+	if err != nil {
+		return fmt.Errorf("unmarshal operation type: %w", err)
+	}
+	if !ok {
+		*t = OperationTypeOmit
+		return nil
+	}
+	*t = OperationType(n)
+	return nil
+}
 
 type TransferType int
 
@@ -84,7 +118,27 @@ func (t TransferType) String() string {
 	return strconv.Itoa(int(t))
 }
 
-func (t TransferType) MarshalText() ([]byte, error) { return []byte(t.String()), nil }
+func (t TransferType) MarshalText() ([]byte, error) { return t.AppendText(nil) }
+
+func (t TransferType) AppendText(dst []byte) ([]byte, error) {
+	if t == TransferTypeDisabled {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(t), 10), nil
+}
+
+func (t *TransferType) UnmarshalText(text []byte) error {
+	n, ok, err := enumInteger(text)
+	if err != nil {
+		return fmt.Errorf("unmarshal transfer type: %w", err)
+	}
+	if !ok {
+		*t = TransferTypeDisabled
+		return nil
+	}
+	*t = TransferType(n)
+	return nil
+}
 
 type OperationResult int
 
@@ -103,7 +157,14 @@ func (r OperationResult) String() string {
 	return strconv.Itoa(int(r))
 }
 
-func (r OperationResult) MarshalText() ([]byte, error) { return []byte(r.String()), nil }
+func (r OperationResult) MarshalText() ([]byte, error) { return r.AppendText(nil) }
+
+func (r OperationResult) AppendText(dst []byte) ([]byte, error) {
+	if r == OperationResultUnknown {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(r), 10), nil
+}
 
 func (r *OperationResult) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -132,7 +193,14 @@ func (e AppEligibility) String() string {
 	return strconv.Itoa(int(e))
 }
 
-func (e AppEligibility) MarshalText() ([]byte, error) { return []byte(e.String()), nil }
+func (e AppEligibility) MarshalText() ([]byte, error) { return e.AppendText(nil) }
+
+func (e AppEligibility) AppendText(dst []byte) ([]byte, error) {
+	if e == AppEligibilityUnknown {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(e), 10), nil
+}
 
 func (e *AppEligibility) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -168,7 +236,14 @@ func (r SubscriptionResult) String() string {
 	return strconv.Itoa(int(r))
 }
 
-func (r SubscriptionResult) MarshalText() ([]byte, error) { return []byte(r.String()), nil }
+func (r SubscriptionResult) MarshalText() ([]byte, error) { return r.AppendText(nil) }
+
+func (r SubscriptionResult) AppendText(dst []byte) ([]byte, error) {
+	if r == SubscriptionResultUnknown {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(r), 10), nil
+}
 
 func (r *SubscriptionResult) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -200,7 +275,14 @@ func (s ServiceStatus) String() string {
 	return strconv.Itoa(int(s))
 }
 
-func (s ServiceStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+func (s ServiceStatus) MarshalText() ([]byte, error) { return s.AppendText(nil) }
+
+func (s ServiceStatus) AppendText(dst []byte) ([]byte, error) {
+	if s == ServiceStatusUnknown {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(s), 10), nil
+}
 
 func (s *ServiceStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -230,7 +312,27 @@ func (b MessageButton) String() string {
 	return strconv.Itoa(int(b))
 }
 
-func (b MessageButton) MarshalText() ([]byte, error) { return []byte(b.String()), nil }
+func (b MessageButton) MarshalText() ([]byte, error) { return b.AppendText(nil) }
+
+func (b MessageButton) AppendText(dst []byte) ([]byte, error) {
+	if b == MessageButtonUnknown {
+		return dst, nil
+	}
+	return strconv.AppendInt(dst, int64(b), 10), nil
+}
+
+func (b *MessageButton) UnmarshalText(text []byte) error {
+	n, ok, err := enumInteger(text)
+	if err != nil {
+		return fmt.Errorf("unmarshal message button: %w", err)
+	}
+	if !ok {
+		*b = MessageButtonUnknown
+		return nil
+	}
+	*b = MessageButton(n)
+	return nil
+}
 
 func enumInteger(text []byte) (int, bool, error) {
 	s := strings.TrimSpace(string(text))

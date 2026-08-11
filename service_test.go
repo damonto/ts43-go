@@ -47,7 +47,7 @@ func TestActivateDownloadAndCompleteActivation(t *testing.T) {
 		t.Fatalf("activate() error = %v", err)
 	}
 	if result.State != StatePendingDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 	}
 	if event, ok := result.Event.(DownloadReadyEvent); !ok || event.Config.ActivationCode != activationCode {
 		t.Fatalf("Event = %#v", result.Event)
@@ -58,13 +58,13 @@ func TestActivateDownloadAndCompleteActivation(t *testing.T) {
 		t.Fatalf("CompleteActivation() error = %v", err)
 	}
 	if result.State != StateDone {
-		t.Fatalf("State = %d, want %d", result.State, StateDone)
+		t.Errorf("State = %d, want %d", result.State, StateDone)
 	}
 	if _, ok := result.Event.(DoneEvent); !ok {
 		t.Fatalf("Event = %#v", result.Event)
 	}
 	if doer.calls != 3 {
-		t.Fatalf("HTTP calls = %d, want download, activation, and configuration requests", doer.calls)
+		t.Errorf("HTTP calls = %d, want download, activation, and configuration requests", doer.calls)
 	}
 }
 
@@ -104,7 +104,7 @@ func TestActivateSamsungUpdateAcquiresConfiguration(t *testing.T) {
 					switch op {
 					case OperationManage:
 						if got := query.Get("operation_type"); got != OperationTypeUpdateSubscription.String() {
-							t.Fatalf("operation_type = %q, want %s", got, OperationTypeUpdateSubscription)
+							t.Errorf("operation_type = %q, want %s", got, OperationTypeUpdateSubscription)
 						}
 						return response(http.StatusOK, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationAcquireConf:
@@ -141,16 +141,16 @@ func TestActivateSamsungUpdateAcquiresConfiguration(t *testing.T) {
 			}
 			wantCalls := []Operation{OperationManage, OperationAcquireConf}
 			if !slices.Equal(calls, wantCalls) {
-				t.Fatalf("calls = %v, want %v", calls, wantCalls)
+				t.Errorf("calls = %v, want %v", calls, wantCalls)
 			}
 			if tt.wantDownloadError {
 				return
 			}
 			if result.State != tt.wantState {
-				t.Fatalf("State = %d, want %d", result.State, tt.wantState)
+				t.Errorf("State = %d, want %d", result.State, tt.wantState)
 			}
 			if result.DownloadConfig.SMDPFQDN != tt.wantSMDPFQDN {
-				t.Fatalf("DownloadConfig.SMDPFQDN = %q, want %q", result.DownloadConfig.SMDPFQDN, tt.wantSMDPFQDN)
+				t.Errorf("DownloadConfig.SMDPFQDN = %q, want %q", result.DownloadConfig.SMDPFQDN, tt.wantSMDPFQDN)
 			}
 		})
 	}
@@ -250,7 +250,7 @@ func TestNewAllowsMissingEntitlementServer(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 	if client.transfer.entitlement.Server != "" {
-		t.Fatalf("Server = %q, want empty before discovery", client.transfer.entitlement.Server)
+		t.Errorf("Server = %q, want empty before discovery", client.transfer.entitlement.Server)
 	}
 }
 
@@ -259,11 +259,11 @@ func TestTransferDiscoversEntitlementServer(t *testing.T) {
 	client, err := New(&Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			if req.URL.Host != "ts43.eas3.msg.t-mobile.com" {
-				t.Fatalf("host = %q, want discovered T-Mobile server", req.URL.Host)
+				t.Errorf("host = %q, want discovered T-Mobile server", req.URL.Host)
 			}
 			query := req.URL.Query()
 			if got := query.Get("entitlement_version"); got != "9.0" {
-				t.Fatalf("entitlement_version = %q, want 9.0", got)
+				t.Errorf("entitlement_version = %q, want 9.0", got)
 			}
 			op := Operation(query.Get("operation"))
 			calls = append(calls, op)
@@ -276,10 +276,10 @@ func TestTransferDiscoversEntitlementServer(t *testing.T) {
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationManage:
 				if got := query.Get("temporary_token"); got != "tmp" {
-					t.Fatalf("temporary_token = %q, want tmp", got)
+					t.Errorf("temporary_token = %q, want tmp", got)
 				}
 				if got := query.Get("operation_type"); got != OperationTypeTransferSubscription.String() {
-					t.Fatalf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
+					t.Errorf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="2"/><characteristic type="DownloadInfo"><parm name="ProfileSmdpAddress" value="smdp.example"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 			case OperationAcquireConf:
@@ -303,13 +303,13 @@ func TestTransferDiscoversEntitlementServer(t *testing.T) {
 		t.Fatalf("Transfer() error = %v", err)
 	}
 	if result.State != StatePendingDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 	}
 	if client.transfer.entitlement.Server != "https://ts43.eas3.msg.t-mobile.com/google/" {
-		t.Fatalf("Server = %q, want discovered T-Mobile server", client.transfer.entitlement.Server)
+		t.Errorf("Server = %q, want discovered T-Mobile server", client.transfer.entitlement.Server)
 	}
 	if got := operationList(calls); got != ",CheckEligibility,AcquireTemporaryToken,ManageSubscription" {
-		t.Fatalf("calls = %s", got)
+		t.Errorf("calls = %s", got)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestTransferKeepsExplicitEntitlementServer(t *testing.T) {
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			calls++
 			if req.URL.Host != "example.test" {
-				t.Fatalf("host = %q, want explicit server", req.URL.Host)
+				t.Errorf("host = %q, want explicit server", req.URL.Host)
 			}
 			switch Operation(req.URL.Query().Get("operation")) {
 			case "":
@@ -328,7 +328,7 @@ func TestTransferKeepsExplicitEntitlementServer(t *testing.T) {
 				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationManage:
 				if got := req.URL.Query().Get("operation_type"); got != OperationTypeTransferSubscription.String() {
-					t.Fatalf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
+					t.Errorf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="2"/><characteristic type="DownloadInfo"><parm name="ProfileSmdpAddress" value="smdp.example"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 			case OperationAcquireConf:
@@ -355,10 +355,10 @@ func TestTransferKeepsExplicitEntitlementServer(t *testing.T) {
 		t.Fatalf("Transfer() error = %v", err)
 	}
 	if result.State != StatePendingDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 	}
 	if calls != 3 {
-		t.Fatalf("HTTP calls = %d, want 3", calls)
+		t.Errorf("HTTP calls = %d, want 3", calls)
 	}
 }
 
@@ -380,7 +380,7 @@ func TestDiscoverEntitlementPreservesSamsungSubscriptionType(t *testing.T) {
 				t.Fatalf("discoverEntitlement() error = %v", err)
 			}
 			if got := client.transfer.entitlement.SamsungSubscriptionType; got != tt.subscriptionType {
-				t.Fatalf("SamsungSubscriptionType = %v, want %v", got, tt.subscriptionType)
+				t.Errorf("SamsungSubscriptionType = %v, want %v", got, tt.subscriptionType)
 			}
 		})
 	}
@@ -397,14 +397,14 @@ func TestEAPRelayUsesLatestCookies(t *testing.T) {
 			case 1:
 				cookie, err := req.Cookie("relay")
 				if err != nil || cookie.Value != "one" {
-					t.Fatalf("relay call 1 cookie = %v, %v; want relay=one", cookie, err)
+					t.Errorf("relay call 1 cookie = %v, %v; want relay=one", cookie, err)
 				}
 				calls++
 				return responseWithCookie(http.StatusOK, eapRelayBody(t, 2), "relay=two"), nil
 			case 2:
 				cookie, err := req.Cookie("relay")
 				if err != nil || cookie.Value != "two" {
-					t.Fatalf("relay call 2 cookie = %v, %v; want relay=two", cookie, err)
+					t.Errorf("relay call 2 cookie = %v, %v; want relay=two", cookie, err)
 				}
 				calls++
 				return response(http.StatusOK, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/></characteristic></wap-provisioningdoc>`), nil
@@ -431,7 +431,7 @@ func TestEAPRelayUsesLatestCookies(t *testing.T) {
 		t.Fatalf("call() error = %v", err)
 	}
 	if calls != 3 {
-		t.Fatalf("HTTP calls = %d, want 3", calls)
+		t.Errorf("HTTP calls = %d, want 3", calls)
 	}
 }
 
@@ -461,13 +461,13 @@ func TestActivateReturnsDownloadFromManageSubscription(t *testing.T) {
 		t.Fatalf("activate() error = %v", err)
 	}
 	if result.State != StatePendingDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 	}
 	if event, ok := result.Event.(DownloadReadyEvent); !ok || event.Config.ActivationCode != activationCode {
 		t.Fatalf("Event = %#v", result.Event)
 	}
 	if doer.calls != 1 {
-		t.Fatalf("HTTP calls = %d, want 1", doer.calls)
+		t.Errorf("HTTP calls = %d, want 1", doer.calls)
 	}
 }
 
@@ -496,41 +496,41 @@ func TestContinueAfterSourceProfileDeletionUsesReturnedToken(t *testing.T) {
 					switch calls {
 					case 1:
 						if !strings.Contains(body, `"operation":"ManageSubscription"`) {
-							t.Fatalf("first request body = %s, want ManageSubscription", body)
+							t.Errorf("first request body = %s, want ManageSubscription", body)
 						}
 						if !strings.Contains(body, `"token":"old-token"`) {
-							t.Fatalf("first ManageSubscription body = %s, want old token", body)
+							t.Errorf("first ManageSubscription body = %s, want old token", body)
 						}
 						if strings.Contains(body, `"old_terminal_entitlement_protocol"`) {
-							t.Fatalf("first ManageSubscription body = %s, want no old terminal protocol", body)
+							t.Errorf("first ManageSubscription body = %s, want no old terminal protocol", body)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="new-token"/><parm name="validity" value="3600"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="6"/></characteristic></wap-provisioningdoc>`), nil
 					case 2:
 						if !strings.Contains(body, `"operation":"`+tt.wantSecond.String()+`"`) {
-							t.Fatalf("second request body = %s, want %s", body, tt.wantSecond)
+							t.Errorf("second request body = %s, want %s", body, tt.wantSecond)
 						}
 						if !strings.Contains(body, `"token":"new-token"`) {
-							t.Fatalf("second request body = %s, want returned token", body)
+							t.Errorf("second request body = %s, want returned token", body)
 						}
 						hasOldProto := strings.Contains(body, `"old_terminal_entitlement_protocol":"1"`)
 						if hasOldProto != tt.wantOldProto {
-							t.Fatalf("second request body = %s, want old terminal protocol %v", body, tt.wantOldProto)
+							t.Errorf("second request body = %s, want old terminal protocol %v", body, tt.wantOldProto)
 						}
 						if tt.wantSecond == OperationAcquireConf {
 							if strings.Contains(body, `"operation_type"`) {
-								t.Fatalf("AcquireConfiguration body = %s, want no operation_type", body)
+								t.Errorf("AcquireConfiguration body = %s, want no operation_type", body)
 							}
 							if !strings.Contains(body, `"terminal_id":"111111111111111"`) {
-								t.Fatalf("AcquireConfiguration body = %s, want source terminal_id", body)
+								t.Errorf("AcquireConfiguration body = %s, want source terminal_id", body)
 							}
 							if !strings.Contains(body, `"target_terminal_id":"222222222222222"`) {
-								t.Fatalf("AcquireConfiguration body = %s, want target_terminal_id", body)
+								t.Errorf("AcquireConfiguration body = %s, want target_terminal_id", body)
 							}
 							if !strings.Contains(body, `"target_terminal_eid":"89049032000001000000000000000000"`) {
-								t.Fatalf("AcquireConfiguration body = %s, want target_terminal_eid", body)
+								t.Errorf("AcquireConfiguration body = %s, want target_terminal_eid", body)
 							}
 							if strings.Contains(body, `"old_terminal_iccid"`) || strings.Contains(body, `"old_terminal_id"`) {
-								t.Fatalf("AcquireConfiguration body = %s, want no old terminal identifiers", body)
+								t.Errorf("AcquireConfiguration body = %s, want no old terminal identifiers", body)
 							}
 							return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="`+base64.StdEncoding.EncodeToString([]byte(activationCode))+`"/></characteristic></characteristic></characteristic></wap-provisioningdoc>`), nil
 						}
@@ -563,7 +563,7 @@ func TestContinueAfterSourceProfileDeletionUsesReturnedToken(t *testing.T) {
 				t.Fatalf("activate() error = %v", err)
 			}
 			if result.State != StatePendingSourceProfileDeletion {
-				t.Fatalf("State = %d, want %d", result.State, StatePendingSourceProfileDeletion)
+				t.Errorf("State = %d, want %d", result.State, StatePendingSourceProfileDeletion)
 			}
 
 			result, err = client.Continue(context.Background(), result, ContinueRequest{SourceProfileDeleted: true})
@@ -571,10 +571,10 @@ func TestContinueAfterSourceProfileDeletionUsesReturnedToken(t *testing.T) {
 				t.Fatalf("Continue() error = %v", err)
 			}
 			if result.State != StatePendingDownload {
-				t.Fatalf("State = %d, want %d", result.State, StatePendingDownload)
+				t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 			}
 			if result.DownloadConfig.ActivationCode != activationCode {
-				t.Fatalf("ActivationCode = %q, want %q", result.DownloadConfig.ActivationCode, activationCode)
+				t.Errorf("ActivationCode = %q, want %q", result.DownloadConfig.ActivationCode, activationCode)
 			}
 		})
 	}
@@ -593,45 +593,45 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationCheck:
 				if got := query.Get("token"); got != "auth" {
-					t.Fatalf("CheckEligibility token = %q, want auth", got)
+					t.Errorf("CheckEligibility token = %q, want auth", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationManage:
 				if got := query.Get("token"); got != "checked-auth" {
-					t.Fatalf("ManageSubscription token = %q, want checked-auth", got)
+					t.Errorf("ManageSubscription token = %q, want checked-auth", got)
 				}
 				if query.Get("operation_type") == OperationTypeUpdateSubscription.String() {
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				}
 				if got := query.Get("operation_type"); got != OperationTypeTransferSubscription.String() {
-					t.Fatalf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
+					t.Errorf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
 				}
 				if got := query.Get("terminal_id"); got != "111111111111111" {
-					t.Fatalf("terminal_id = %q, want source IMEI", got)
+					t.Errorf("terminal_id = %q, want source IMEI", got)
 				}
 				if got := query.Get("terminal_eid"); got != "" {
-					t.Fatalf("terminal_eid = %q, want empty", got)
+					t.Errorf("terminal_eid = %q, want empty", got)
 				}
 				if got := query.Get("terminal_iccid"); got != "" {
-					t.Fatalf("terminal_iccid = %q, want empty", got)
+					t.Errorf("terminal_iccid = %q, want empty", got)
 				}
 				if got := query.Get("target_terminal_id"); got != "222222222222222" {
-					t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+					t.Errorf("target_terminal_id = %q, want target IMEI", got)
 				}
 				if got := query.Get("target_terminal_eid"); got != "89049032000001000000000000000000" {
-					t.Fatalf("target_terminal_eid = %q, want target EID", got)
+					t.Errorf("target_terminal_eid = %q, want target EID", got)
 				}
 				if got := query.Get("target_terminal_model"); got != "" {
-					t.Fatalf("target_terminal_model = %q, want empty", got)
+					t.Errorf("target_terminal_model = %q, want empty", got)
 				}
 				if got := query.Get("old_terminal_id"); got != "111111111111111" {
-					t.Fatalf("old_terminal_id = %q, want source IMEI", got)
+					t.Errorf("old_terminal_id = %q, want source IMEI", got)
 				}
 				if got := query.Get("old_terminal_iccid"); got != "8910000000000000000" {
-					t.Fatalf("old_terminal_iccid = %q, want source ICCID", got)
+					t.Errorf("old_terminal_iccid = %q, want source ICCID", got)
 				}
 				if got := query.Get("old_terminal_entitlement_protocol"); got != "" {
-					t.Fatalf("old_terminal_entitlement_protocol = %q, want empty", got)
+					t.Errorf("old_terminal_entitlement_protocol = %q, want empty", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="2"/><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="`+base64.StdEncoding.EncodeToString([]byte(activationCode))+`"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 			case OperationAcquireConf:
@@ -659,18 +659,18 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 		t.Fatalf("Transfer() error = %v", err)
 	}
 	if result.State != StatePendingDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 	}
 	event, ok := result.Event.(DownloadReadyEvent)
 	if !ok {
 		t.Fatalf("Event = %#v, want DownloadReadyEvent", result.Event)
 	}
 	if event.Config.ActivationCode != activationCode {
-		t.Fatalf("ActivationCode = %q, want %q", event.Config.ActivationCode, activationCode)
+		t.Errorf("ActivationCode = %q, want %q", event.Config.ActivationCode, activationCode)
 	}
 	wantCalls := []Operation{"", OperationCheck, OperationManage}
 	if !slices.Equal(calls, wantCalls) {
-		t.Fatalf("calls = %v, want %v", calls, wantCalls)
+		t.Errorf("calls = %v, want %v", calls, wantCalls)
 	}
 
 	result, err = client.CompleteActivation(context.Background(), result, ActivationResult{ICCID: "8900000000000000000"})
@@ -678,14 +678,14 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 		t.Fatalf("CompleteActivation() error = %v", err)
 	}
 	if result.State != StateDone {
-		t.Fatalf("State after CompleteActivation = %d, want %d", result.State, StateDone)
+		t.Errorf("State after CompleteActivation = %d, want %d", result.State, StateDone)
 	}
 	if _, ok := result.Event.(DoneEvent); !ok {
-		t.Fatalf("Event after CompleteActivation = %#v, want DoneEvent", result.Event)
+		t.Errorf("Event after CompleteActivation = %#v, want DoneEvent", result.Event)
 	}
 	wantCalls = append(wantCalls, OperationManage, OperationAcquireConf)
 	if !slices.Equal(calls, wantCalls) {
-		t.Fatalf("calls after CompleteActivation = %v, want %v", calls, wantCalls)
+		t.Errorf("calls after CompleteActivation = %v, want %v", calls, wantCalls)
 	}
 }
 
@@ -751,7 +751,7 @@ func TestActivateGoogleDelayedOperationResult(t *testing.T) {
 				t.Fatalf("activate() error = %v", err)
 			}
 			if result.State != tt.wantState {
-				t.Fatalf("State = %d, want %d", result.State, tt.wantState)
+				t.Errorf("State = %d, want %d", result.State, tt.wantState)
 			}
 			if tt.useSMDS {
 				if _, ok := result.Event.(SMDSDiscoveryEvent); !ok {
@@ -831,10 +831,10 @@ func TestActivateDoesNotRunTargetActivationBeforeDownload(t *testing.T) {
 		t.Fatalf("activate() error = %v", err)
 	}
 	if result.State != StateDone {
-		t.Fatalf("State = %d, want %d", result.State, StateDone)
+		t.Errorf("State = %d, want %d", result.State, StateDone)
 	}
 	if doer.calls != 1 {
-		t.Fatalf("HTTP calls = %d, want only transfer ManageSubscription", doer.calls)
+		t.Errorf("HTTP calls = %d, want only transfer ManageSubscription", doer.calls)
 	}
 }
 
@@ -849,9 +849,11 @@ func TestAcquireTemporaryTokenRequiresTransferTargets(t *testing.T) {
 
 	_, err := client.AcquireTemporaryToken(
 		context.Background(),
-		Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
-		Device{IMEI: "111111111111111"},
-		Device{IMEI: "222222222222222"},
+		SubscriptionTransferRequest{
+			Identity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+			Source:   Device{IMEI: "111111111111111"},
+			Target:   Device{IMEI: "222222222222222"},
+		},
 		AuthToken{Value: "auth"},
 	)
 	if err == nil {
@@ -870,9 +872,11 @@ func TestAcquireTemporaryTokenRequiresExpiry(t *testing.T) {
 
 	_, err := client.AcquireTemporaryToken(
 		context.Background(),
-		Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
-		Device{IMEI: "111111111111111"},
-		Device{IMEI: "222222222222222"},
+		SubscriptionTransferRequest{
+			Identity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+			Source:   Device{IMEI: "111111111111111"},
+			Target:   Device{IMEI: "222222222222222"},
+		},
 		AuthToken{Value: "auth"},
 	)
 	if err == nil {
@@ -885,7 +889,7 @@ func TestAuthenticateInitialEAPRequestUsesRelayAccept(t *testing.T) {
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			wantAccept := EAPRelayContentType + ", " + DefaultResponseAccept
 			if got := req.Header.Get("Accept"); got != wantAccept {
-				t.Fatalf("Accept = %q, want %q", got, wantAccept)
+				t.Errorf("Accept = %q, want %q", got, wantAccept)
 			}
 			if got := req.URL.Query().Get("EAP_ID"); got == "" {
 				t.Fatal("EAP_ID is empty")
@@ -905,7 +909,7 @@ func TestAuthenticateInitialEAPRequestUsesRelayAccept(t *testing.T) {
 		t.Fatalf("Authenticate() error = %v", err)
 	}
 	if token.Value != "auth" {
-		t.Fatalf("token = %q, want auth", token.Value)
+		t.Errorf("token = %q, want auth", token.Value)
 	}
 }
 
@@ -929,15 +933,15 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/><parm name="Validity" value="3600"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationCheck:
 					if got := query.Get("token"); got != "auth" {
-						t.Fatalf("CheckEligibility token = %q, want auth", got)
+						t.Errorf("CheckEligibility token = %q, want auth", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationManage:
 					if got := query.Get("token"); got != "checked-auth" {
-						t.Fatalf("ManageSubscription token = %q, want checked-auth", got)
+						t.Errorf("ManageSubscription token = %q, want checked-auth", got)
 					}
 					if got := query.Get("temporary_token"); got != "" {
-						t.Fatalf("ManageSubscription temporary_token = %q, want empty", got)
+						t.Errorf("ManageSubscription temporary_token = %q, want empty", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				default:
@@ -958,15 +962,15 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/><parm name="Validity" value="3600"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationCheck:
 					if got := query.Get("token"); got != "auth" {
-						t.Fatalf("CheckEligibility token = %q, want auth", got)
+						t.Errorf("CheckEligibility token = %q, want auth", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationManage:
 					if got := query.Get("token"); got != "checked-auth" {
-						t.Fatalf("ManageSubscription token = %q, want checked-auth", got)
+						t.Errorf("ManageSubscription token = %q, want checked-auth", got)
 					}
 					if got := query.Get("temporary_token"); got != "" {
-						t.Fatalf("ManageSubscription temporary_token = %q, want empty", got)
+						t.Errorf("ManageSubscription temporary_token = %q, want empty", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				default:
@@ -992,15 +996,15 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/><parm name="Validity" value="3600"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationCheck:
 					if got := query.Get("token"); got != "auth" {
-						t.Fatalf("CheckEligibility token = %q, want auth", got)
+						t.Errorf("CheckEligibility token = %q, want auth", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationManage:
 					if got := query.Get("token"); got != "checked-auth" {
-						t.Fatalf("ManageSubscription token = %q, want checked-auth", got)
+						t.Errorf("ManageSubscription token = %q, want checked-auth", got)
 					}
 					if got := query.Get("temporary_token"); got != "" {
-						t.Fatalf("ManageSubscription temporary_token = %q, want empty", got)
+						t.Errorf("ManageSubscription temporary_token = %q, want empty", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				default:
@@ -1021,17 +1025,17 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/><parm name="Validity" value="3600"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationCheck:
 					if got := query.Get("token"); got != "auth" {
-						t.Fatalf("CheckEligibility token = %q, want auth", got)
+						t.Errorf("CheckEligibility token = %q, want auth", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationTempToken:
 					if got := query.Get("token"); got != "checked-auth" {
-						t.Fatalf("AcquireTemporaryToken token = %q, want checked-auth", got)
+						t.Errorf("AcquireTemporaryToken token = %q, want checked-auth", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="temp-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 				case OperationManage:
 					if got := query.Get("temporary_token"); got != "tmp" {
-						t.Fatalf("ManageSubscription temporary_token = %q, want tmp", got)
+						t.Errorf("ManageSubscription temporary_token = %q, want tmp", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				default:
@@ -1062,12 +1066,12 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 							return response(511, ""), nil
 						}
 						if got := query.Get("token"); got != "fresh-auth" {
-							t.Fatalf("CheckEligibility retry token = %q, want fresh-auth", got)
+							t.Errorf("CheckEligibility retry token = %q, want fresh-auth", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationTempToken:
 						if got := query.Get("token"); got != "fresh-auth" {
-							t.Fatalf("AcquireTemporaryToken token = %q, want fresh-auth", got)
+							t.Errorf("AcquireTemporaryToken token = %q, want fresh-auth", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationManage:
@@ -1103,7 +1107,7 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 							return response(511, ""), nil
 						}
 						if got := query.Get("token"); got != "fresh-auth" {
-							t.Fatalf("AcquireTemporaryToken retry token = %q, want fresh-auth", got)
+							t.Errorf("AcquireTemporaryToken retry token = %q, want fresh-auth", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationManage:
@@ -1151,10 +1155,10 @@ func TestTransferRefreshesAuthAroundEligibility(t *testing.T) {
 				t.Fatalf("Transfer() error = %v", err)
 			}
 			if result.session.offer.AuthToken.Value != tt.wantAuth {
-				t.Fatalf("session AuthToken = %q, want %q", result.session.offer.AuthToken.Value, tt.wantAuth)
+				t.Errorf("session AuthToken = %q, want %q", result.session.offer.AuthToken.Value, tt.wantAuth)
 			}
 			if got := strings.Join(calls, ","); got != tt.wantCalls {
-				t.Fatalf("calls = %q, want %q", got, tt.wantCalls)
+				t.Errorf("calls = %q, want %q", got, tt.wantCalls)
 			}
 		})
 	}
@@ -1211,34 +1215,34 @@ func TestPostRelayRequestShape(t *testing.T) {
 			client := newClient(Config{
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					if req.Method != http.MethodPost {
-						t.Fatalf("method = %q, want POST", req.Method)
+						t.Errorf("method = %q, want POST", req.Method)
 					}
 					if got := req.URL.String(); got != "https://example.test/ts43" {
-						t.Fatalf("URL = %q, want https://example.test/ts43", got)
+						t.Errorf("URL = %q, want https://example.test/ts43", got)
 					}
 					body, err := io.ReadAll(req.Body)
 					if err != nil {
 						t.Fatalf("read body: %v", err)
 					}
 					if got := string(body); got != tt.wantBody {
-						t.Fatalf("body = %q, want %q", got, tt.wantBody)
+						t.Errorf("body = %q, want %q", got, tt.wantBody)
 					}
 					if got := req.Header.Get("Content-Type"); got != EAPRelayContentType {
-						t.Fatalf("Content-Type = %q, want %q", got, EAPRelayContentType)
+						t.Errorf("Content-Type = %q, want %q", got, EAPRelayContentType)
 					}
 					if got := req.Header.Get("Accept"); got != tt.wantAccept {
-						t.Fatalf("Accept = %q, want %q", got, tt.wantAccept)
+						t.Errorf("Accept = %q, want %q", got, tt.wantAccept)
 					}
 					if got := req.Header.Get("Cookie"); got != tt.wantCookie {
-						t.Fatalf("Cookie = %q, want %q", got, tt.wantCookie)
+						t.Errorf("Cookie = %q, want %q", got, tt.wantCookie)
 					}
 					if got := req.Header.Get("Accept-Language"); got != tt.wantLanguage {
-						t.Fatalf("Accept-Language = %q, want %q", got, tt.wantLanguage)
+						t.Errorf("Accept-Language = %q, want %q", got, tt.wantLanguage)
 					}
 					if got := req.Header.Get("User-Agent"); tt.wantUserAgent != "" && got != tt.wantUserAgent {
-						t.Fatalf("User-Agent = %q, want %q", got, tt.wantUserAgent)
+						t.Errorf("User-Agent = %q, want %q", got, tt.wantUserAgent)
 					} else if !strings.Contains(got, tt.wantUserAgentContaining) {
-						t.Fatalf("User-Agent = %q, want marker %q", got, tt.wantUserAgentContaining)
+						t.Errorf("User-Agent = %q, want marker %q", got, tt.wantUserAgentContaining)
 					}
 					return response(200, `<wap-provisioningdoc/>`), nil
 				}),
@@ -1273,18 +1277,18 @@ func TestActivateRefreshesTokenAfterManageHTTP511(t *testing.T) {
 			case OperationCheck:
 				eligibilityFetched = true
 				if got := query.Get("token"); got != "new-auth" {
-					t.Fatalf("CheckEligibility token = %q, want new-auth", got)
+					t.Errorf("CheckEligibility token = %q, want new-auth", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationTempToken:
 				tempFetched = true
 				if got := query.Get("token"); got != "new-auth" {
-					t.Fatalf("AcquireTemporaryToken token = %q, want new-auth", got)
+					t.Errorf("AcquireTemporaryToken token = %q, want new-auth", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="new-temp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationManage:
 				if got := query.Get("operation_type"); got != OperationTypeTransferSubscription.String() {
-					t.Fatalf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
+					t.Errorf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
 				}
 				manageTokens = append(manageTokens, query.Get("temporary_token"))
 				if query.Get("temporary_token") == "old-temp" {
@@ -1318,13 +1322,13 @@ func TestActivateRefreshesTokenAfterManageHTTP511(t *testing.T) {
 		t.Fatalf("activate() error = %v", err)
 	}
 	if !authFetched || !eligibilityFetched || !tempFetched {
-		t.Fatalf("refresh auth=%v eligibility=%v temp=%v, want all true", authFetched, eligibilityFetched, tempFetched)
+		t.Errorf("refresh auth=%v eligibility=%v temp=%v, want all true", authFetched, eligibilityFetched, tempFetched)
 	}
 	if got := strings.Join(manageTokens, ","); got != "old-temp,new-temp" {
-		t.Fatalf("ManageSubscription tokens = %q, want old-temp,new-temp", got)
+		t.Errorf("ManageSubscription tokens = %q, want old-temp,new-temp", got)
 	}
 	if result.State != StatePendingDelayedDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDelayedDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDelayedDownload)
 	}
 	if _, ok := result.Event.(DelayedDownloadEvent); !ok {
 		t.Fatalf("Event = %#v, want DelayedDownloadEvent", result.Event)
@@ -1344,13 +1348,13 @@ func TestPollConfigurationRetriesAfterHTTP511(t *testing.T) {
 			case OperationCheck:
 				eligibilityFetched = true
 				if got := query.Get("token"); got != "new-auth" {
-					t.Fatalf("CheckEligibility token = %q, want new-auth", got)
+					t.Errorf("CheckEligibility token = %q, want new-auth", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationTempToken:
 				tempFetched = true
 				if got := query.Get("token"); got != "new-auth" {
-					t.Fatalf("AcquireTemporaryToken token = %q, want new-auth", got)
+					t.Errorf("AcquireTemporaryToken token = %q, want new-auth", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="new-temp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationManage:
@@ -1385,13 +1389,13 @@ func TestPollConfigurationRetriesAfterHTTP511(t *testing.T) {
 		t.Fatalf("pollConfiguration() error = %v", err)
 	}
 	if !authFetched || !eligibilityFetched || !tempFetched {
-		t.Fatalf("refresh auth=%v eligibility=%v temp=%v, want all true", authFetched, eligibilityFetched, tempFetched)
+		t.Errorf("refresh auth=%v eligibility=%v temp=%v, want all true", authFetched, eligibilityFetched, tempFetched)
 	}
 	if got := strings.Join(acquireTokens, ","); got != "old-temp,new-temp" {
-		t.Fatalf("AcquireConfiguration tokens = %q, want old-temp,new-temp", got)
+		t.Errorf("AcquireConfiguration tokens = %q, want old-temp,new-temp", got)
 	}
 	if resp.Download.SMDPFQDN != "smdp.example" {
-		t.Fatalf("Download = %+v", resp.Download)
+		t.Errorf("Download = %+v", resp.Download)
 	}
 }
 
@@ -1425,7 +1429,7 @@ func TestActivateTypeTwoDelayedDownloadWithTemporaryToken(t *testing.T) {
 					case OperationCheck:
 						eligibilityFetched = true
 						if got := query.Get("token"); got != "new-auth" {
-							t.Fatalf("CheckEligibility token = %q, want new-auth", got)
+							t.Errorf("CheckEligibility token = %q, want new-auth", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationTempToken:
@@ -1434,43 +1438,43 @@ func TestActivateTypeTwoDelayedDownloadWithTemporaryToken(t *testing.T) {
 					case OperationManage:
 						manageTokens = append(manageTokens, query.Get("temporary_token"))
 						if got := query.Get("token"); got != "" {
-							t.Fatalf("ManageSubscription token = %q, want empty", got)
+							t.Errorf("ManageSubscription token = %q, want empty", got)
 						}
 						if got := query.Get("temporary_token"); got != "old-temp" {
-							t.Fatalf("ManageSubscription temporary_token = %q, want old-temp", got)
+							t.Errorf("ManageSubscription temporary_token = %q, want old-temp", got)
 						}
 						if got := query.Get("terminal_id"); got != "111111111111111" {
-							t.Fatalf("ManageSubscription terminal_id = %q, want source IMEI", got)
+							t.Errorf("ManageSubscription terminal_id = %q, want source IMEI", got)
 						}
 						if got := query.Get("terminal_eid"); got != "89049032000001000000000000000000" {
-							t.Fatalf("ManageSubscription terminal_eid = %q, want target EID", got)
+							t.Errorf("ManageSubscription terminal_eid = %q, want target EID", got)
 						}
 						if got := query.Get("target_terminal_id"); got != "" {
-							t.Fatalf("ManageSubscription target_terminal_id = %q, want empty", got)
+							t.Errorf("ManageSubscription target_terminal_id = %q, want empty", got)
 						}
 						if got := query.Get("old_terminal_id"); got != "111111111111111" {
-							t.Fatalf("ManageSubscription old_terminal_id = %q, want source IMEI", got)
+							t.Errorf("ManageSubscription old_terminal_id = %q, want source IMEI", got)
 						}
 						if got := query.Get("old_terminal_iccid"); got != "8910000000000000000" {
-							t.Fatalf("ManageSubscription old_terminal_iccid = %q, want source ICCID", got)
+							t.Errorf("ManageSubscription old_terminal_iccid = %q, want source ICCID", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="4"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationAcquireConf:
 						acquireTokens = append(acquireTokens, query.Get("temporary_token"))
 						if got := query.Get("token"); got != "" {
-							t.Fatalf("AcquireConfiguration token = %q, want empty", got)
+							t.Errorf("AcquireConfiguration token = %q, want empty", got)
 						}
 						if got := query.Get("temporary_token"); got != "old-temp" {
-							t.Fatalf("AcquireConfiguration temporary_token = %q, want old-temp", got)
+							t.Errorf("AcquireConfiguration temporary_token = %q, want old-temp", got)
 						}
 						if got := query.Get("terminal_id"); got != "222222222222222" {
-							t.Fatalf("AcquireConfiguration terminal_id = %q, want target IMEI", got)
+							t.Errorf("AcquireConfiguration terminal_id = %q, want target IMEI", got)
 						}
 						if got := query.Get("terminal_eid"); got != "89049032000001000000000000000000" {
-							t.Fatalf("AcquireConfiguration terminal_eid = %q, want target EID", got)
+							t.Errorf("AcquireConfiguration terminal_eid = %q, want target EID", got)
 						}
 						if got := query.Get("target_terminal_id"); got != "" {
-							t.Fatalf("AcquireConfiguration target_terminal_id = %q, want empty", got)
+							t.Errorf("AcquireConfiguration target_terminal_id = %q, want empty", got)
 						}
 						if query.Get("token") == "old-auth" {
 							return response(511, ""), nil
@@ -1501,16 +1505,16 @@ func TestActivateTypeTwoDelayedDownloadWithTemporaryToken(t *testing.T) {
 				t.Fatalf("activate() error = %v", err)
 			}
 			if authFetched || eligibilityFetched {
-				t.Fatalf("refresh auth=%v eligibility=%v, want no refresh", authFetched, eligibilityFetched)
+				t.Errorf("refresh auth=%v eligibility=%v, want no refresh", authFetched, eligibilityFetched)
 			}
 			if got := strings.Join(manageTokens, ","); got != "old-temp" {
-				t.Fatalf("ManageSubscription tokens = %q, want old-temp", got)
+				t.Errorf("ManageSubscription tokens = %q, want old-temp", got)
 			}
 			if len(acquireTokens) != 0 {
-				t.Fatalf("AcquireConfiguration tokens = %q, want none", strings.Join(acquireTokens, ","))
+				t.Errorf("AcquireConfiguration tokens = %q, want none", strings.Join(acquireTokens, ","))
 			}
 			if result.State != StatePendingDelayedDownload {
-				t.Fatalf("State = %d, want %d", result.State, StatePendingDelayedDownload)
+				t.Errorf("State = %d, want %d", result.State, StatePendingDelayedDownload)
 			}
 			if _, ok := result.Event.(DelayedDownloadEvent); !ok {
 				t.Fatalf("Event = %#v, want DelayedDownloadEvent", result.Event)
@@ -1589,7 +1593,7 @@ func TestActivateHandlesManageSubscriptionPendingResults(t *testing.T) {
 				t.Fatalf("activate() error = %v", err)
 			}
 			if result.State != tt.wantState {
-				t.Fatalf("State = %d, want %d", result.State, tt.wantState)
+				t.Errorf("State = %d, want %d", result.State, tt.wantState)
 			}
 			if !tt.wantEvent(result.Event) {
 				t.Fatalf("Event = %#v", result.Event)
@@ -1661,11 +1665,11 @@ func TestCompleteActivationPollsConfigurationAfterUpdateSubscription(t *testing.
 	var configurationFetched bool
 	sourceIdentity := Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"}
 	targetIdentity := Identity{ICCID: "8900000000000000000", IMSI: "311480987654321", MCC: "311", MNC: "480"}
-	sourceSamsungIMSI, err := terminalIMSIEAPBase64(sourceIdentity, DefaultEAPAkaRealm)
+	sourceSamsungIMSI, err := terminalIMSIEAPBase64(sourceIdentity, DefaultEAPAKARealm)
 	if err != nil {
 		t.Fatalf("terminalIMSIEAPBase64(source) error = %v", err)
 	}
-	targetSamsungIMSI, err := terminalIMSIEAPBase64(targetIdentity, DefaultEAPAkaRealm)
+	targetSamsungIMSI, err := terminalIMSIEAPBase64(targetIdentity, DefaultEAPAKARealm)
 	if err != nil {
 		t.Fatalf("terminalIMSIEAPBase64(target) error = %v", err)
 	}
@@ -1675,56 +1679,56 @@ func TestCompleteActivationPollsConfigurationAfterUpdateSubscription(t *testing.
 			switch Operation(query.Get("operation")) {
 			case "":
 				if got := query.Get("terminal_id"); got != "222222222222222" {
-					t.Fatalf("authentication terminal_id = %q, want target IMEI", got)
+					t.Errorf("authentication terminal_id = %q, want target IMEI", got)
 				}
-				wantEAPID, err := IMSIEAPIdentity(mccmnc(targetIdentity), targetIdentity.IMSI, DefaultEAPAkaRealm)
+				wantEAPID, err := IMSIEAPIdentity(mccMNC(targetIdentity), targetIdentity.IMSI, DefaultEAPAKARealm)
 				if err != nil {
 					t.Fatalf("IMSIEAPIdentity() error = %v", err)
 				}
 				if got := query.Get("EAP_ID"); got != wantEAPID {
-					t.Fatalf("authentication EAP_ID = %q, want target identity %q", got, wantEAPID)
+					t.Errorf("authentication EAP_ID = %q, want target identity %q", got, wantEAPID)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="new-auth"/><parm name="Validity" value="3600"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationCheck:
 				eligibilityFetched = true
 				if got := query.Get("token"); got != "new-auth" {
-					t.Fatalf("CheckEligibility token = %q, want new-auth", got)
+					t.Errorf("CheckEligibility token = %q, want new-auth", got)
 				}
 				if got := query.Get("IMSI"); got != targetSamsungIMSI {
-					t.Fatalf("CheckEligibility IMSI = %q, want target IMSI", got)
+					t.Errorf("CheckEligibility IMSI = %q, want target IMSI", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationManage:
 				if got := query.Get("operation_type"); got != OperationTypeUpdateSubscription.String() {
-					t.Fatalf("operation_type = %q, want %s", got, OperationTypeUpdateSubscription)
+					t.Errorf("operation_type = %q, want %s", got, OperationTypeUpdateSubscription)
 				}
 				if got := query.Get("terminal_id"); got != "222222222222222" {
-					t.Fatalf("terminal_id = %q, want target IMEI", got)
+					t.Errorf("terminal_id = %q, want target IMEI", got)
 				}
 				if got := query.Get("temporary_token"); got != "" {
-					t.Fatalf("temporary_token = %q, want empty", got)
+					t.Errorf("temporary_token = %q, want empty", got)
 				}
 				updateTokens = append(updateTokens, query.Get("token"))
 				if query.Get("token") == "old-auth" {
 					if got := query.Get("IMSI"); got != sourceSamsungIMSI {
-						t.Fatalf("initial UpdateSubscription IMSI = %q, want source IMSI", got)
+						t.Errorf("initial UpdateSubscription IMSI = %q, want source IMSI", got)
 					}
 					return response(511, ""), nil
 				}
 				if got := query.Get("IMSI"); got != targetSamsungIMSI {
-					t.Fatalf("retried UpdateSubscription IMSI = %q, want target IMSI", got)
+					t.Errorf("retried UpdateSubscription IMSI = %q, want target IMSI", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 			case OperationAcquireConf:
 				configurationFetched = true
 				if got := query.Get("IMSI"); got != targetSamsungIMSI {
-					t.Fatalf("AcquireConfiguration IMSI = %q, want target IMSI", got)
+					t.Errorf("AcquireConfiguration IMSI = %q, want target IMSI", got)
 				}
 				if got := query.Get("terminal_iccid"); got != "8900000000000000000" {
-					t.Fatalf("terminal_iccid = %q, want installed target ICCID", got)
+					t.Errorf("terminal_iccid = %q, want installed target ICCID", got)
 				}
 				if got := query.Get("target_terminal_iccid"); got != "8900000000000000000" {
-					t.Fatalf("target_terminal_iccid = %q, want installed target ICCID", got)
+					t.Errorf("target_terminal_iccid = %q, want installed target ICCID", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 			default:
@@ -1763,7 +1767,7 @@ func TestCompleteActivationPollsConfigurationAfterUpdateSubscription(t *testing.
 		t.Fatalf("CompleteActivation() error = %v", err)
 	}
 	if got := strings.Join(updateTokens, ","); got != "old-auth,new-auth" {
-		t.Fatalf("UpdateSubscription tokens = %q, want old-auth,new-auth", got)
+		t.Errorf("UpdateSubscription tokens = %q, want old-auth,new-auth", got)
 	}
 	if !eligibilityFetched {
 		t.Fatal("CheckEligibility was not called during token refresh")
@@ -1772,10 +1776,10 @@ func TestCompleteActivationPollsConfigurationAfterUpdateSubscription(t *testing.
 		t.Fatal("AcquireConfiguration was not called after subscription update")
 	}
 	if got := result.DownloadConfig.ProfileICCID; got != targetIdentity.ICCID {
-		t.Fatalf("DownloadConfig.ProfileICCID = %q, want active target ICCID %q", got, targetIdentity.ICCID)
+		t.Errorf("DownloadConfig.ProfileICCID = %q, want active target ICCID %q", got, targetIdentity.ICCID)
 	}
 	if result.State != StateDone {
-		t.Fatalf("State = %d, want %d", result.State, StateDone)
+		t.Errorf("State = %d, want %d", result.State, StateDone)
 	}
 }
 
@@ -1817,14 +1821,14 @@ func TestCompleteActivationReturnsDismissEvent(t *testing.T) {
 		t.Fatalf("CompleteActivation() error = %v", err)
 	}
 	if result.State != StateDismissed {
-		t.Fatalf("State = %d, want %d", result.State, StateDismissed)
+		t.Errorf("State = %d, want %d", result.State, StateDismissed)
 	}
 	event, ok := result.Event.(DismissEvent)
 	if !ok {
 		t.Fatalf("Event = %#v", result.Event)
 	}
 	if event.SubscriptionResult != SubscriptionResultDismiss {
-		t.Fatalf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDismiss)
+		t.Errorf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDismiss)
 	}
 }
 
@@ -1870,17 +1874,17 @@ func TestCompleteActivationReturnsPendingActivationForDelayedDownload(t *testing
 		t.Fatal("activation configuration poll was called")
 	}
 	if result.State != StatePendingActivation {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingActivation)
+		t.Errorf("State = %d, want %d", result.State, StatePendingActivation)
 	}
 	event, ok := result.Event.(ActivationPendingEvent)
 	if !ok {
 		t.Fatalf("Event = %#v", result.Event)
 	}
 	if event.ICCID != "8900000000000000000" {
-		t.Fatalf("Event.ICCID = %q, want %q", event.ICCID, "8900000000000000000")
+		t.Errorf("Event.ICCID = %q, want %q", event.ICCID, "8900000000000000000")
 	}
 	if event.SubscriptionResult != SubscriptionResultDelayedDownload {
-		t.Fatalf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDelayedDownload)
+		t.Errorf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDelayedDownload)
 	}
 }
 
@@ -1925,11 +1929,13 @@ func TestManageSubscriptionAcceptsActionableResults(t *testing.T) {
 			})
 			_, err := client.ManageSubscription(
 				context.Background(),
-				Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
-				Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
-				Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+				ManageSubscriptionRequest{
+					Identity:  Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+					Source:    Device{IMEI: "111111111111111", ICCID: "8910000000000000000"},
+					Target:    Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+					UserInput: UserInputResult{Button: MessageButtonUnknown},
+				},
 				AuthToken{Value: "tmp"},
-				UserInputResult{Button: MessageButtonUnknown},
 			)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("ManageSubscription() error = %v, wantErr %v", err, tt.wantErr)
@@ -1967,7 +1973,7 @@ func TestPollConfigurationUsesServerPollingInterval(t *testing.T) {
 		t.Fatalf("pollConfiguration() error = %v", err)
 	}
 	if len(sleeps) != 1 || sleeps[0] != 2*time.Minute {
-		t.Fatalf("sleeps = %v, want [2m]", sleeps)
+		t.Errorf("sleeps = %v, want [2m]", sleeps)
 	}
 }
 
@@ -2000,7 +2006,7 @@ func TestPollConfigurationUsesPollingIntervalUnit(t *testing.T) {
 		t.Fatalf("pollConfiguration() error = %v", err)
 	}
 	if len(sleeps) != 1 || sleeps[0] != 2*time.Second {
-		t.Fatalf("sleeps = %v, want [2s]", sleeps)
+		t.Errorf("sleeps = %v, want [2s]", sleeps)
 	}
 }
 
@@ -2033,7 +2039,7 @@ func TestPollConfigurationUsesConfiguredIntervalWhenServerOmitsPollingInterval(t
 		t.Fatalf("pollConfiguration() error = %v", err)
 	}
 	if len(sleeps) != 1 || sleeps[0] != 3*time.Second {
-		t.Fatalf("sleeps = %v, want [3s]", sleeps)
+		t.Errorf("sleeps = %v, want [3s]", sleeps)
 	}
 }
 
@@ -2090,29 +2096,29 @@ func TestActivateReturnsDelayedDownloadEventWhenServerDelaysDownload(t *testing.
 		t.Fatalf("activate() error = %v", err)
 	}
 	if result.State != StatePendingDelayedDownload {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingDelayedDownload)
+		t.Errorf("State = %d, want %d", result.State, StatePendingDelayedDownload)
 	}
 	event, ok := result.Event.(DelayedDownloadEvent)
 	if !ok {
 		t.Fatalf("Event = %#v", result.Event)
 	}
 	if event.SourceICCID != "8910000000000000000" {
-		t.Fatalf("Event.SourceICCID = %q, want %q", event.SourceICCID, "8910000000000000000")
+		t.Errorf("Event.SourceICCID = %q, want %q", event.SourceICCID, "8910000000000000000")
 	}
 	if event.TargetEID != "89049032000001000000000000000000" {
-		t.Fatalf("Event.TargetEID = %q, want %q", event.TargetEID, "89049032000001000000000000000000")
+		t.Errorf("Event.TargetEID = %q, want %q", event.TargetEID, "89049032000001000000000000000000")
 	}
 	if event.TargetIMEI != "222222222222222" {
-		t.Fatalf("Event.TargetIMEI = %q, want %q", event.TargetIMEI, "222222222222222")
+		t.Errorf("Event.TargetIMEI = %q, want %q", event.TargetIMEI, "222222222222222")
 	}
 	if event.SubscriptionResult != SubscriptionResultDelayedDownload {
-		t.Fatalf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDelayedDownload)
+		t.Errorf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDelayedDownload)
 	}
 	if result.DownloadConfig != (DownloadConfig{}) {
-		t.Fatalf("DownloadConfig = %+v, want empty before activation", result.DownloadConfig)
+		t.Errorf("DownloadConfig = %+v, want empty before activation", result.DownloadConfig)
 	}
 	if doer.calls != 1 {
-		t.Fatalf("HTTP calls = %d, want 1", doer.calls)
+		t.Errorf("HTTP calls = %d, want 1", doer.calls)
 	}
 }
 
@@ -2130,7 +2136,7 @@ func TestApplyDownloadConfigurationRejectsMissingDownloadInfo(t *testing.T) {
 		t.Fatalf("applyDownloadConfiguration() error = %v, want errDownloadInfoMissing", err)
 	}
 	if result == nil || result.State == StatePendingDownload {
-		t.Fatalf("result = %+v, should not enter download", result)
+		t.Errorf("result = %+v, should not enter download", result)
 	}
 }
 
@@ -2171,23 +2177,23 @@ func TestActivateReturnsSMDSDiscoveryEventForDelayedDownload(t *testing.T) {
 		t.Fatal("acquire configuration was called")
 	}
 	if result.State != StatePendingSMDSDiscovery {
-		t.Fatalf("State = %d, want %d", result.State, StatePendingSMDSDiscovery)
+		t.Errorf("State = %d, want %d", result.State, StatePendingSMDSDiscovery)
 	}
 	event, ok := result.Event.(SMDSDiscoveryEvent)
 	if !ok {
 		t.Fatalf("Event = %#v", result.Event)
 	}
 	if event.SourceICCID != "8910000000000000000" {
-		t.Fatalf("Event.SourceICCID = %q, want %q", event.SourceICCID, "8910000000000000000")
+		t.Errorf("Event.SourceICCID = %q, want %q", event.SourceICCID, "8910000000000000000")
 	}
 	if event.TargetEID != "89049032000001000000000000000000" {
-		t.Fatalf("Event.TargetEID = %q, want %q", event.TargetEID, "89049032000001000000000000000000")
+		t.Errorf("Event.TargetEID = %q, want %q", event.TargetEID, "89049032000001000000000000000000")
 	}
 	if event.TargetIMEI != "222222222222222" {
-		t.Fatalf("Event.TargetIMEI = %q, want %q", event.TargetIMEI, "222222222222222")
+		t.Errorf("Event.TargetIMEI = %q, want %q", event.TargetIMEI, "222222222222222")
 	}
 	if event.SubscriptionResult != SubscriptionResultDelayedDownload {
-		t.Fatalf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDelayedDownload)
+		t.Errorf("Event.SubscriptionResult = %d, want %d", event.SubscriptionResult, SubscriptionResultDelayedDownload)
 	}
 }
 
@@ -2226,7 +2232,7 @@ func TestPollConfigurationHandlesDeactivatedServiceStatus(t *testing.T) {
 				t.Fatal("pollConfiguration() error = nil, want deactivated error")
 			}
 			if resp == nil || (resp.ServiceStatus != ServiceStatusDeactivated && resp.ServiceStatus != ServiceStatusDeactivatedNoReuse) {
-				t.Fatalf("ServiceStatus = %v", resp)
+				t.Errorf("ServiceStatus = %v", resp)
 			}
 		})
 	}
@@ -2288,13 +2294,13 @@ func TestManageSubscriptionOldTerminalIDGating(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("old_terminal_id") != ""; got != tt.wantOld {
-						t.Fatalf("old_terminal_id present = %v, want %v", got, tt.wantOld)
+						t.Errorf("old_terminal_id present = %v, want %v", got, tt.wantOld)
 					}
 					if got := query.Get("old_terminal_iccid") != ""; got != tt.wantOld {
-						t.Fatalf("old_terminal_iccid present = %v, want %v", got, tt.wantOld)
+						t.Errorf("old_terminal_iccid present = %v, want %v", got, tt.wantOld)
 					}
 					if got := query.Get("old_terminal_entitlement_protocol"); got != tt.wantProto {
-						t.Fatalf("old_terminal_entitlement_protocol = %q, want %q", got, tt.wantProto)
+						t.Errorf("old_terminal_entitlement_protocol = %q, want %q", got, tt.wantProto)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				}),
@@ -2334,34 +2340,34 @@ func TestAcquireConfigurationSourceCredentialShape(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("operation"); got != OperationAcquireConf.String() {
-						t.Fatalf("operation = %q, want %s", got, OperationAcquireConf)
+						t.Errorf("operation = %q, want %s", got, OperationAcquireConf)
 					}
 					if got := query.Get("operation_type"); got != "" {
-						t.Fatalf("operation_type = %q, want empty", got)
+						t.Errorf("operation_type = %q, want empty", got)
 					}
 					if got := query.Get("terminal_id"); got != "111111111111111" {
-						t.Fatalf("terminal_id = %q, want source IMEI", got)
+						t.Errorf("terminal_id = %q, want source IMEI", got)
 					}
 					if got := query.Get("terminal_eid"); got != "" {
-						t.Fatalf("terminal_eid = %q, want empty", got)
+						t.Errorf("terminal_eid = %q, want empty", got)
 					}
 					if got := query.Get("terminal_iccid"); got != "" {
-						t.Fatalf("terminal_iccid = %q, want empty", got)
+						t.Errorf("terminal_iccid = %q, want empty", got)
 					}
 					if got := query.Get("target_terminal_id"); got != "222222222222222" {
-						t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+						t.Errorf("target_terminal_id = %q, want target IMEI", got)
 					}
 					if got := query.Get("target_terminal_eid"); got != "89049032000001000000000000000000" {
-						t.Fatalf("target_terminal_eid = %q, want target EID", got)
+						t.Errorf("target_terminal_eid = %q, want target EID", got)
 					}
 					if got := query.Get("old_terminal_entitlement_protocol"); got != "1" {
-						t.Fatalf("old_terminal_entitlement_protocol = %q, want 1", got)
+						t.Errorf("old_terminal_entitlement_protocol = %q, want 1", got)
 					}
 					if got := query.Get("old_terminal_id"); got != "" {
-						t.Fatalf("old_terminal_id = %q, want empty", got)
+						t.Errorf("old_terminal_id = %q, want empty", got)
 					}
 					if got := query.Get("old_terminal_iccid"); got != "" {
-						t.Fatalf("old_terminal_iccid = %q, want empty", got)
+						t.Errorf("old_terminal_iccid = %q, want empty", got)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 				}),
@@ -2406,7 +2412,7 @@ func TestSamsungTokenOperationRequestFields(t *testing.T) {
 			name:      "CheckEligibility",
 			operation: OperationCheck,
 			run: func(ctx context.Context, client *Client) error {
-				_, err := client.CheckEligibility(ctx, identity, source, AuthToken{Value: "auth"}, target)
+				_, err := client.CheckEligibility(ctx, SubscriptionTransferRequest{Identity: identity, Source: source, Target: target}, AuthToken{Value: "auth"})
 				return err
 			},
 		},
@@ -2414,7 +2420,7 @@ func TestSamsungTokenOperationRequestFields(t *testing.T) {
 			name:      "AcquireTemporaryToken",
 			operation: OperationTempToken,
 			run: func(ctx context.Context, client *Client) error {
-				_, err := client.AcquireTemporaryToken(ctx, identity, source, target, AuthToken{Value: "auth"})
+				_, err := client.AcquireTemporaryToken(ctx, SubscriptionTransferRequest{Identity: identity, Source: source, Target: target}, AuthToken{Value: "auth"})
 				return err
 			},
 		},
@@ -2425,48 +2431,48 @@ func TestSamsungTokenOperationRequestFields(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("operation"); got != tt.operation.String() {
-						t.Fatalf("operation = %q, want %s", got, tt.operation)
+						t.Errorf("operation = %q, want %s", got, tt.operation)
 					}
 					if got := query.Get("token"); got != "auth" {
-						t.Fatalf("token = %q, want auth", got)
+						t.Errorf("token = %q, want auth", got)
 					}
 					if got := query.Get("terminal_id"); got != source.IMEI {
-						t.Fatalf("terminal_id = %q, want source IMEI", got)
+						t.Errorf("terminal_id = %q, want source IMEI", got)
 					}
 					if got := query.Get("terminal_iccid"); got != source.ICCID {
-						t.Fatalf("terminal_iccid = %q, want source ICCID", got)
+						t.Errorf("terminal_iccid = %q, want source ICCID", got)
 					}
 					if got := query.Get("target_terminal_iccid"); got != "" {
-						t.Fatalf("target_terminal_iccid = %q, want empty", got)
+						t.Errorf("target_terminal_iccid = %q, want empty", got)
 					}
 					if got := query.Get("target_terminal_eid"); got != "" {
-						t.Fatalf("target_terminal_eid = %q, want empty", got)
+						t.Errorf("target_terminal_eid = %q, want empty", got)
 					}
 					if got := query.Get("target_terminal_entitlement_protocol"); got != "" {
-						t.Fatalf("target_terminal_entitlement_protocol = %q, want empty", got)
+						t.Errorf("target_terminal_entitlement_protocol = %q, want empty", got)
 					}
 					switch tt.operation {
 					case OperationCheck:
-						want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)
+						want, err := terminalIMSIEAPBase64(identity, DefaultEAPAKARealm)
 						if err != nil {
 							t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
 						}
 						if got := query.Get("IMSI"); got != want {
-							t.Fatalf("IMSI = %q, want %q", got, want)
+							t.Errorf("IMSI = %q, want %q", got, want)
 						}
 						if got := query.Get("target_terminal_id"); got != target.IMEI {
-							t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+							t.Errorf("target_terminal_id = %q, want target IMEI", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationTempToken:
 						if got := query.Get("IMSI"); got != "" {
-							t.Fatalf("IMSI = %q, want empty", got)
+							t.Errorf("IMSI = %q, want empty", got)
 						}
 						if got := query.Get("target_terminal_id"); got != "" {
-							t.Fatalf("target_terminal_id = %q, want empty", got)
+							t.Errorf("target_terminal_id = %q, want empty", got)
 						}
 						if got := query.Get("operation_targets"); got != "ManageSubscription,AcquireConfiguration" {
-							t.Fatalf("operation_targets = %q, want ManageSubscription,AcquireConfiguration", got)
+							t.Errorf("operation_targets = %q, want ManageSubscription,AcquireConfiguration", got)
 						}
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 					default:
@@ -2527,19 +2533,19 @@ func TestSamsungSourceCredentialRequestFields(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("operation"); got != tt.operation.String() {
-						t.Fatalf("operation = %q, want %s", got, tt.operation)
+						t.Errorf("operation = %q, want %s", got, tt.operation)
 					}
 					if got := query.Get("terminal_id"); got != source.IMEI {
-						t.Fatalf("terminal_id = %q, want source IMEI", got)
+						t.Errorf("terminal_id = %q, want source IMEI", got)
 					}
 					if got := query.Get("terminal_iccid"); got != source.ICCID {
-						t.Fatalf("terminal_iccid = %q, want source ICCID", got)
+						t.Errorf("terminal_iccid = %q, want source ICCID", got)
 					}
 					if got := query.Get("target_terminal_id"); got != target.IMEI {
-						t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+						t.Errorf("target_terminal_id = %q, want target IMEI", got)
 					}
 					if got := query.Get("target_terminal_iccid"); got != target.ICCID {
-						t.Fatalf("target_terminal_iccid = %q, want target ICCID", got)
+						t.Errorf("target_terminal_iccid = %q, want target ICCID", got)
 					}
 					wantTerminalEID := ""
 					wantTargetEID := target.EID
@@ -2548,23 +2554,23 @@ func TestSamsungSourceCredentialRequestFields(t *testing.T) {
 						wantTargetEID = ""
 					}
 					if got := query.Get("terminal_eid"); got != wantTerminalEID {
-						t.Fatalf("terminal_eid = %q, want %q", got, wantTerminalEID)
+						t.Errorf("terminal_eid = %q, want %q", got, wantTerminalEID)
 					}
 					if got := query.Get("target_terminal_eid"); got != wantTargetEID {
-						t.Fatalf("target_terminal_eid = %q, want %q", got, wantTargetEID)
+						t.Errorf("target_terminal_eid = %q, want %q", got, wantTargetEID)
 					}
 					if got := query.Get("old_terminal_entitlement_protocol"); got != "" {
-						t.Fatalf("old_terminal_entitlement_protocol = %q, want empty", got)
+						t.Errorf("old_terminal_entitlement_protocol = %q, want empty", got)
 					}
-					want, err := terminalIMSIEAPBase64(identity, DefaultEAPAkaRealm)
+					want, err := terminalIMSIEAPBase64(identity, DefaultEAPAKARealm)
 					if err != nil {
 						t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
 					}
 					if got := query.Get("IMSI"); got != want {
-						t.Fatalf("IMSI = %q, want %q", got, want)
+						t.Errorf("IMSI = %q, want %q", got, want)
 					}
 					if got := query.Get("terminal_imsieapbase64"); got != "" {
-						t.Fatalf("terminal_imsieapbase64 = %q, want empty", got)
+						t.Errorf("terminal_imsieapbase64 = %q, want empty", got)
 					}
 					if tt.operation == OperationManage {
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
@@ -2628,13 +2634,13 @@ func TestSamsungAcquireConfigurationEIDPlacement(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("operation"); got != OperationAcquireConf.String() {
-						t.Fatalf("operation = %q, want %s", got, OperationAcquireConf)
+						t.Errorf("operation = %q, want %s", got, OperationAcquireConf)
 					}
 					if got := query.Get("terminal_eid"); got != tt.wantTerminal {
-						t.Fatalf("terminal_eid = %q, want %q", got, tt.wantTerminal)
+						t.Errorf("terminal_eid = %q, want %q", got, tt.wantTerminal)
 					}
 					if got := query.Get("target_terminal_eid"); got != tt.wantTargetEID {
-						t.Fatalf("target_terminal_eid = %q, want %q", got, tt.wantTargetEID)
+						t.Errorf("target_terminal_eid = %q, want %q", got, tt.wantTargetEID)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 				}),
@@ -2697,13 +2703,13 @@ func TestSamsungTemporaryTokenTransferSendsBasicTargetFields(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("operation"); got != tt.operation.String() {
-						t.Fatalf("operation = %q, want %s", got, tt.operation)
+						t.Errorf("operation = %q, want %s", got, tt.operation)
 					}
 					if got := query.Get("target_terminal_id"); got != target.IMEI {
-						t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+						t.Errorf("target_terminal_id = %q, want target IMEI", got)
 					}
 					if got := query.Get("target_terminal_iccid"); got != target.ICCID {
-						t.Fatalf("target_terminal_iccid = %q, want target ICCID", got)
+						t.Errorf("target_terminal_iccid = %q, want target ICCID", got)
 					}
 					if tt.operation == OperationManage {
 						return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
@@ -2739,19 +2745,19 @@ func TestSamsungDigitalizedTempToken4FFManageClearsTerminalICCIDAndIMSI(t *testi
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 			query := req.URL.Query()
 			if got := query.Get("operation"); got != OperationManage.String() {
-				t.Fatalf("operation = %q, want %s", got, OperationManage)
+				t.Errorf("operation = %q, want %s", got, OperationManage)
 			}
 			if got := query.Get("operation_type"); got != OperationTypeTransferSubscription.String() {
-				t.Fatalf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
+				t.Errorf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
 			}
 			if got := query.Get("terminal_iccid"); got != "" {
-				t.Fatalf("terminal_iccid = %q, want empty", got)
+				t.Errorf("terminal_iccid = %q, want empty", got)
 			}
 			if got := query.Get("IMSI"); got != "" {
-				t.Fatalf("IMSI = %q, want empty", got)
+				t.Errorf("IMSI = %q, want empty", got)
 			}
 			if got := query.Get("target_terminal_id"); got != target.IMEI {
-				t.Fatalf("target_terminal_id = %q, want target IMEI", got)
+				t.Errorf("target_terminal_id = %q, want target IMEI", got)
 			}
 			return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 		}),
@@ -2824,24 +2830,24 @@ func TestTransferSamsungDigitalizedTemporaryTokenIntent(t *testing.T) {
 						return response(http.StatusOK, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationTempToken:
 						if got := query.Get("token"); got != "checked-auth" {
-							t.Fatalf("AcquireTemporaryToken token = %q, want checked-auth", got)
+							t.Errorf("AcquireTemporaryToken token = %q, want checked-auth", got)
 						}
 						return response(http.StatusOK, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="temporary"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 					case OperationManage:
 						if got := query.Get("terminal_id"); got != "222222222222222" {
-							t.Fatalf("ManageSubscription terminal_id = %q, want target IMEI", got)
+							t.Errorf("ManageSubscription terminal_id = %q, want target IMEI", got)
 						}
 						if got := query.Get("temporary_token"); got != "temporary" {
-							t.Fatalf("ManageSubscription temporary_token = %q, want temporary", got)
+							t.Errorf("ManageSubscription temporary_token = %q, want temporary", got)
 						}
 						if got := query.Get("token"); got != "" {
-							t.Fatalf("ManageSubscription token = %q, want empty", got)
+							t.Errorf("ManageSubscription token = %q, want empty", got)
 						}
 						if got := query.Get("IMSI"); got != "" {
-							t.Fatalf("ManageSubscription IMSI = %q, want empty", got)
+							t.Errorf("ManageSubscription IMSI = %q, want empty", got)
 						}
 						if got := query.Get("terminal_iccid"); got != "" {
-							t.Fatalf("ManageSubscription terminal_iccid = %q, want empty", got)
+							t.Errorf("ManageSubscription terminal_iccid = %q, want empty", got)
 						}
 						return response(http.StatusOK, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 					default:
@@ -2860,7 +2866,7 @@ func TestTransferSamsungDigitalizedTemporaryTokenIntent(t *testing.T) {
 				t.Fatalf("New() error = %v", err)
 			}
 			if got := client.transfer.entitlement.TransferType; got != tt.wantTransferType {
-				t.Fatalf("TransferType = %v, want %v", got, tt.wantTransferType)
+				t.Errorf("TransferType = %v, want %v", got, tt.wantTransferType)
 			}
 
 			result, err := client.Transfer(context.Background())
@@ -2868,11 +2874,11 @@ func TestTransferSamsungDigitalizedTemporaryTokenIntent(t *testing.T) {
 				t.Fatalf("Transfer() error = %v", err)
 			}
 			if result.State != StateDone {
-				t.Fatalf("State = %d, want %d", result.State, StateDone)
+				t.Errorf("State = %d, want %d", result.State, StateDone)
 			}
 			wantCalls := []Operation{"", OperationCheck, OperationTempToken, OperationManage}
 			if !slices.Equal(calls, wantCalls) {
-				t.Fatalf("calls = %v, want %v", calls, wantCalls)
+				t.Errorf("calls = %v, want %v", calls, wantCalls)
 			}
 		})
 	}
@@ -2928,7 +2934,7 @@ func TestSamsungDigitalizedTempToken4FF(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := samsungDigitalizedTempToken4FF(tt.entitlement); got != tt.want {
-				t.Fatalf("samsungDigitalizedTempToken4FF() = %v, want %v", got, tt.want)
+				t.Errorf("samsungDigitalizedTempToken4FF() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -2980,10 +2986,10 @@ func TestTransferRequestAuthMode(t *testing.T) {
 			}))
 
 			if req.AuthenticationToken != tt.wantAuth {
-				t.Fatalf("AuthenticationToken = %q, want %q", req.AuthenticationToken, tt.wantAuth)
+				t.Errorf("AuthenticationToken = %q, want %q", req.AuthenticationToken, tt.wantAuth)
 			}
 			if req.TemporaryToken != tt.wantTemp {
-				t.Fatalf("TemporaryToken = %q, want %q", req.TemporaryToken, tt.wantTemp)
+				t.Errorf("TemporaryToken = %q, want %q", req.TemporaryToken, tt.wantTemp)
 			}
 		})
 	}
@@ -3057,7 +3063,7 @@ func TestSelectedTransferType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := selectedTransferType(tt.entitlement); got != tt.want {
-				t.Fatalf("selectedTransferType() = %v, want %v", got, tt.want)
+				t.Errorf("selectedTransferType() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -3137,7 +3143,7 @@ func TestSamsungManageSubscriptionOperationType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := samsungManageSubscriptionOperationType(tt.entitlement); got != tt.want {
-				t.Fatalf("samsungManageSubscriptionOperationType() = %v, want %v", got, tt.want)
+				t.Errorf("samsungManageSubscriptionOperationType() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -3165,7 +3171,7 @@ func TestGoogleManageSubscriptionOperationType(t *testing.T) {
 				UserInputResult{Button: MessageButtonUnknown},
 			)
 			if op.OperationType != OperationTypeTransferSubscription {
-				t.Fatalf("OperationType = %v, want %v", op.OperationType, OperationTypeTransferSubscription)
+				t.Errorf("OperationType = %v, want %v", op.OperationType, OperationTypeTransferSubscription)
 			}
 		})
 	}
@@ -3197,7 +3203,7 @@ func TestSubscriptionUpdateAcceptedByChannel(t *testing.T) {
 				},
 			)
 			if got != tt.want {
-				t.Fatalf("subscriptionUpdateAccepted() = %v, want %v", got, tt.want)
+				t.Errorf("subscriptionUpdateAccepted() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -3218,7 +3224,7 @@ func TestIsSourceCredentialTransferType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsSourceCredentialTransferType(tt.t); got != tt.want {
-				t.Fatalf("IsSourceCredentialTransferType() = %v, want %v", got, tt.want)
+				t.Errorf("IsSourceCredentialTransferType() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -3243,7 +3249,7 @@ func TestGoogleIncludeTargetTerminalIdentity(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := googleIncludeTargetTerminalIdentity(tt.entitlement); got != tt.want {
-				t.Fatalf("googleIncludeTargetTerminalIdentity() = %v, want %v", got, tt.want)
+				t.Errorf("googleIncludeTargetTerminalIdentity() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -3266,24 +3272,24 @@ func TestManageSubscriptionTargetIdentityGating(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("target_terminal_id") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_id present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_id present = %v, want %v", got, tt.wantTarget)
 					}
 					if got := query.Get("target_terminal_eid") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_eid present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_eid present = %v, want %v", got, tt.wantTarget)
 					}
 					wantModel := ""
 					if tt.wantTarget && !IsSourceCredentialTransferType(tt.entitlement.TransferType) {
 						wantModel = "Pixel"
 					}
 					if got := query.Get("target_terminal_model"); got != wantModel {
-						t.Fatalf("target_terminal_model = %q, want %q", got, wantModel)
+						t.Errorf("target_terminal_model = %q, want %q", got, wantModel)
 					}
 					wantOldICCID := ""
 					if googleIncludeOldTerminalIDs(tt.entitlement) {
 						wantOldICCID = "8910000000000000000"
 					}
 					if got := query.Get("old_terminal_iccid"); got != wantOldICCID {
-						t.Fatalf("old_terminal_iccid = %q, want %q", got, wantOldICCID)
+						t.Errorf("old_terminal_iccid = %q, want %q", got, wantOldICCID)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
 				}),
@@ -3326,13 +3332,13 @@ func TestCheckEligibilityTargetIdentityGating(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("target_terminal_id") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_id present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_id present = %v, want %v", got, tt.wantTarget)
 					}
 					if got := query.Get("target_terminal_eid") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_eid present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_eid present = %v, want %v", got, tt.wantTarget)
 					}
 					if got := query.Get("target_terminal_model") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_model present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_model present = %v, want %v", got, tt.wantTarget)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="checked-auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="PrimaryAppEligibility" value="1"/></characteristic></wap-provisioningdoc>`), nil
 				}),
@@ -3342,10 +3348,12 @@ func TestCheckEligibilityTargetIdentityGating(t *testing.T) {
 
 			_, err := client.CheckEligibility(
 				context.Background(),
-				Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
-				Device{IMEI: "111111111111111"},
+				SubscriptionTransferRequest{
+					Identity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+					Source:   Device{IMEI: "111111111111111"},
+					Target:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000", Model: "Pixel"},
+				},
 				AuthToken{Value: "auth"},
-				Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000", Model: "Pixel"},
 			)
 			if err != nil {
 				t.Fatalf("CheckEligibility() error = %v", err)
@@ -3370,13 +3378,13 @@ func TestAcquireTemporaryTokenTargetIdentityGating(t *testing.T) {
 				HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					query := req.URL.Query()
 					if got := query.Get("target_terminal_id") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_id present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_id present = %v, want %v", got, tt.wantTarget)
 					}
 					if got := query.Get("target_terminal_eid") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_eid present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_eid present = %v, want %v", got, tt.wantTarget)
 					}
 					if got := query.Get("target_terminal_model") != ""; got != tt.wantTarget {
-						t.Fatalf("target_terminal_model present = %v, want %v", got, tt.wantTarget)
+						t.Errorf("target_terminal_model present = %v, want %v", got, tt.wantTarget)
 					}
 					return response(200, `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="auth"/></characteristic><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="TemporaryToken" value="tmp"/><parm name="TemporaryTokenExpiry" value="2030-01-01T00:00:00Z"/><parm name="OperationTargets" value="ManageSubscription,AcquireConfiguration"/></characteristic></wap-provisioningdoc>`), nil
 				}),
@@ -3386,16 +3394,18 @@ func TestAcquireTemporaryTokenTargetIdentityGating(t *testing.T) {
 
 			tokens, err := client.AcquireTemporaryToken(
 				context.Background(),
-				Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
-				Device{IMEI: "111111111111111"},
-				Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000", Model: "Pixel"},
+				SubscriptionTransferRequest{
+					Identity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+					Source:   Device{IMEI: "111111111111111"},
+					Target:   Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000", Model: "Pixel"},
+				},
 				AuthToken{Value: "auth"},
 			)
 			if err != nil {
 				t.Fatalf("AcquireTemporaryToken() error = %v", err)
 			}
 			if !slices.Equal(tokens.Temporary.Targets, []Operation{OperationManage, OperationAcquireConf}) {
-				t.Fatalf("Temporary.Targets = %v, want ManageSubscription and AcquireConfiguration", tokens.Temporary.Targets)
+				t.Errorf("Temporary.Targets = %v, want ManageSubscription and AcquireConfiguration", tokens.Temporary.Targets)
 			}
 		})
 	}
@@ -3423,12 +3433,12 @@ func TestTransferRequestsSendTargetAndConfiguredFields(t *testing.T) {
 				}
 				for key, value := range want {
 					if got := query.Get(key); got != value {
-						t.Fatalf("%s = %q, want %q", key, got, value)
+						t.Errorf("%s = %q, want %q", key, got, value)
 					}
 				}
 				imeis := query["target_terminal_imeis"]
 				if len(imeis) != 2 || imeis[0] != "222222222222222" || imeis[1] != "333333333333333" {
-					t.Fatalf("target_terminal_imeis = %v, want repeated query parameters", imeis)
+					t.Errorf("target_terminal_imeis = %v, want repeated query parameters", imeis)
 				}
 			default:
 				t.Fatalf("unexpected operation %q", query.Get("operation"))
@@ -3496,7 +3506,7 @@ func TestTemporaryTokenExpiresAt(t *testing.T) {
 				return
 			}
 			if !got.Equal(tt.want) {
-				t.Fatalf("temporaryTokenExpiresAt() = %s, want %s", got, tt.want)
+				t.Errorf("temporaryTokenExpiresAt() = %s, want %s", got, tt.want)
 			}
 		})
 	}

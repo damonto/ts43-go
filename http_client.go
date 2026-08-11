@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	nethttp "net/http"
+	"net/http"
 	"time"
 )
 
@@ -23,19 +24,19 @@ func NewRoundTripper(logger *slog.Logger) RoundTripper {
 	return newRoundTripper(logger, nil)
 }
 
-func newRoundTripper(logger *slog.Logger, transport nethttp.RoundTripper) RoundTripper {
+func newRoundTripper(logger *slog.Logger, transport http.RoundTripper) RoundTripper {
 	return RoundTripper{
 		log: newLoggingTransport(logger, ts43Transport(transport)),
 	}
 }
 
 func withTS43Transport(logger *slog.Logger, doer HTTPDoer) HTTPDoer {
-	client, ok := doer.(*nethttp.Client)
+	client, ok := doer.(*http.Client)
 	if !ok {
 		return doer
 	}
 	switch client.Transport.(type) {
-	case nil, *nethttp.Transport:
+	case nil, *http.Transport:
 	default:
 		return client
 	}
@@ -44,7 +45,7 @@ func withTS43Transport(logger *slog.Logger, doer HTTPDoer) HTTPDoer {
 	return &clone
 }
 
-func (r RoundTripper) RoundTrip(req *nethttp.Request) (*nethttp.Response, error) {
+func (r RoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return r.log.RoundTrip(req)
 }
 
@@ -56,15 +57,15 @@ func (r RoundTripper) CloseIdleConnections() {
 }
 
 type loggingTransport struct {
-	transport nethttp.RoundTripper
+	transport http.RoundTripper
 	logger    *slog.Logger
 }
 
-func newLoggingTransport(logger *slog.Logger, transport nethttp.RoundTripper) *loggingTransport {
+func newLoggingTransport(logger *slog.Logger, transport http.RoundTripper) *loggingTransport {
 	return &loggingTransport{logger: logger, transport: transport}
 }
 
-func (l *loggingTransport) RoundTrip(request *nethttp.Request) (*nethttp.Response, error) {
+func (l *loggingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	body, err := requestBody(request)
 	if err != nil {
 		return nil, err
@@ -92,34 +93,46 @@ func (l *loggingTransport) RoundTrip(request *nethttp.Request) (*nethttp.Respons
 	return response, nil
 }
 
-func requestBody(request *nethttp.Request) ([]byte, error) {
+func requestBody(request *http.Request) ([]byte, error) {
 	if request.Body == nil {
 		return nil, nil
 	}
-	body, err := io.ReadAll(request.Body)
-	if err != nil {
-		return nil, err
-	}
-	request.Body.Close()
+	body, readErr := io.ReadAll(request.Body)
+	closeErr := request.Body.Close()
 	request.Body = io.NopCloser(bytes.NewBuffer(body))
-	return body, nil
-}
-
-func responseBody(response *nethttp.Response) ([]byte, error) {
-	body, err := io.ReadAll(response.Body)
-	if err != nil {
+	if readErr != nil {
+		readErr = fmt.Errorf("read request body: %w", readErr)
+	}
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close request body: %w", closeErr)
+	}
+	if err := errors.Join(readErr, closeErr); err != nil {
 		return nil, err
 	}
-	response.Body.Close()
-	response.Body = io.NopCloser(bytes.NewBuffer(body))
 	return body, nil
 }
 
-func ts43Transport(transport nethttp.RoundTripper) nethttp.RoundTripper {
-	if transport == nil {
-		transport = nethttp.DefaultTransport
+func responseBody(response *http.Response) ([]byte, error) {
+	body, readErr := io.ReadAll(response.Body)
+	closeErr := response.Body.Close()
+	response.Body = io.NopCloser(bytes.NewBuffer(body))
+	if readErr != nil {
+		readErr = fmt.Errorf("read response body: %w", readErr)
 	}
-	httpTransport, ok := transport.(*nethttp.Transport)
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close response body: %w", closeErr)
+	}
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func ts43Transport(transport http.RoundTripper) http.RoundTripper {
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	httpTransport, ok := transport.(*http.Transport)
 	if !ok {
 		return transport
 	}
@@ -150,8 +163,8 @@ func ts43TLSConfig(cfg *tls.Config) *tls.Config {
 	return cfg
 }
 
-func NewHTTPClient(logger *slog.Logger, timeout time.Duration) *nethttp.Client {
-	return &nethttp.Client{
+func NewHTTPClient(logger *slog.Logger, timeout time.Duration) *http.Client {
+	return &http.Client{
 		Timeout:   timeout,
 		Transport: NewRoundTripper(logger),
 	}
@@ -168,7 +181,7 @@ func (c *Client) CloseIdleConnections() {
 
 type HTTPError struct {
 	StatusCode int
-	Header     nethttp.Header
+	Header     http.Header
 	Body       []byte
 }
 
@@ -176,16 +189,22 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("TS.43 HTTP status %d", e.StatusCode)
 }
 
-func DoRaw(ctx context.Context, client HTTPDoer, req *nethttp.Request) ([]byte, []*nethttp.Cookie, error) {
+func DoRaw(ctx context.Context, client HTTPDoer, req *http.Request) ([]byte, []*http.Cookie, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer resp.Body.Close()
 	cookies := resp.Cookies()
 	data, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
 	if readErr != nil {
-		return nil, nil, readErr
+		readErr = fmt.Errorf("read HTTP response body: %w", readErr)
+	}
+	if closeErr != nil {
+		closeErr = fmt.Errorf("close HTTP response body: %w", closeErr)
+	}
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return nil, nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, cookies, &HTTPError{StatusCode: resp.StatusCode, Header: resp.Header, Body: data}

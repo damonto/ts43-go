@@ -55,7 +55,11 @@ type WFCEntitlementStatus int
 
 func (s WFCEntitlementStatus) String() string { return strconv.Itoa(int(s)) }
 
-func (s WFCEntitlementStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+func (s WFCEntitlementStatus) MarshalText() ([]byte, error) { return s.AppendText(nil) }
+
+func (s WFCEntitlementStatus) AppendText(dst []byte) ([]byte, error) {
+	return strconv.AppendInt(dst, int64(s), 10), nil
+}
 
 func (s *WFCEntitlementStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -74,7 +78,11 @@ type WFCTCStatus int
 
 func (s WFCTCStatus) String() string { return strconv.Itoa(int(s)) }
 
-func (s WFCTCStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+func (s WFCTCStatus) MarshalText() ([]byte, error) { return s.AppendText(nil) }
+
+func (s WFCTCStatus) AppendText(dst []byte) ([]byte, error) {
+	return strconv.AppendInt(dst, int64(s), 10), nil
+}
 
 func (s *WFCTCStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -93,7 +101,11 @@ type WFCAddressStatus int
 
 func (s WFCAddressStatus) String() string { return strconv.Itoa(int(s)) }
 
-func (s WFCAddressStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+func (s WFCAddressStatus) MarshalText() ([]byte, error) { return s.AppendText(nil) }
+
+func (s WFCAddressStatus) AppendText(dst []byte) ([]byte, error) {
+	return strconv.AppendInt(dst, int64(s), 10), nil
+}
 
 func (s *WFCAddressStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -112,7 +124,11 @@ type WFCProvisionStatus int
 
 func (s WFCProvisionStatus) String() string { return strconv.Itoa(int(s)) }
 
-func (s WFCProvisionStatus) MarshalText() ([]byte, error) { return []byte(s.String()), nil }
+func (s WFCProvisionStatus) MarshalText() ([]byte, error) { return s.AppendText(nil) }
+
+func (s WFCProvisionStatus) AppendText(dst []byte) ([]byte, error) {
+	return strconv.AppendInt(dst, int64(s), 10), nil
+}
 
 func (s *WFCProvisionStatus) UnmarshalText(text []byte) error {
 	n, ok, err := enumInteger(text)
@@ -145,6 +161,13 @@ type WFCConfig struct {
 
 type WFCResult struct {
 	Status    WFCStatus
+	AuthToken AuthToken
+}
+
+type WFCEntitlementRequest struct {
+	Identity  Identity
+	Device    Device
+	Config    WFCConfig
 	AuthToken AuthToken
 }
 
@@ -205,9 +228,9 @@ func selectWFCRecord(records []wfcRecord, identity Identity) (wfcRecord, error) 
 		return matches[0], nil
 	}
 	if len(matches) > 1 {
-		return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigAmbiguous, mccmnc(identity))
+		return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigAmbiguous, mccMNC(identity))
 	}
-	return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigNotFound, mccmnc(identity))
+	return wfcRecord{}, fmt.Errorf("%w for MCCMNC %s", ErrWFCConfigNotFound, mccMNC(identity))
 }
 
 func (r wfcRecord) match() carrierMatch {
@@ -292,35 +315,19 @@ func (c WFCConfig) ShouldShowWebFlow(status WFCStatus) bool {
 	return status.NeedsUserWebFlow()
 }
 
-func CheckWFCEntitlement(ctx context.Context, cfg Config, identity Identity, device Device, wfc WFCConfig) (WFCStatus, error) {
-	result, err := CheckWFCEntitlementWithToken(ctx, cfg, identity, device, wfc, AuthToken{})
-	if err != nil {
-		return WFCStatus{}, err
-	}
-	return result.Status, nil
-}
-
-func CheckWFCEntitlementWithToken(ctx context.Context, cfg Config, identity Identity, device Device, wfc WFCConfig, token AuthToken) (WFCResult, error) {
+func CheckWFCEntitlement(ctx context.Context, cfg Config, req WFCEntitlementRequest) (WFCResult, error) {
 	client := newClient(cfg)
-	return client.CheckWFCEntitlementWithToken(ctx, identity, device, wfc, token)
+	return client.CheckWFCEntitlement(ctx, req)
 }
 
-func (c *Client) CheckWFCEntitlement(ctx context.Context, identity Identity, device Device, cfg WFCConfig) (WFCStatus, error) {
-	result, err := c.CheckWFCEntitlementWithToken(ctx, identity, device, cfg, AuthToken{})
-	if err != nil {
-		return WFCStatus{}, err
-	}
-	return result.Status, nil
-}
-
-func (c *Client) CheckWFCEntitlementWithToken(ctx context.Context, identity Identity, device Device, cfg WFCConfig, token AuthToken) (WFCResult, error) {
-	if token.Value != "" {
-		result, err := c.checkWFCEntitlementOnce(ctx, identity, device, cfg, token)
+func (c *Client) CheckWFCEntitlement(ctx context.Context, req WFCEntitlementRequest) (WFCResult, error) {
+	if req.AuthToken.Value != "" {
+		result, err := c.checkWFCEntitlementOnce(ctx, req.Identity, req.Device, req.Config, req.AuthToken)
 		if !isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) {
 			return result, err
 		}
 	}
-	return c.checkWFCEntitlementOnce(ctx, identity, device, cfg, AuthToken{})
+	return c.checkWFCEntitlementOnce(ctx, req.Identity, req.Device, req.Config, AuthToken{})
 }
 
 func (c *Client) checkWFCEntitlementOnce(ctx context.Context, identity Identity, device Device, cfg WFCConfig, token AuthToken) (WFCResult, error) {
@@ -765,14 +772,21 @@ func wfcAuthTokenFromBody(body []byte, current AuthToken, cookies []string, now 
 	next := current
 	next.Value = payload.Token.Token.String()
 	next.Cookies = mergeCookieHeaders(current.Cookies, cookies)
-	next.ExpiresAt = now.Add(time.Duration(wfcAuthTokenValidity(payload.Token.Validity.String())) * time.Second)
+	validity, err := wfcAuthTokenValidity(payload.Token.Validity.String())
+	if err != nil {
+		return current, err
+	}
+	next.ExpiresAt = now.Add(time.Duration(validity) * time.Second)
 	return next, nil
 }
 
-func wfcAuthTokenValidity(value string) int {
-	validity := atoi(value)
-	if validity > 0 {
-		return validity
+func wfcAuthTokenValidity(value string) (int, error) {
+	validity, err := parseOptionalInt(value)
+	if err != nil {
+		return 0, fmt.Errorf("parse WFC authentication token validity: %w", err)
 	}
-	return 3600
+	if validity.value > 0 {
+		return validity.value, nil
+	}
+	return 3600, nil
 }

@@ -21,26 +21,26 @@ func NewSource(card *sim.Card) (*Source, error) {
 	return &Source{card: card}, nil
 }
 
-func (c *Source) Identity(ctx context.Context) (*Identity, error) {
+func (s *Source) Identity(ctx context.Context) (*Identity, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return &Identity{
-		ICCID: c.card.ICCID(),
-		IMSI:  c.card.IMSI(),
-		MCC:   c.card.MCC(),
-		MNC:   c.card.MNC(),
-		GID1:  c.card.GID1(),
-		GID2:  c.card.GID2(),
-		SPN:   c.card.SPN(),
+		ICCID: s.card.ICCID(),
+		IMSI:  s.card.IMSI(),
+		MCC:   s.card.MCC(),
+		MNC:   s.card.MNC(),
+		GID1:  s.card.GID1(),
+		GID2:  s.card.GID2(),
+		SPN:   s.card.SPN(),
 	}, nil
 }
 
-func (c *Source) AuthenticateAKA(ctx context.Context, req *AKARequest) (*AKAResponse, error) {
+func (s *Source) AuthenticateAKA(ctx context.Context, req *AKARequest) (*AKAResponse, error) {
 	if req == nil {
 		return nil, errors.New("authenticating source SIM: request is nil")
 	}
-	result, err := c.card.AKA(ctx, req.Rand, req.Autn)
+	result, err := s.card.AKA(ctx, req.Rand, req.Autn)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +55,6 @@ func (c *Source) AuthenticateAKA(ctx context.Context, req *AKARequest) (*AKAResp
 	}, nil
 }
 
-func (c *Source) Close() error {
-	return c.card.Close()
+func (s *Source) Close() error {
+	return s.card.Close()
 }

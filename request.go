@@ -204,7 +204,7 @@ func samsungOperationUsesEAPIdentity(operation Operation) bool {
 }
 
 func terminalIMSIEAPBase64(identity Identity, realm string) (string, error) {
-	eapID, err := IMSIEAPIdentity(mccmnc(identity), identity.IMSI, realm)
+	eapID, err := IMSIEAPIdentity(mccMNC(identity), identity.IMSI, realm)
 	if err != nil {
 		return "", err
 	}
@@ -241,7 +241,7 @@ func addAuthIdentity(params url.Values, identity Identity, req ServiceEntitlemen
 	if req.OmitEAPID {
 		return nil
 	}
-	eapID, err := IMSIEAPIdentity(mccmnc(identity), identity.IMSI, realm)
+	eapID, err := IMSIEAPIdentity(mccMNC(identity), identity.IMSI, realm)
 	if err != nil {
 		return err
 	}
