@@ -126,10 +126,12 @@ func TestWithTS43Transport(t *testing.T) {
 	tests := []struct {
 		name       string
 		doer       HTTPDoer
+		wantNil    bool
 		wantSame   bool
 		wantClient bool
 	}{
-		{name: "nil remains nil", wantSame: true},
+		{name: "nil remains nil", wantNil: true},
+		{name: "nil HTTP client becomes nil", doer: (*http.Client)(nil), wantNil: true},
 		{name: "arbitrary doer remains unchanged", doer: customDoer, wantSame: true},
 		{name: "client with arbitrary transport remains unchanged", doer: customClient, wantSame: true, wantClient: true},
 		{name: "HTTP client is cloned and wrapped", doer: client, wantClient: true},
@@ -138,7 +140,7 @@ func TestWithTS43Transport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := withTS43Transport(logger, tt.doer)
-			if tt.doer == nil {
+			if tt.wantNil {
 				if got != nil {
 					t.Errorf("withTS43Transport() = %T, want nil", got)
 				}
@@ -178,6 +180,7 @@ func TestNewClientHTTPClient(t *testing.T) {
 		wantDefault bool
 	}{
 		{name: "default client", wantDefault: true},
+		{name: "nil HTTP client uses default", doer: (*http.Client)(nil), wantDefault: true},
 		{name: "custom doer", doer: customDoer},
 	}
 	for _, tt := range tests {
@@ -187,6 +190,9 @@ func TestNewClientHTTPClient(t *testing.T) {
 				client, ok := got.(*http.Client)
 				if !ok {
 					t.Fatalf("HTTP client = %T, want *http.Client", got)
+				}
+				if _, ok := client.Transport.(RoundTripper); !ok {
+					t.Errorf("Transport = %T, want ts43.RoundTripper", client.Transport)
 				}
 				if client.Timeout != defaultEntitlementTimeout {
 					t.Errorf("Timeout = %s, want %s", client.Timeout, defaultEntitlementTimeout)

@@ -37,6 +37,7 @@ driver/mbim/libmbim
 .codex
 .agents
 AGENTS.md
+CLAUDE.md
 
 # Other
 refs

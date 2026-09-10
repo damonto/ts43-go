@@ -25,6 +25,7 @@ type Config struct {
 	// HTTPClient performs TS.43 requests. New clones and configures a standard
 	// *http.Client whose Transport is nil or *http.Transport. Other implementations
 	// are used unchanged and must provide TS.43-compatible TLS settings.
+	// A nil interface or nil *http.Client uses the default client.
 	HTTPClient  HTTPDoer
 	Entitlement Entitlement
 	Source      Endpoint

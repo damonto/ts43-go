@@ -35,6 +35,9 @@ func withTS43Transport(logger *slog.Logger, doer HTTPDoer) HTTPDoer {
 	if !ok {
 		return doer
 	}
+	if client == nil {
+		return nil
+	}
 	switch client.Transport.(type) {
 	case nil, *http.Transport:
 	default:
