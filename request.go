@@ -35,6 +35,10 @@ type ServiceEntitlementRequest struct {
 
 var errAppRequired = errors.New("app is required")
 
+// ErrAndroidEntitlementRequired reports a carrier routed by Samsung through
+// Android Ts43Operation, which this direct HTTP client cannot substitute.
+var ErrAndroidEntitlementRequired = errors.New("carrier requires Android Ts43Operation entitlement backend")
+
 type ODSAOperation struct {
 	Operation                      Operation
 	OperationType                  OperationType
@@ -65,6 +69,9 @@ type ODSAOperation struct {
 }
 
 func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Identity, req ServiceEntitlementRequest, op ODSAOperation, clientTS43, realm string) (*http.Request, error) {
+	if entitlement.SamsungAndroidEntitlement {
+		return nil, ErrAndroidEntitlementRequired
+	}
 	req = shapeSamsungRequest(entitlement, req)
 	if req.App == "" {
 		return nil, errAppRequired
@@ -87,7 +94,7 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 	accept := requestAccept(entitlement, req)
 	var httpReq *http.Request
 	if entitlement.UsePost {
-		data, err := json.Marshal(jsonBodyFields(params))
+		data, err := marshalRequestJSON(entitlement, params)
 		if err != nil {
 			return nil, fmt.Errorf("marshal TS.43 request: %w", err)
 		}
@@ -209,6 +216,27 @@ func terminalIMSIEAPBase64(identity Identity, realm string) (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString([]byte(eapID)), nil
+}
+
+func marshalRequestJSON(entitlement Entitlement, params url.Values) ([]byte, error) {
+	if entitlement.Channel != EntitlementChannelSamsung {
+		return json.Marshal(jsonBodyFields(params))
+	}
+	body := make(map[string]json.RawMessage, len(params))
+	for name, values := range params {
+		var data []byte
+		var err error
+		if name == "target_terminal_imeis" {
+			data, err = json.Marshal(values)
+		} else {
+			data, err = json.Marshal(strings.Join(values, ","))
+		}
+		if err != nil {
+			return nil, fmt.Errorf("marshal request field %s: %w", name, err)
+		}
+		body[name] = data
+	}
+	return json.Marshal(body)
 }
 
 func jsonBodyFields(params url.Values) map[string]string {
@@ -353,14 +381,7 @@ func setOptionalValues(values url.Values, name string, fields []string) {
 }
 
 func operationTargets(ops []Operation) string {
-	if len(ops) == 0 {
-		return ""
-	}
-	targets := make([]string, 0, len(ops))
-	for _, op := range ops {
-		targets = append(targets, op.String())
-	}
-	return strings.Join(targets, ",")
+	return operationList(ops).String()
 }
 
 func userAgent(entitlement Entitlement, req ServiceEntitlementRequest, clientTS43 string) string {
@@ -368,6 +389,9 @@ func userAgent(entitlement Entitlement, req ServiceEntitlementRequest, clientTS4
 		clientTS43 = DefaultODSAClientTS43
 	}
 	if entitlement.Channel == EntitlementChannelSamsung {
+		if entitlement.SamsungLegacyUserAgent {
+			return req.TerminalModel + " Android" + req.TerminalSoftware
+		}
 		if !strings.HasPrefix(clientTS43, "client-") {
 			clientTS43 = "client-" + clientTS43
 		}

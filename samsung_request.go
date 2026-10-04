@@ -18,23 +18,30 @@ func samsungCheckEligibilityOperation(source, target Device) ODSAOperation {
 	}
 }
 
-func samsungManageSubscriptionOperation(entitlement Entitlement, source, target Device, answer UserInputResult) ODSAOperation {
+func samsungManageSubscriptionOperation(entitlement Entitlement, req ManageSubscriptionRequest) ODSAOperation {
+	source, target, answer := req.Source, req.Target, req.UserInput
 	op := baseManageSubscriptionOperation(samsungManageSubscriptionOperationType(entitlement), answer)
-	if transferUsesSourceCredential(entitlement) {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
+	op.TargetTerminalID = target.IMEI
+	op.TargetTerminalICCID = target.ICCID
+	op.OldTerminalID = source.IMEI
+	op.OldTerminalICCID = source.ICCID
+	switch {
+	case transferUsesSourceCredential(entitlement):
+		op.TerminalEID = source.EID
 		op.TerminalICCID = source.ICCID
-		op.TargetTerminalICCID = target.ICCID
-	} else {
-		op.TerminalEID = target.EID
-		op.TerminalICCID = target.ICCID
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalICCID = target.ICCID
-		if samsungDigitalizedTempToken4FF(entitlement) {
-			op.TerminalICCID = ""
+		op.TargetTerminalEID = target.EID
+	case samsungDigitalizedTransfer(entitlement) && !samsungDigitalizedTempToken4FF(entitlement):
+		// Ordinary conversion still identifies the physical SIM as terminal SIM.
+		op.TerminalICCID = source.ICCID
+		op.TargetTerminalEID = target.EID
+		op.OldTerminalID = ""
+		op.OldTerminalICCID = ""
+	default:
+		setSamsungTargetEID(&op, entitlement, target)
+		if !samsungDigitalizedTempToken4FF(entitlement) {
+			op.TerminalICCID = target.ICCID
 		}
 	}
-	addSamsungOldTerminalFields(&op, source)
 	return op
 }
 
@@ -51,7 +58,10 @@ func samsungAcquireConfigurationOperation(entitlement Entitlement, source, targe
 		return op
 	}
 	op.TerminalICCID = target.ICCID
-	setSamsungAcquireConfigurationEID(&op, entitlement, target)
+	if samsungDigitalizedTransfer(entitlement) && !samsungDigitalizedTempToken4FF(entitlement) {
+		op.TerminalICCID = source.ICCID
+	}
+	setSamsungTargetEID(&op, entitlement, target)
 	op.TargetTerminalID = target.IMEI
 	op.TargetTerminalICCID = target.ICCID
 	return op
@@ -117,10 +127,13 @@ func samsungSubscriptionIntent(entitlement Entitlement) SamsungSubscriptionType 
 	if entitlement.SourceSIMType == SIMTypePSIM {
 		return SamsungSubscriptionDigitalizedSIM
 	}
-	return SamsungSubscriptionD2DTransfer
+	if transferTypeUsesTemporaryToken(entitlement.TransferType) {
+		return SamsungSubscriptionContinueTemporaryToken
+	}
+	return SamsungSubscriptionRemoteAKATransfer
 }
 
-func setSamsungAcquireConfigurationEID(op *ODSAOperation, entitlement Entitlement, target Device) {
+func setSamsungTargetEID(op *ODSAOperation, entitlement Entitlement, target Device) {
 	usesTargetEID := entitlement.TransferType == TransferTypeOldTerminalIDs ||
 		(samsungDigitalizedTransfer(entitlement) && !samsungDigitalizedTempToken4FF(entitlement))
 	if usesTargetEID {
@@ -132,7 +145,11 @@ func setSamsungAcquireConfigurationEID(op *ODSAOperation, entitlement Entitlemen
 	op.TargetTerminalEID = ""
 }
 
-func addSamsungOldTerminalFields(op *ODSAOperation, source Device) {
-	op.OldTerminalID = source.IMEI
-	op.OldTerminalICCID = source.ICCID
+func samsungExtraTerminalFields(entitlement Entitlement, op ODSAOperation, target Device) ODSAOperation {
+	if entitlement.SamsungExtraTerminalParams {
+		op.TargetTerminalIMEIs = terminalIMEIs(target)
+		op.TargetTerminalSN = target.SerialNumber
+		op.TargetTerminalModel = target.Model
+	}
+	return op
 }

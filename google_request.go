@@ -23,7 +23,8 @@ func googleCheckEligibilityOperation(entitlement Entitlement, target Device) ODS
 	return op
 }
 
-func googleManageSubscriptionOperation(entitlement Entitlement, source, target Device, answer UserInputResult) ODSAOperation {
+func googleManageSubscriptionOperation(entitlement Entitlement, req ManageSubscriptionRequest) ODSAOperation {
+	source, target, answer := req.Source, req.Target, req.UserInput
 	op := baseManageSubscriptionOperation(OperationTypeTransferSubscription, answer)
 	if IsSourceCredentialTransferType(entitlement.TransferType) {
 		op.TargetTerminalID = target.IMEI

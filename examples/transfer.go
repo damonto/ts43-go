@@ -64,9 +64,18 @@ func runTransfer(ctx context.Context, reader *bufio.Reader, w io.Writer, client 
 				return err
 			}
 			result, err = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
+		case ts43.ConfigurationPendingEvent:
+			fmt.Fprintln(w, "Waiting for the carrier to prepare download configuration.")
+			if _, err := prompt(reader, w, "After the carrier signals readiness, press Enter to check again: "); err != nil {
+				return err
+			}
+			result, err = client.Continue(ctx, result, ts43.ContinueRequest{})
 		case ts43.ActivationPendingEvent:
-			fmt.Fprintf(w, "TS.43 activation is pending for ICCID %s; retry later after the carrier finishes activation.\n", event.ICCID)
-			return nil
+			fmt.Fprintf(w, "TS.43 activation is pending for ICCID %s.\n", event.ICCID)
+			if _, err := prompt(reader, w, "After the carrier signals readiness, press Enter to check again: "); err != nil {
+				return err
+			}
+			result, err = client.Continue(ctx, result, ts43.ContinueRequest{})
 		case ts43.DismissEvent:
 			fmt.Fprintf(w, "TS.43 transfer dismissed by carrier; subscription_result=%d\n", event.SubscriptionResult)
 			return nil

@@ -77,6 +77,7 @@ func isWebsheetCallbackText(line string) bool {
 	return strings.HasPrefix(line, "{") ||
 		strings.Contains(line, "ODSAServiceFlow.") ||
 		strings.Contains(line, "VoWiFiWebServiceFlow.") ||
+		strings.Contains(line, "WiFiCallingWebViewController.") ||
 		strings.Contains(line, "/_callback")
 }
 

@@ -308,7 +308,7 @@ func TestTransferDiscoversEntitlementServer(t *testing.T) {
 	if client.transfer.entitlement.Server != "https://ts43.eas3.msg.t-mobile.com/google/" {
 		t.Errorf("Server = %q, want discovered T-Mobile server", client.transfer.entitlement.Server)
 	}
-	if got := operationList(calls); got != ",CheckEligibility,AcquireTemporaryToken,ManageSubscription" {
+	if got := requestOperationNames(calls); got != ",CheckEligibility,AcquireTemporaryToken,ManageSubscription" {
 		t.Errorf("calls = %s", got)
 	}
 }
@@ -480,7 +480,7 @@ func TestContinueAfterSourceProfileDeletionUsesReturnedToken(t *testing.T) {
 		wantOldProto bool
 	}{
 		{name: "source credential reusable activation code", transferType: TransferTypeReusableActivationCode, wantSecond: OperationAcquireConf, wantOldProto: true},
-		{name: "old terminal ID type keeps protocol empty", transferType: TransferTypeOldTerminalIDs, wantSecond: OperationManage},
+		{name: "old terminal ID type keeps protocol empty", transferType: TransferTypeOldTerminalIDs, wantSecond: OperationAcquireConf},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -520,7 +520,7 @@ func TestContinueAfterSourceProfileDeletionUsesReturnedToken(t *testing.T) {
 							if strings.Contains(body, `"operation_type"`) {
 								t.Errorf("AcquireConfiguration body = %s, want no operation_type", body)
 							}
-							if !strings.Contains(body, `"terminal_id":"111111111111111"`) {
+							if tt.wantOldProto && !strings.Contains(body, `"terminal_id":"111111111111111"`) {
 								t.Errorf("AcquireConfiguration body = %s, want source terminal_id", body)
 							}
 							if !strings.Contains(body, `"target_terminal_id":"222222222222222"`) {
@@ -689,7 +689,7 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 	}
 }
 
-func TestActivateGoogleDelayedOperationResult(t *testing.T) {
+func TestActivateInvalidMessageResponse(t *testing.T) {
 	tests := []struct {
 		name         string
 		channel      EntitlementChannel
@@ -699,19 +699,19 @@ func TestActivateGoogleDelayedOperationResult(t *testing.T) {
 		wantDenied   bool
 	}{
 		{
-			name:      "ordinary auth flow waits for delayed download",
-			wantState: StatePendingDelayedDownload,
+			name:       "ordinary auth rejects invalid input",
+			wantDenied: true,
 		},
 		{
-			name:         "type three waits for delayed download",
+			name:         "type three rejects invalid input",
 			transferType: TransferTypeReusableActivationCode,
-			wantState:    StatePendingDelayedDownload,
+			wantDenied:   true,
 		},
 		{
-			name:         "type six routes delayed download through SM-DS",
+			name:         "SM-DS does not accept invalid input",
 			transferType: TransferTypeTS43V8,
 			useSMDS:      true,
-			wantState:    StatePendingSMDSDiscovery,
+			wantDenied:   true,
 		},
 		{
 			name:         "Samsung does not interpret 104 as delayed credential",
@@ -741,8 +741,7 @@ func TestActivateGoogleDelayedOperationResult(t *testing.T) {
 				AuthToken:      AuthToken{Value: "auth"},
 			}, UserInputResult{Button: MessageButtonUnknown})
 			if tt.wantDenied {
-				var denied *CarrierDeniedError
-				if !errors.As(err, &denied) {
+				if _, ok := errors.AsType[*CarrierDeniedError](err); !ok {
 					t.Fatalf("activate() error = %v, want CarrierDeniedError", err)
 				}
 				return
@@ -1303,7 +1302,7 @@ func TestActivateRefreshesTokenAfterManageHTTP511(t *testing.T) {
 				return response(500, ""), nil
 			}
 		}),
-		Entitlement: Entitlement{Server: "https://example.test/ts43", AutoRetry511Limit: 1, PollTimeout: time.Second, TransferType: TransferTypeTemporaryToken},
+		Entitlement: Entitlement{Server: "https://example.test/ts43", AutoRetry511Limit: 1, PollTimeout: time.Second, TransferType: TransferTypeTemporaryToken, UseSMDSDelayedDownload: true},
 		Source:      Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
 		Target:      Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
 		Logger:      slog.Default(),
@@ -1327,11 +1326,11 @@ func TestActivateRefreshesTokenAfterManageHTTP511(t *testing.T) {
 	if got := strings.Join(manageTokens, ","); got != "old-temp,new-temp" {
 		t.Errorf("ManageSubscription tokens = %q, want old-temp,new-temp", got)
 	}
-	if result.State != StatePendingDelayedDownload {
-		t.Errorf("State = %d, want %d", result.State, StatePendingDelayedDownload)
+	if result.State != StatePendingSMDSDiscovery {
+		t.Errorf("State = %d, want %d", result.State, StatePendingSMDSDiscovery)
 	}
-	if _, ok := result.Event.(DelayedDownloadEvent); !ok {
-		t.Fatalf("Event = %#v, want DelayedDownloadEvent", result.Event)
+	if _, ok := result.Event.(SMDSDiscoveryEvent); !ok {
+		t.Fatalf("Event = %#v, want SMDSDiscoveryEvent", result.Event)
 	}
 }
 
@@ -1510,14 +1509,14 @@ func TestActivateTypeTwoDelayedDownloadWithTemporaryToken(t *testing.T) {
 			if got := strings.Join(manageTokens, ","); got != "old-temp" {
 				t.Errorf("ManageSubscription tokens = %q, want old-temp", got)
 			}
-			if len(acquireTokens) != 0 {
-				t.Errorf("AcquireConfiguration tokens = %q, want none", strings.Join(acquireTokens, ","))
+			if len(acquireTokens) != 1 || acquireTokens[0] != "old-temp" {
+				t.Errorf("AcquireConfiguration tokens = %q, want old-temp", strings.Join(acquireTokens, ","))
 			}
-			if result.State != StatePendingDelayedDownload {
-				t.Errorf("State = %d, want %d", result.State, StatePendingDelayedDownload)
+			if result.State != StatePendingDownload {
+				t.Errorf("State = %d, want %d", result.State, StatePendingDownload)
 			}
-			if _, ok := result.Event.(DelayedDownloadEvent); !ok {
-				t.Fatalf("Event = %#v, want DelayedDownloadEvent", result.Event)
+			if _, ok := result.Event.(DownloadReadyEvent); !ok {
+				t.Fatalf("Event = %#v, want DownloadReadyEvent", result.Event)
 			}
 		})
 	}
@@ -2077,7 +2076,7 @@ func TestActivateReturnsDelayedDownloadEventWhenServerDelaysDownload(t *testing.
 	}}
 	client, err := New(&Config{
 		HTTPClient:  doer,
-		Entitlement: Entitlement{Server: "https://example.test/ts43", PollTimeout: time.Hour, PollInterval: time.Second},
+		Entitlement: Entitlement{Channel: EntitlementChannelSamsung, Server: "https://example.test/ts43", PollTimeout: time.Hour, PollInterval: time.Second},
 		Source:      Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
 		Target:      Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
 		Logger:      slog.Default(),
@@ -2547,7 +2546,7 @@ func TestSamsungSourceCredentialRequestFields(t *testing.T) {
 					if got := query.Get("target_terminal_iccid"); got != target.ICCID {
 						t.Errorf("target_terminal_iccid = %q, want target ICCID", got)
 					}
-					wantTerminalEID := ""
+					wantTerminalEID := source.EID
 					wantTargetEID := target.EID
 					if tt.operation == OperationAcquireConf {
 						wantTerminalEID = source.EID
@@ -3077,7 +3076,7 @@ func TestSamsungManageSubscriptionOperationType(t *testing.T) {
 	}{
 		{
 			name: "unspecified eSIM transfer defaults to D2D",
-			want: OperationTypeSamsungD2DTransfer,
+			want: OperationTypeTransferSubscription,
 		},
 		{
 			name:        "unspecified pSIM transfer defaults to digitalized SIM",
@@ -3166,9 +3165,11 @@ func TestGoogleManageSubscriptionOperationType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			op := googleManageSubscriptionOperation(
 				Entitlement{TransferType: tt.transferType},
-				Device{IMEI: "111111111111111"},
-				Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
-				UserInputResult{Button: MessageButtonUnknown},
+				ManageSubscriptionRequest{
+					Source:    Device{IMEI: "111111111111111"},
+					Target:    Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
+					UserInput: UserInputResult{Button: MessageButtonUnknown},
+				},
 			)
 			if op.OperationType != OperationTypeTransferSubscription {
 				t.Errorf("OperationType = %v, want %v", op.OperationType, OperationTypeTransferSubscription)
@@ -3191,7 +3192,7 @@ func TestSubscriptionUpdateAcceptedByChannel(t *testing.T) {
 		{name: "Samsung accepts activated subscription", channel: EntitlementChannelSamsung, operationResult: OperationResultSuccess, subscriptionResult: SubscriptionResultDone, want: true},
 		{name: "Samsung accepts dismiss", channel: EntitlementChannelSamsung, operationResult: OperationResultSuccess, subscriptionResult: SubscriptionResultDismiss, want: true},
 		{name: "Samsung accepts delayed download", channel: EntitlementChannelSamsung, operationResult: OperationResultSuccess, subscriptionResult: SubscriptionResultDelayedDownload, want: true},
-		{name: "operation failure is rejected", operationResult: OperationResultGoogleDelayedDownload, subscriptionResult: SubscriptionResultDone},
+		{name: "operation failure is rejected", operationResult: OperationResultInvalidMessageResponse, subscriptionResult: SubscriptionResultDone},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3593,7 +3594,7 @@ func (akaChannel) AuthenticateAKA(context.Context, *AKARequest) (*AKAResponse, e
 	}, nil
 }
 
-func operationList(ops []Operation) string {
+func requestOperationNames(ops []Operation) string {
 	values := make([]string, 0, len(ops))
 	for _, op := range ops {
 		values = append(values, op.String())

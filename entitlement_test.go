@@ -132,16 +132,9 @@ func TestDiscoverEntitlement(t *testing.T) {
 			wantErr:  ErrEntitlementNotFound,
 		},
 		{
-			name:     "missing SPN falls back to Samsung",
+			name:     "Google MCCMNC does not fall back to Samsung",
 			identity: Identity{MCC: "208", MNC: "01"},
-			want: Entitlement{
-				Server:       "https://des.orange.fr",
-				TransferType: TransferTypeTemporaryToken,
-				PollInterval: time.Minute,
-				PollTimeout:  10 * time.Minute,
-				AppName:      "ap2009",
-				Version:      "9.0",
-			},
+			wantErr:  ErrEntitlementNotFound,
 		},
 		{
 			name:     "missing MCCMNC",
@@ -270,15 +263,15 @@ func TestDiscoverEntitlementForSamsungChannel(t *testing.T) {
 			name:     "Samsung SK Telecom eSIM transfer",
 			identity: Identity{MCC: "450", MNC: "05"},
 			want: Entitlement{
-				Server:                  "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
-				Channel:                 EntitlementChannelSamsung,
-				TransferType:            TransferTypeTS43V8,
-				SetTargetTerminalFields: true,
-				App:                     AppODSAPrimary,
-				AppName:                 AppODSAPrimary,
-				ProvisioningVersion:     "5.0",
-				RequestVersion:          "1",
-				Version:                 "8.0",
+				Server:                      "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
+				Channel:                     EntitlementChannelSamsung,
+				TransferType:                TransferTypeTS43V8,
+				SamsungInjectWebsheetParams: true,
+				App:                         AppODSAPrimary,
+				AppName:                     AppODSAPrimary,
+				ProvisioningVersion:         "5.0",
+				RequestVersion:              "1",
+				Version:                     "8.0",
 			},
 		},
 		{
@@ -286,15 +279,15 @@ func TestDiscoverEntitlementForSamsungChannel(t *testing.T) {
 			identity:      Identity{MCC: "450", MNC: "05"},
 			sourceSIMType: SIMTypePSIM,
 			want: Entitlement{
-				Server:                  "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
-				Channel:                 EntitlementChannelSamsung,
-				TransferType:            TransferTypeOldTerminalIDs,
-				SetTargetTerminalFields: true,
-				App:                     AppODSAPrimary,
-				AppName:                 AppODSAPrimary,
-				ProvisioningVersion:     "5.0",
-				RequestVersion:          "1",
-				Version:                 "8.0",
+				Server:                      "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
+				Channel:                     EntitlementChannelSamsung,
+				TransferType:                TransferTypeOldTerminalIDs,
+				SamsungInjectWebsheetParams: true,
+				App:                         AppODSAPrimary,
+				AppName:                     AppODSAPrimary,
+				ProvisioningVersion:         "5.0",
+				RequestVersion:              "1",
+				Version:                     "8.0",
 			},
 		},
 	}
@@ -316,8 +309,8 @@ func TestDiscoverEntitlementForSamsungChannel(t *testing.T) {
 			if got.SourceSIMType != tt.sourceSIMType {
 				t.Errorf("SourceSIMType = %v, want %v", got.SourceSIMType, tt.sourceSIMType)
 			}
-			if got.SetTargetTerminalFields != tt.want.SetTargetTerminalFields {
-				t.Errorf("SetTargetTerminalFields = %t, want %t", got.SetTargetTerminalFields, tt.want.SetTargetTerminalFields)
+			if got.SamsungInjectWebsheetParams != tt.want.SamsungInjectWebsheetParams {
+				t.Errorf("SamsungInjectWebsheetParams = %t, want %t", got.SamsungInjectWebsheetParams, tt.want.SamsungInjectWebsheetParams)
 			}
 			if got.App != tt.want.App {
 				t.Errorf("App = %q, want %q", got.App, tt.want.App)

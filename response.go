@@ -593,7 +593,11 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 	r.PollingIntervalUnit = pollingIntervalUnitValue.value
 	r.TemporaryToken = app.TemporaryToken.String()
 	r.TemporaryTokenExpiry = app.TemporaryTokenExpiry.String()
-	r.OperationTargets = splitOperations(app.OperationTargets.String())
+	var targets operationList
+	if err := targets.UnmarshalText([]byte(app.OperationTargets)); err != nil {
+		return fmt.Errorf("parse operation targets: %w", err)
+	}
+	r.OperationTargets = targets
 	r.RegisterNotifStatus = registerNotifStatus.value
 	r.GeneralErrorText = app.GeneralErrorText.String()
 	r.AuthenticationToken = token.Token.String()
@@ -651,19 +655,35 @@ func splitList(s string) []string {
 	return out
 }
 
-func splitOperations(s string) []Operation {
-	parts := splitList(s)
-	if len(parts) == 0 {
-		return nil
+type encodedText string
+
+func (s encodedText) MarshalText() ([]byte, error) {
+	return []byte("encodedValue=" + base64.StdEncoding.EncodeToString([]byte(s))), nil
+}
+
+func (s *encodedText) UnmarshalText(text []byte) error {
+	value := string(text)
+	if encoded, ok := strings.CutPrefix(value, "encodedValue="); ok {
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			return fmt.Errorf("decode encoded text: %w", err)
+		}
+		value = string(decoded)
 	}
-	out := make([]Operation, 0, len(parts))
-	for _, part := range parts {
-		out = append(out, Operation(part))
-	}
-	return out
+	*s = encodedText(value)
+	return nil
 }
 
 func encodedPrefixedField(value string) string {
+	var text encodedText
+	if err := text.UnmarshalText([]byte(value)); err != nil {
+		// Preserve malformed carrier text rather than silently discarding it.
+		return value
+	}
+	return string(text)
+}
+
+func encodedDownloadField(value string) string {
 	value = strings.TrimSpace(value)
 	value = strings.TrimPrefix(value, "encodedValue=")
 	if value == "" {
@@ -677,7 +697,7 @@ func encodedPrefixedField(value string) string {
 }
 
 func activationCodeField(value string) string {
-	value = encodedPrefixedField(value)
+	value = encodedDownloadField(value)
 	if value == "" {
 		return ""
 	}
@@ -688,7 +708,7 @@ func activationCodeField(value string) string {
 }
 
 func smdpFQDN(value string) string {
-	values := splitList(encodedPrefixedField(value))
+	values := splitList(encodedDownloadField(value))
 	if len(values) == 0 {
 		return ""
 	}
@@ -697,4 +717,25 @@ func smdpFQDN(value string) string {
 		return u.Host
 	}
 	return fqdn
+}
+
+type operationList []Operation
+
+func (ops operationList) String() string {
+	values := make([]string, 0, len(ops))
+	for _, op := range ops {
+		values = append(values, op.String())
+	}
+	return strings.Join(values, ",")
+}
+
+func (ops operationList) MarshalText() ([]byte, error) { return []byte(ops.String()), nil }
+
+func (ops *operationList) UnmarshalText(text []byte) error {
+	var next operationList
+	for _, name := range splitList(string(text)) {
+		next = append(next, Operation(name))
+	}
+	*ops = next
+	return nil
 }

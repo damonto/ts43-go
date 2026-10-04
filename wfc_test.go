@@ -3,9 +3,9 @@ package ts43
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -345,24 +345,26 @@ func TestWFCActivationMode(t *testing.T) {
 			inProgress: true,
 		},
 		{
-			name: "not provisioned is unavailable",
+			name: "not provisioned is in progress",
 			status: WFCStatus{
 				EntitlementStatus: WFCEntitlementDisabled,
 				TCStatus:          WFCTCAvailable,
 				AddrStatus:        WFCAddressAvailable,
 				ProvStatus:        WFCProvisionNotProvisioned,
 			},
-			want: WFCActivationUnavailable,
+			want:       WFCActivationInProgress,
+			inProgress: true,
 		},
 		{
-			name: "entitlement provisioning is unavailable",
+			name: "entitlement provisioning is in progress",
 			status: WFCStatus{
 				EntitlementStatus: WFCEntitlementProvisioning,
 				TCStatus:          WFCTCAvailable,
 				AddrStatus:        WFCAddressAvailable,
 				ProvStatus:        WFCProvisionProvisioned,
 			},
-			want: WFCActivationUnavailable,
+			want:       WFCActivationInProgress,
+			inProgress: true,
 		},
 		{
 			name: "entitled can be activated",
@@ -453,8 +455,7 @@ func TestWFCAuthTokenValidity(t *testing.T) {
 			if !tt.wantErr {
 				return
 			}
-			var numErr *strconv.NumError
-			if !errors.As(err, &numErr) {
+			if _, ok := errors.AsType[*strconv.NumError](err); !ok {
 				t.Errorf("wfcAuthTokenValidity(%q) error = %T, want *strconv.NumError in chain", tt.value, err)
 			}
 			if !strings.Contains(err.Error(), "WFC authentication token validity") {
@@ -465,57 +466,16 @@ func TestWFCAuthTokenValidity(t *testing.T) {
 }
 
 func TestCheckWFCEntitlementHandlesEmptyResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	t.Cleanup(server.Close)
-	tests := []struct {
-		name           string
-		defaultEnabled bool
-		want           WFCStatus
-	}{
-		{
-			name:           "carrier default enables service",
-			defaultEnabled: true,
-			want: WFCStatus{
-				EntitlementStatus: WFCEntitlementEnabled,
-				TCStatus:          WFCTCNotRequired,
-				AddrStatus:        WFCAddressNotRequired,
-				ProvStatus:        WFCProvisionNotRequired,
-			},
-		},
-		{
-			name: "empty status is incompatible by default",
-			want: WFCStatus{
-				EntitlementStatus: WFCEntitlementIncompatible,
-				TCStatus:          WFCTCNotAvailable,
-				AddrStatus:        WFCAddressNotAvailable,
-				ProvStatus:        WFCProvisionNotProvisioned,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := CheckWFCEntitlement(
-				context.Background(),
-				Config{
-					HTTPClient: server.Client(),
-					Source:     Endpoint{Channel: fakeChannel{}},
-				},
-				WFCEntitlementRequest{
-					Identity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
-					Device:   Device{IMEI: "111111111111111", Vendor: "Google", Model: "Pixel 8 Pro", SoftwareVersion: "15"},
-					Config: WFCConfig{
-						Server:                           server.URL,
-						DefaultServiceEntitlementEnabled: tt.defaultEnabled,
-					},
-				},
-			)
-			if err != nil {
-				t.Fatalf("CheckWFCEntitlement() error = %v", err)
-			}
-			if got.Status != tt.want {
-				t.Errorf("CheckWFCEntitlement().Status = %+v, want %+v", got.Status, tt.want)
+	for _, enabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("default_enabled_%v", enabled), func(t *testing.T) {
+			_, err := CheckWFCEntitlement(context.Background(), Config{
+				HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) { return response(200, ""), nil }),
+			}, WFCEntitlementRequest{
+				Identity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				Config:   WFCConfig{Server: "https://example.test", DefaultServiceEntitlementEnabled: enabled},
+			})
+			if err == nil {
+				t.Fatal("empty response succeeded")
 			}
 		})
 	}

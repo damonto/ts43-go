@@ -145,9 +145,8 @@ type OperationResult int
 const (
 	OperationResultUnknown OperationResult = 0
 	OperationResultSuccess OperationResult = 1
-	// OperationResultGoogleDelayedDownload is specific to the GMS flow. Samsung
-	// assigns the same value to an invalid message response.
-	OperationResultGoogleDelayedDownload OperationResult = 104
+	// OperationResultInvalidMessageResponse reports rejected user input (TS.43 Part 1).
+	OperationResultInvalidMessageResponse OperationResult = 104
 )
 
 func (r OperationResult) String() string {

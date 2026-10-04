@@ -1,7 +1,7 @@
 /*
  * Standard TS.43 VoWiFi web portal callback adapter.
  *
- * TS.43 VoWiFi portals use only two WebView callbacks:
+ * Supports TS.43 callbacks and the Google Wi-Fi Calling portal bridge:
  * - VoWiFiWebServiceFlow.entitlementChanged()
  * - VoWiFiWebServiceFlow.dismissFlow()
  */
@@ -41,21 +41,31 @@
     }
   }
 
-  global.VoWiFiWebServiceFlow = Object.assign(
-    {
-      entitlementChanged: function entitlementChanged() {
-        return emit("entitlementChanged");
-      },
-      dismissFlow: function dismissFlow() {
-        return emit("dismissFlow");
-      },
-    },
-    global.VoWiFiWebServiceFlow || {},
-  );
+  function install(name) {
+    const callbacks = {
+      entitlementChanged: () => emit("entitlementChanged"),
+      CloseWebView: () => emit("entitlementChanged"),
+      dismissFlow: () => emit("dismissFlow"),
+      cancelButtonClicked: () => emit("dismissFlow"),
+      cancelButtonPressed: () => emit("dismissFlow"),
+      phoneServicesAccountStatusChanged: () => emit("entitlementChanged"),
+      workflowAbandoned: () => emit("entitlementChanged"),
+      workflowCompleted: () => emit("entitlementChanged"),
+    };
+    global[name] = Object.assign(callbacks, global[name] || {});
+    return global[name];
+  }
+
+  // Set this to WFCConfig.WebsheetClientName before injecting the adapter.
+  const clientName = global.TS43_WFC_CLIENT_NAME || "WiFiCallingWebViewController";
+  install(clientName);
+  install("VoWiFiWebServiceFlow");
+  install("WiFiCallingWebViewController");
 
   global.ts43VoWiFiServiceFlow = Object.freeze({
-    done: global.VoWiFiWebServiceFlow.entitlementChanged,
-    dismiss: global.VoWiFiWebServiceFlow.dismissFlow,
+    install,
+    done: global[clientName].entitlementChanged,
+    dismiss: global[clientName].dismissFlow,
     callbacks: function callbacks() {
       try {
         return JSON.parse(global.localStorage.getItem(STORAGE_KEY) || "[]");

@@ -30,7 +30,7 @@ type Config struct {
 	Entitlement Entitlement
 	Source      Endpoint
 	// Target.Channel is required to refresh credentials with the activated
-	// target profile when a post-download request returns HTTP 511.
+	// target profile when a post-download token expires or is rejected (401/511).
 	Target     Endpoint
 	Companion  Device
 	Events     chan<- Event
@@ -52,8 +52,15 @@ type Entitlement struct {
 	// derive ManageSubscription operation_type. Its zero value is inferred from
 	// SourceSIMType for transfer flows.
 	SamsungSubscriptionType SamsungSubscriptionType
-	UseTempTokenConversion  bool
-	SetTargetTerminalFields bool
+	// Samsung capability flags have different wire destinations.
+	SamsungExtraTerminalParams     bool
+	SamsungInjectWebsheetParams    bool
+	SamsungInjectWebsheetParamsLGU bool
+	SamsungLegacyUserAgent         bool
+	// SamsungAndroidEntitlement requires the Android Ts43Operation backend.
+	SamsungAndroidEntitlement bool
+	UseTempTokenConversion    bool
+	SetTargetTerminalFields   bool
 	// RestrictOldTerminalFields mirrors the GMS Ljotr.Q feature flag. When it
 	// is false, GMS sends old terminal IDs broadly; when true, it only sends
 	// them for transfer types 7 and 9.
@@ -64,10 +71,12 @@ type Entitlement struct {
 	PollTimeout            time.Duration
 	AutoRetry511Limit      int
 	App                    string
-	AppName                string
-	ProvisioningVersion    string
-	RequestVersion         string
-	Version                string
+	// OmitAppName preserves an explicit empty carrier app_name.
+	OmitAppName         bool
+	AppName             string
+	ProvisioningVersion string
+	RequestVersion      string
+	Version             string
 }
 
 // SamsungSubscriptionType identifies the Samsung ODA subscription intent.
@@ -109,6 +118,8 @@ type Device struct {
 	Model               string
 	SoftwareVersion     string
 	SerialNumber        string
+	BarcodeNumber       string
+	ActivatedID         string
 	FriendlyName        string
 	Service             string
 	EntitlementProtocol int
@@ -131,6 +142,8 @@ const (
 	StatePendingSMDSDiscovery
 	StateDismissed
 	StatePendingDelayedDownload
+	// StatePendingConfiguration waits for download configuration before installation.
+	StatePendingConfiguration
 )
 
 type Event interface {
@@ -211,6 +224,13 @@ type DelayedDownloadEvent struct {
 
 func (DelayedDownloadEvent) ts43Event() {}
 
+// ConfigurationPendingEvent requests a later check for profile download data.
+type ConfigurationPendingEvent struct {
+	ICCID string
+}
+
+func (ConfigurationPendingEvent) ts43Event() {}
+
 type ActivationPendingEvent struct {
 	ICCID              string
 	SubscriptionResult SubscriptionResult
@@ -256,11 +276,12 @@ type transferSession struct {
 }
 
 type transferOffer struct {
-	SourceIdentity Identity
-	SourceDevice   Device
-	TargetDevice   Device
-	AuthToken      AuthToken
-	TemporaryToken TemporaryToken
+	SourceIdentity     Identity
+	SourceDevice       Device
+	TargetDevice       Device
+	AuthToken          AuthToken
+	TemporaryToken     TemporaryToken
+	activationIdentity *Identity
 }
 
 // AuthToken is the TS.43 source authentication token sent as IMSI + token.

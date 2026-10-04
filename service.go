@@ -18,26 +18,15 @@ var (
 const sourceProfileDeletedEntitlementProtocol = 1
 
 func (c *Client) Transfer(ctx context.Context) (*Result, error) {
-	return transferFlow{client: c}.Transfer(ctx)
-}
-
-func (c *Client) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {
-	return transferFlow{client: c}.Continue(ctx, result, req)
-}
-
-func (c *Client) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
-	return transferFlow{client: c}.CompleteActivation(ctx, result, activation)
-}
-
-type transferFlow struct {
-	client *Client
-}
-
-func (f transferFlow) Transfer(ctx context.Context) (*Result, error) {
-	c := f.client
+	if c.transfer.source.Channel == nil {
+		return nil, errors.New("source channel is required")
+	}
 	identity, err := c.transfer.source.Channel.Identity(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read source SIM identity: %w", err)
+	}
+	if identity == nil {
+		return nil, errors.New("read source SIM identity: identity is missing")
 	}
 	if err := c.discoverEntitlement(*identity); err != nil {
 		return nil, err
@@ -71,27 +60,34 @@ func (c *Client) discoverEntitlement(identity Identity) error {
 	if err != nil {
 		return fmt.Errorf("discover entitlement config: %w", err)
 	}
+	c.applyDiscoveredEntitlement(discovered)
+	return nil
+}
+
+func (c *Client) applyDiscoveredEntitlement(discovered Entitlement) {
+	requested := c.transfer.entitlement
 	discovered.SourceSIMType = requested.SourceSIMType
 	discovered.SamsungSubscriptionType = requested.SamsungSubscriptionType
-	if requested.Timeout != defaultEntitlementTimeout || discovered.Timeout == 0 {
+	if c.runtime.explicitTimeout || discovered.Timeout == 0 {
 		discovered.Timeout = requested.Timeout
 	}
 	discovered.AutoRetry511Limit = requested.AutoRetry511Limit
 	c.transfer.entitlement = discovered
-	return nil
+	if c.runtime.defaultHTTPClient {
+		c.runtime.httpClient = NewHTTPClient(c.runtime.logger, discovered.Timeout)
+	}
 }
 
-func (f transferFlow) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {
-	c := f.client
+func (c *Client) Continue(ctx context.Context, result *Result, req ContinueRequest) (*Result, error) {
 	if result == nil {
 		return nil, errors.New("result is required")
 	}
+	session, err := requireTransferSession(result)
+	if err != nil {
+		return result, err
+	}
 	switch result.State {
 	case StatePendingUserInput:
-		session, err := requireTransferSession(result)
-		if err != nil {
-			return result, err
-		}
 		if req.UserInput == nil {
 			return result, errors.New("user input is required")
 		}
@@ -100,18 +96,15 @@ func (f transferFlow) Continue(ctx context.Context, result *Result, req Continue
 		}
 		return c.activate(ctx, session.offer, *req.UserInput)
 	case StatePendingWebsheet:
-		if _, err := requireTransferSession(result); err != nil {
-			return result, err
-		}
 		if req.Websheet == nil {
 			return result, errors.New("websheet result is required")
 		}
 		return c.handleWebsheetResult(ctx, result, *req.Websheet)
+	case StatePendingConfiguration:
+		return c.continueConfiguration(ctx, result)
+	case StatePendingActivation:
+		return c.resumeActivation(ctx, result)
 	case StatePendingSourceProfileDeletion:
-		session, err := requireTransferSession(result)
-		if err != nil {
-			return result, err
-		}
 		if !req.SourceProfileDeleted {
 			return result, errors.New("source profile deletion confirmation is required")
 		}
@@ -119,7 +112,10 @@ func (f transferFlow) Continue(ctx context.Context, result *Result, req Continue
 			if session.offer.SourceDevice.EntitlementProtocol == 0 {
 				session.offer.SourceDevice.EntitlementProtocol = sourceProfileDeletedEntitlementProtocol
 			}
-			return c.pollAfterSourceProfileDeletion(ctx, result)
+			return c.continueConfiguration(ctx, result)
+		}
+		if c.transfer.entitlement.Channel != EntitlementChannelSamsung && c.transfer.entitlement.TransferType != TransferTypeTemporaryTokenVariant11 {
+			return c.continueConfiguration(ctx, result)
 		}
 		return c.activate(ctx, session.offer, UserInputResult{Button: MessageButtonUnknown})
 	default:
@@ -127,8 +123,7 @@ func (f transferFlow) Continue(ctx context.Context, result *Result, req Continue
 	}
 }
 
-func (f transferFlow) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
-	c := f.client
+func (c *Client) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
 	if result == nil {
 		return nil, errors.New("result is required")
 	}
@@ -136,29 +131,34 @@ func (f transferFlow) CompleteActivation(ctx context.Context, result *Result, ac
 	if err != nil {
 		return result, err
 	}
+	if result.State == StateDone || result.State == StateDismissed {
+		return result, nil
+	}
+	if result.State == StatePendingActivation {
+		return c.resumeActivation(ctx, result)
+	}
+	if result.State == StatePendingConfiguration {
+		return result, errors.New("download configuration is still pending")
+	}
 	offer := session.offer
 	if iccid := firstNonEmpty(activation.ICCID, result.DownloadConfig.ProfileICCID); iccid != "" {
 		offer.TargetDevice.ICCID = iccid
 		result.DownloadConfig.ProfileICCID = iccid
 	}
-	credential, err := c.transferCredential(ctx, offer)
+	auth, err := c.activationAuth(ctx, offer)
 	if err != nil {
 		return result, err
 	}
-	requestIdentity := offer.SourceIdentity
-	requestChannel := c.transfer.source.Channel
 	var update *ODSAResponse
 	for attempt := 0; ; attempt++ {
-		update, err = c.updateSubscriptionOnChannel(ctx, requestChannel, requestIdentity, offer.SourceDevice, offer.TargetDevice, credential)
-		if isHTTPStatus(err, 511) && attempt < c.transfer.entitlement.AutoRetry511Limit {
-			nextCredential, targetIdentity, refreshErr := c.refreshActivationCredential(ctx, offer)
+		update, err = c.updateSubscriptionOnChannel(ctx, auth.channel, auth.identity, offer.SourceDevice, offer.TargetDevice, auth.credential)
+		if auth.credential.rejectedBy(err) && attempt < c.transfer.entitlement.AutoRetry511Limit {
+			nextAuth, refreshErr := c.refreshActivationAuth(ctx, offer)
 			if refreshErr != nil {
 				result.UpdateSubscription = update
 				return result, refreshErr
 			}
-			credential = nextCredential
-			requestIdentity = targetIdentity
-			requestChannel = c.transfer.target.Channel
+			auth = nextAuth
 			result.DownloadConfig.ProfileICCID = offer.TargetDevice.ICCID
 			continue
 		}
@@ -168,6 +168,11 @@ func (f transferFlow) CompleteActivation(ctx context.Context, result *Result, ac
 	if err != nil {
 		return result, err
 	}
+	c.updateTransferCredential(offer, update, auth.credential)
+	// Once the update is accepted, errors from subsequent polling must leave
+	// the result resumable without submitting the subscription update again.
+	result.State = StatePendingActivation
+	result.Event = ActivationPendingEvent{ICCID: offer.TargetDevice.ICCID, SubscriptionResult: update.SubscriptionResult}
 	if c.transfer.entitlement.Channel == EntitlementChannelSamsung && update.SubscriptionResult == SubscriptionResultDismiss {
 		result.State = StateDismissed
 		result.Event = DismissEvent{SubscriptionResult: update.SubscriptionResult}
@@ -175,22 +180,30 @@ func (f transferFlow) CompleteActivation(ctx context.Context, result *Result, ac
 		return result, nil
 	}
 	if c.transfer.entitlement.Channel == EntitlementChannelSamsung && update.SubscriptionResult == SubscriptionResultDelayedDownload {
-		result.State = StatePendingActivation
-		result.Event = ActivationPendingEvent{
-			ICCID:              offer.TargetDevice.ICCID,
-			SubscriptionResult: update.SubscriptionResult,
-		}
 		c.emit(result.Event)
 		return result, nil
 	}
-	configuration, err := c.pollActivationConfiguration(ctx, offer, requestChannel, requestIdentity, credential)
+	return c.resumeActivation(ctx, result)
+}
+
+func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result, error) {
+	session, err := requireTransferSession(result)
+	if err != nil {
+		return result, err
+	}
+	offer := session.offer
+	auth, err := c.activationAuth(ctx, offer)
+	if err != nil {
+		return result, err
+	}
+	configuration, err := c.pollActivationConfiguration(ctx, offer, auth)
 	result.DownloadConfig.ProfileICCID = offer.TargetDevice.ICCID
 	result.UpdateConfiguration = configuration
 	if errors.Is(err, errPollingNotTriggered) {
 		result.State = StatePendingActivation
 		result.Event = ActivationPendingEvent{
 			ICCID:              offer.TargetDevice.ICCID,
-			SubscriptionResult: update.SubscriptionResult,
+			SubscriptionResult: result.UpdateSubscription.SubscriptionResult,
 		}
 		c.emit(result.Event)
 		return result, nil
@@ -241,7 +254,7 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 	var manage *ODSAResponse
 	for manageAttempt := 0; ; manageAttempt++ {
 		manage, err = c.manageSubscription(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, credential, answer)
-		if isHTTPStatus(err, 511) && manageAttempt < c.transfer.entitlement.AutoRetry511Limit {
+		if credential.rejectedBy(err) && manageAttempt < c.transfer.entitlement.AutoRetry511Limit {
 			nextCredential, refreshErr := c.refreshTransferCredential(ctx, offer)
 			if refreshErr != nil {
 				return &Result{ManageSubscription: manage, session: &transferSession{offer: offer}}, refreshErr
@@ -255,7 +268,7 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 	if err != nil {
 		return result, err
 	}
-	credential = c.updateTransferCredential(offer, manage, credential)
+	c.updateTransferCredential(offer, manage, credential)
 	if sourceProfileDeletionRequired(manage) {
 		result.session.sourceProfileICCID = firstNonEmpty(offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID)
 		result.State = StatePendingSourceProfileDeletion
@@ -271,7 +284,11 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 	}
 	if websheetRequired(manage) {
 		result.State = StatePendingWebsheet
-		result.Event = WebsheetEvent{Websheet: manage.Websheet}
+		sheet := manage.Websheet
+		if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
+			sheet = samsungWebsheet(c.transfer.entitlement, sheet, offer.TargetDevice)
+		}
+		result.Event = WebsheetEvent{Websheet: sheet}
 		c.emit(result.Event)
 		return result, nil
 	}
@@ -295,40 +312,22 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 		c.emit(result.Event)
 		return result, nil
 	}
-	if delayedDownloadRequired(manage) || googleDelayedDownloadRequired(c.transfer.entitlement, manage) {
+	if delayedDownloadRequired(manage) && (c.transfer.entitlement.Channel == EntitlementChannelSamsung || c.transfer.entitlement.UseSMDSDelayedDownload) {
 		result.State, result.Event = c.delayedDownloadState(offer, manage.SubscriptionResult)
 		c.emit(result.Event)
 		return result, nil
 	}
-	configuration, err := c.pollConfiguration(ctx, offer, credential)
-	result.Configuration = configuration
-	if errors.Is(err, errPollingNotTriggered) {
-		result.State = StatePendingActivation
-		result.Event = ActivationPendingEvent{
-			ICCID:              offer.TargetDevice.ICCID,
-			SubscriptionResult: manage.SubscriptionResult,
-		}
-		c.emit(result.Event)
-		return result, nil
-	}
-	if err != nil {
-		return result, err
-	}
-	if updateConfigurationRequired && !configuration.DownloadInfoPresent {
-		result.State = StateDone
-		result.Event = DoneEvent{}
-		c.emit(result.Event)
-		return result, nil
-	}
-	return c.applyDownloadConfiguration(result, configuration.Download)
+	return c.continueConfiguration(ctx, result)
 }
 
-func (c *Client) pollAfterSourceProfileDeletion(ctx context.Context, result *Result) (*Result, error) {
+func (c *Client) continueConfiguration(ctx context.Context, result *Result) (*Result, error) {
 	session, err := requireTransferSession(result)
 	if err != nil {
 		return result, err
 	}
 	offer := session.offer
+	result.State = StatePendingConfiguration
+	result.Event = ConfigurationPendingEvent{ICCID: offer.TargetDevice.ICCID}
 	credential, err := c.transferCredential(ctx, offer)
 	if err != nil {
 		return result, err
@@ -336,15 +335,17 @@ func (c *Client) pollAfterSourceProfileDeletion(ctx context.Context, result *Res
 	configuration, err := c.pollConfiguration(ctx, offer, credential)
 	result.Configuration = configuration
 	if errors.Is(err, errPollingNotTriggered) {
-		result.State = StatePendingActivation
-		result.Event = ActivationPendingEvent{
-			ICCID: offer.TargetDevice.ICCID,
-		}
 		c.emit(result.Event)
 		return result, nil
 	}
 	if err != nil {
 		return result, err
+	}
+	if result.ManageSubscription != nil && samsungUpdateConfigurationRequired(c.transfer.entitlement, result.ManageSubscription) && !configuration.DownloadInfoPresent {
+		result.State = StateDone
+		result.Event = DoneEvent{}
+		c.emit(result.Event)
+		return result, nil
 	}
 	return c.applyDownloadConfiguration(result, configuration.Download)
 }
@@ -357,7 +358,7 @@ func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, cr
 			return nil, errors.New("acquire configuration timeout")
 		}
 		resp, err := c.acquireConfiguration(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, credential)
-		if isHTTPStatus(err, 511) && retries < c.transfer.entitlement.AutoRetry511Limit {
+		if credential.rejectedBy(err) && retries < c.transfer.entitlement.AutoRetry511Limit {
 			retries++
 			nextCredential, refreshErr := c.refreshTransferCredential(ctx, offer)
 			if refreshErr != nil {
@@ -369,66 +370,36 @@ func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, cr
 		if err != nil {
 			return resp, err
 		}
-		switch resp.ServiceStatus {
-		case ServiceStatusActivated:
-			return resp, nil
-		case ServiceStatusActivating:
-			interval, ok := c.pollInterval(resp)
-			if !ok {
-				return resp, errPollingNotTriggered
-			}
-			if err := c.sleep(ctx, interval); err != nil {
-				return resp, err
-			}
-		case ServiceStatusDeactivated:
-			return resp, errors.New("service is deactivated")
-		case ServiceStatusDeactivatedNoReuse:
-			return resp, errors.New("service is deactivated with no ICCID reuse")
-		default:
-			return resp, fmt.Errorf("unexpected service status %q", resp.ServiceStatus)
+		ready, err := c.waitForConfiguration(ctx, resp)
+		if ready || err != nil {
+			return resp, err
 		}
 	}
 }
 
-func (c *Client) pollActivationConfiguration(ctx context.Context, offer *transferOffer, channel Channel, identity Identity, credential transferCredential) (*ODSAResponse, error) {
+func (c *Client) pollActivationConfiguration(ctx context.Context, offer *transferOffer, auth activationAuth) (*ODSAResponse, error) {
 	deadline := c.now().Add(c.transfer.entitlement.PollTimeout)
 	retries := 0
 	for {
 		if !c.now().Before(deadline) {
 			return nil, errors.New("activation configuration timeout")
 		}
-		resp, err := c.acquireActivationConfigurationOnChannel(ctx, channel, identity, offer.TargetDevice, credential)
-		if isHTTPStatus(err, 511) && retries < c.transfer.entitlement.AutoRetry511Limit {
+		resp, err := c.acquireActivationConfigurationOnChannel(ctx, auth.channel, auth.identity, offer.TargetDevice, auth.credential)
+		if auth.credential.rejectedBy(err) && retries < c.transfer.entitlement.AutoRetry511Limit {
 			retries++
-			nextCredential, targetIdentity, refreshErr := c.refreshActivationCredential(ctx, offer)
+			nextAuth, refreshErr := c.refreshActivationAuth(ctx, offer)
 			if refreshErr != nil {
 				return resp, refreshErr
 			}
-			credential = nextCredential
-			identity = targetIdentity
-			channel = c.transfer.target.Channel
+			auth = nextAuth
 			continue
 		}
 		if err != nil {
 			return resp, err
 		}
-		switch resp.ServiceStatus {
-		case ServiceStatusActivated:
-			return resp, nil
-		case ServiceStatusActivating:
-			interval, ok := c.pollInterval(resp)
-			if !ok {
-				return resp, errPollingNotTriggered
-			}
-			if err := c.sleep(ctx, interval); err != nil {
-				return resp, err
-			}
-		case ServiceStatusDeactivated:
-			return resp, errors.New("activation service is deactivated")
-		case ServiceStatusDeactivatedNoReuse:
-			return resp, errors.New("activation service is deactivated with no ICCID reuse")
-		default:
-			return resp, fmt.Errorf("unexpected activation service status %q", resp.ServiceStatus)
+		ready, err := c.waitForConfiguration(ctx, resp)
+		if ready || err != nil {
+			return resp, err
 		}
 	}
 }
@@ -443,28 +414,47 @@ func (c *Client) refreshTransferCredential(ctx context.Context, offer *transferO
 	return c.transferCredentialFromTokens(tokens), nil
 }
 
-func (c *Client) refreshActivationCredential(ctx context.Context, offer *transferOffer) (transferCredential, Identity, error) {
+type activationAuth struct {
+	identity   Identity
+	channel    Channel
+	credential transferCredential
+}
+
+func (c *Client) activationAuth(ctx context.Context, offer *transferOffer) (activationAuth, error) {
+	auth := activationAuth{identity: offer.SourceIdentity, channel: c.transfer.source.Channel, credential: c.offerCredential(offer)}
+	if !auth.credential.validAt(c.now()) {
+		return c.refreshActivationAuth(ctx, offer)
+	}
+	if offer.activationIdentity != nil {
+		auth.identity = *offer.activationIdentity
+		auth.channel = c.transfer.target.Channel
+	}
+	return auth, nil
+}
+
+func (c *Client) refreshActivationAuth(ctx context.Context, offer *transferOffer) (activationAuth, error) {
 	channel := c.transfer.target.Channel
 	if channel == nil {
-		return transferCredential{}, Identity{}, errors.New("refresh activation credential: target channel is required")
+		return activationAuth{}, errors.New("refresh activation credential: target channel is required")
 	}
 	identity, err := channel.Identity(ctx)
 	if err != nil {
-		return transferCredential{}, Identity{}, fmt.Errorf("read target subscription identity: %w", err)
+		return activationAuth{}, fmt.Errorf("read target subscription identity: %w", err)
 	}
 	if identity == nil {
-		return transferCredential{}, Identity{}, errors.New("read target subscription identity: identity is missing")
+		return activationAuth{}, errors.New("read target subscription identity: identity is missing")
 	}
 	target := offer.TargetDevice
 	target.ICCID = firstNonEmpty(identity.ICCID, target.ICCID)
 	offer.TargetDevice.ICCID = target.ICCID
 	tokens, err := c.fetchTransferTokenWithChannel(ctx, channel, *identity, target, target)
 	if err != nil {
-		return transferCredential{}, Identity{}, fmt.Errorf("refresh activation credential: %w", err)
+		return activationAuth{}, fmt.Errorf("refresh activation credential: %w", err)
 	}
 	offer.AuthToken = tokens.Auth
 	offer.TemporaryToken = tokens.Temporary
-	return c.transferCredentialFromTokens(tokens), *identity, nil
+	offer.activationIdentity = identity
+	return activationAuth{identity: *identity, channel: channel, credential: c.transferCredentialFromTokens(tokens)}, nil
 }
 
 func (c *Client) transferTokens(ctx context.Context, channel Channel, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
@@ -475,14 +465,9 @@ func (c *Client) transferTokens(ctx context.Context, channel Channel, identity I
 }
 
 func (c *Client) transferCredential(ctx context.Context, offer *transferOffer) (transferCredential, error) {
-	if c.usesTemporaryToken() {
-		if offer.TemporaryToken.Value != "" {
-			return temporaryCredential(offer.TemporaryToken), nil
-		}
-		return c.refreshTransferCredential(ctx, offer)
-	}
-	if offer.AuthToken.Value != "" {
-		return authCredential(offer.AuthToken), nil
+	credential := c.offerCredential(offer)
+	if credential.validAt(c.now()) {
+		return credential, nil
 	}
 	return c.refreshTransferCredential(ctx, offer)
 }
@@ -589,6 +574,9 @@ func completeDownloadConfig(cfg DownloadConfig, target Device) DownloadConfig {
 }
 
 func (c *Client) pollInterval(resp *ODSAResponse) (time.Duration, bool) {
+	if !resp.PollingIntervalSet && c.transfer.entitlement.Channel == EntitlementChannelSamsung {
+		return 0, false
+	}
 	if !resp.PollingIntervalSet {
 		return c.transfer.entitlement.PollInterval, c.transfer.entitlement.PollInterval > 0
 	}
@@ -633,5 +621,31 @@ func (c *Client) emit(event Event) {
 	select {
 	case c.runtime.events <- event:
 	default:
+	}
+}
+
+func (c *Client) offerCredential(offer *transferOffer) transferCredential {
+	if c.usesTemporaryToken() {
+		return temporaryCredential(offer.TemporaryToken)
+	}
+	return authCredential(offer.AuthToken)
+}
+
+func (c *Client) waitForConfiguration(ctx context.Context, resp *ODSAResponse) (bool, error) {
+	switch resp.ServiceStatus {
+	case ServiceStatusActivated:
+		return true, nil
+	case ServiceStatusActivating:
+		interval, ok := c.pollInterval(resp)
+		if !ok {
+			return false, errPollingNotTriggered
+		}
+		return false, c.sleep(ctx, interval)
+	case ServiceStatusDeactivated:
+		return false, errors.New("service is deactivated")
+	case ServiceStatusDeactivatedNoReuse:
+		return false, errors.New("service is deactivated with no ICCID reuse")
+	default:
+		return false, fmt.Errorf("unexpected service status %q", resp.ServiceStatus)
 	}
 }

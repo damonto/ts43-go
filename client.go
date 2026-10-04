@@ -19,11 +19,13 @@ type Client struct {
 }
 
 type clientRuntime struct {
-	logger     *slog.Logger
-	httpClient HTTPDoer
-	events     chan<- Event
-	now        func() time.Time
-	sleep      func(context.Context, time.Duration) error
+	logger            *slog.Logger
+	httpClient        HTTPDoer
+	defaultHTTPClient bool
+	explicitTimeout   bool
+	events            chan<- Event
+	now               func() time.Time
+	sleep             func(context.Context, time.Duration) error
 }
 
 type transferDefaults struct {
@@ -83,11 +85,13 @@ func newClient(cfg Config) *Client {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+	explicitTimeout := cfg.Entitlement.Timeout != 0
 	cfg.Entitlement.TransferType = selectedTransferType(cfg.Entitlement)
 	if cfg.Entitlement.Timeout == 0 {
 		cfg.Entitlement.Timeout = defaultEntitlementTimeout
 	}
 	cfg.HTTPClient = withTS43Transport(cfg.Logger, cfg.HTTPClient)
+	defaultHTTPClient := cfg.HTTPClient == nil
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = NewHTTPClient(cfg.Logger, cfg.Entitlement.Timeout)
 	}
@@ -102,11 +106,13 @@ func newClient(cfg Config) *Client {
 	}
 	return &Client{
 		runtime: clientRuntime{
-			logger:     cfg.Logger,
-			httpClient: cfg.HTTPClient,
-			events:     cfg.Events,
-			now:        cfg.Now,
-			sleep:      cfg.Sleep,
+			logger:            cfg.Logger,
+			httpClient:        cfg.HTTPClient,
+			defaultHTTPClient: defaultHTTPClient,
+			explicitTimeout:   explicitTimeout,
+			events:            cfg.Events,
+			now:               cfg.Now,
+			sleep:             cfg.Sleep,
 		},
 		transfer: transferDefaults{
 			entitlement: cfg.Entitlement,
@@ -209,21 +215,21 @@ func (c *Client) ManageSubscriptionWithTemporaryToken(ctx context.Context, req M
 }
 
 func (c *Client) manageSubscription(ctx context.Context, identity Identity, source Device, target Device, credential transferCredential, answer UserInputResult) (*ODSAResponse, error) {
-	req, op := c.manageSubscriptionRequest(source, target, credential, answer)
+	req, op := c.manageSubscriptionRequest(ManageSubscriptionRequest{Source: source, Target: target, UserInput: answer}, credential)
 	resp, _, err := c.call(ctx, identity, req, op)
 	if err != nil {
 		return resp, err
 	}
-	if !manageSubscriptionAccepted(c.transfer.entitlement, resp) {
+	if !manageSubscriptionAccepted(resp) {
 		return resp, &CarrierDeniedError{Operation: OperationManage, Result: resp}
 	}
 	return resp, nil
 }
 
-func (c *Client) manageSubscriptionRequest(source Device, target Device, credential transferCredential, answer UserInputResult) (ServiceEntitlementRequest, ODSAOperation) {
-	reqDevice := manageSubscriptionRequestDevice(c.transfer.entitlement, source, target)
+func (c *Client) manageSubscriptionRequest(input ManageSubscriptionRequest, credential transferCredential) (ServiceEntitlementRequest, ODSAOperation) {
+	reqDevice := manageSubscriptionRequestDevice(c.transfer.entitlement, input.Source, input.Target)
 	req := c.transferRequest(reqDevice, credential)
-	op := manageSubscriptionOperation(c.transfer.entitlement, source, target, answer)
+	op := manageSubscriptionOperation(c.transfer.entitlement, input)
 	c.addOptionalOperationFields(&op)
 	return req, op
 }
@@ -481,6 +487,9 @@ func (c *Client) realm() string {
 }
 
 func (c *Client) appName() string {
+	if c.transfer.entitlement.OmitAppName {
+		return ""
+	}
 	if c.transfer.entitlement.AppName != "" {
 		return c.transfer.entitlement.AppName
 	}
@@ -565,14 +574,11 @@ func validateSamsungSubscriptionType(entitlement Entitlement) error {
 }
 
 func isHTTPStatus(err error, status int) bool {
-	var httpErr *HTTPError
-	return errors.As(err, &httpErr) && httpErr.StatusCode == status
+	httpErr, ok := errors.AsType[*HTTPError](err)
+	return ok && httpErr.StatusCode == status
 }
 
-func manageSubscriptionAccepted(entitlement Entitlement, resp *ODSAResponse) bool {
-	if googleDelayedDownloadRequired(entitlement, resp) {
-		return true
-	}
+func manageSubscriptionAccepted(resp *ODSAResponse) bool {
 	if resp.OperationResult != OperationResultSuccess {
 		return false
 	}
@@ -590,11 +596,6 @@ func manageSubscriptionAccepted(entitlement Entitlement, resp *ODSAResponse) boo
 	default:
 		return false
 	}
-}
-
-func googleDelayedDownloadRequired(entitlement Entitlement, resp *ODSAResponse) bool {
-	return entitlement.Channel != EntitlementChannelSamsung &&
-		resp.OperationResult == OperationResultGoogleDelayedDownload
 }
 
 func subscriptionUpdateAccepted(entitlement Entitlement, resp *ODSAResponse) bool {
@@ -633,10 +634,11 @@ func temporaryTokenExpiresAt(value string) (time.Time, error) {
 	if value == "" {
 		return time.Time{}, errors.New("temporary token expiry is missing")
 	}
-	if expiresAt, err := time.Parse(time.RFC3339Nano, value); err == nil {
-		return expiresAt, nil
+	var expiresAt time.Time
+	if err := expiresAt.UnmarshalText([]byte(value)); err != nil {
+		return time.Time{}, fmt.Errorf("parse temporary token expiry: %w", err)
 	}
-	return time.Time{}, fmt.Errorf("parse temporary token expiry %q", value)
+	return expiresAt, nil
 }
 
 func authCredential(token AuthToken) transferCredential {
@@ -670,4 +672,17 @@ func authMode(req ServiceEntitlementRequest) string {
 	default:
 		return "eap_aka"
 	}
+}
+
+func (c transferCredential) validAt(now time.Time) bool {
+	value, expiry := c.auth.Value, c.auth.ExpiresAt
+	if c.temporaryToken {
+		value, expiry = c.temporary.Value, c.temporary.ExpiresAt
+	}
+	return value != "" && (expiry.IsZero() || now.Before(expiry))
+}
+
+func (c transferCredential) rejectedBy(err error) bool {
+	return isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) ||
+		(c.temporaryToken && isHTTPStatus(err, http.StatusUnauthorized))
 }

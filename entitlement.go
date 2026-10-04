@@ -27,7 +27,13 @@ var (
 )
 
 type entitlementRecord struct {
+	SamsungAndroidEntitlement                  bool    `json:"samsungAndroidEntitlement"`
 	MCCMNC                                     string  `json:"mccmnc"`
+	PreferredAPN                               *string `json:"preferredApn"`
+	SamsungExtraTerminalParams                 bool    `json:"samsungExtraTerminalParams"`
+	SamsungInjectWebsheetParams                bool    `json:"samsungInjectWebsheetParams"`
+	SamsungInjectWebsheetParamsLGU             bool    `json:"samsungInjectWebsheetParamsLgu"`
+	SamsungLegacyUserAgent                     bool    `json:"samsungLegacyUserAgent"`
 	GID1                                       *string `json:"gid1"`
 	GID2                                       *string `json:"gid2"`
 	SPN                                        *string `json:"spn"`
@@ -36,7 +42,7 @@ type entitlementRecord struct {
 	Channel                                    string  `json:"channel"`
 	EntitlementServer                          string  `json:"entitlementServer"`
 	App                                        string  `json:"app"`
-	AppName                                    string  `json:"appName"`
+	AppName                                    *string `json:"appName"`
 	EntitlementVersion                         string  `json:"entitlementVersion"`
 	ProvisioningVersion                        string  `json:"provisioningVersion"`
 	RequestVersion                             string  `json:"requestVersion"`
@@ -112,7 +118,7 @@ func selectEntitlementRecord(records []entitlementRecord, identity Identity, cha
 		if normalizeEntitlementChannel(EntitlementChannel(record.Channel)) != channel {
 			continue
 		}
-		score, ok := record.match().score(identity)
+		score, ok := record.score(identity)
 		if !ok || score < bestScore {
 			continue
 		}
@@ -139,6 +145,7 @@ func selectEntitlementRecord(records []entitlementRecord, identity Identity, cha
 func (r entitlementRecord) match() carrierMatch {
 	return carrierMatch{
 		MCCMNC:             r.MCCMNC,
+		PreferredAPN:       r.PreferredAPN,
 		GID1:               r.GID1,
 		GID2:               r.GID2,
 		SPN:                r.SPN,
@@ -165,22 +172,31 @@ func (r entitlementRecord) entitlement(sourceSIMType SIMType) (Entitlement, erro
 
 func (r entitlementRecord) toEntitlement(sourceSIMType SIMType, transferType TransferType) Entitlement {
 	entitlement := Entitlement{
-		Server:                    r.EntitlementServer,
-		Channel:                   normalizeEntitlementChannel(EntitlementChannel(r.Channel)),
-		UsePost:                   r.UseHTTPPost,
-		SourceSIMType:             sourceSIMType,
-		TransferType:              transferType,
-		UseTempTokenConversion:    r.UseTempTokenConversion,
-		SetTargetTerminalFields:   r.SetTargetTerminalFields,
-		RestrictOldTerminalFields: r.RestrictOldTerminalFields,
-		UseSMDSDelayedDownload:    r.UseSMDSDelayedDownload,
-		PollInterval:              time.Duration(r.AcquireConfigurationPollingIntervalMinutes) * time.Minute,
-		PollTimeout:               time.Duration(r.AcquireConfigurationPollingTimeoutMinutes) * time.Minute,
-		App:                       r.App,
-		AppName:                   r.AppName,
-		ProvisioningVersion:       r.ProvisioningVersion,
-		RequestVersion:            r.RequestVersion,
-		Version:                   r.EntitlementVersion,
+		SamsungAndroidEntitlement:      r.SamsungAndroidEntitlement,
+		Server:                         r.EntitlementServer,
+		Channel:                        normalizeEntitlementChannel(EntitlementChannel(r.Channel)),
+		UsePost:                        r.UseHTTPPost,
+		SamsungExtraTerminalParams:     r.SamsungExtraTerminalParams,
+		SamsungInjectWebsheetParams:    r.SamsungInjectWebsheetParams,
+		SamsungInjectWebsheetParamsLGU: r.SamsungInjectWebsheetParamsLGU,
+		SamsungLegacyUserAgent:         r.SamsungLegacyUserAgent,
+		SourceSIMType:                  sourceSIMType,
+		TransferType:                   transferType,
+		UseTempTokenConversion:         r.UseTempTokenConversion,
+		SetTargetTerminalFields:        r.SetTargetTerminalFields,
+		RestrictOldTerminalFields:      r.RestrictOldTerminalFields,
+		UseSMDSDelayedDownload:         r.UseSMDSDelayedDownload,
+		PollInterval:                   time.Duration(r.AcquireConfigurationPollingIntervalMinutes) * time.Minute,
+		PollTimeout:                    time.Duration(r.AcquireConfigurationPollingTimeoutMinutes) * time.Minute,
+		App:                            r.App,
+
+		ProvisioningVersion: r.ProvisioningVersion,
+		RequestVersion:      r.RequestVersion,
+		Version:             r.EntitlementVersion,
+	}
+	if r.AppName != nil {
+		entitlement.AppName = *r.AppName
+		entitlement.OmitAppName = *r.AppName == ""
 	}
 	if r.TimeoutSeconds > 0 {
 		entitlement.Timeout = time.Duration(r.TimeoutSeconds) * time.Second
@@ -193,4 +209,12 @@ func normalizeEntitlementChannel(channel EntitlementChannel) EntitlementChannel 
 		return EntitlementChannelGoogle
 	}
 	return channel
+}
+
+func (r entitlementRecord) score(identity Identity) (int, bool) {
+	match := r.match()
+	if normalizeEntitlementChannel(EntitlementChannel(r.Channel)) == EntitlementChannelGoogle {
+		return match.googleScore(identity)
+	}
+	return match.score(identity)
 }

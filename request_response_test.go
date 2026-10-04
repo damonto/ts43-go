@@ -659,8 +659,7 @@ func TestODSAResponseRejectsInvalidIntegers(t *testing.T) {
 			if err == nil {
 				t.Fatalf("UnmarshalBinary(%s) error = nil, want error", tt.body)
 			}
-			var numErr *strconv.NumError
-			if !errors.As(err, &numErr) {
+			if _, ok := errors.AsType[*strconv.NumError](err); !ok {
 				t.Errorf("UnmarshalBinary(%s) error = %T, want *strconv.NumError in chain", tt.body, err)
 			}
 			if !strings.Contains(err.Error(), tt.wantContext) {

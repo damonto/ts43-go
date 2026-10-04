@@ -21,6 +21,7 @@ type websheetCallbackPayload struct {
 
 func (r *WebsheetResult) UnmarshalText(text []byte) error {
 	line := strings.TrimSpace(string(text))
+	line = strings.ReplaceAll(line, "WiFiCallingWebViewController.", "VoWiFiWebServiceFlow.")
 	if line == "" {
 		return errors.New("websheet callback is required")
 	}
@@ -104,9 +105,9 @@ func websheetResultFromVoWiFiJS(line string) (WebsheetResult, error) {
 
 func websheetResultFromVoWiFiName(name string) (WebsheetResult, error) {
 	switch normalizeCallbackName(name) {
-	case "entitlementchanged":
+	case "entitlementchanged", "closewebview", "phoneservicesaccountstatuschanged", "workflowabandoned", "workflowcompleted":
 		return WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}, nil
-	case "dismissflow":
+	case "dismissflow", "cancelbuttonclicked", "cancelbuttonpressed":
 		return WebsheetResult{Event: WebsheetEventVoWiFiDismissFlow}, nil
 	default:
 		return WebsheetResult{}, fmt.Errorf("unknown VoWiFi websheet callback %q", name)
@@ -180,7 +181,7 @@ func websheetResultFromName(name string, args []string, query url.Values) (Websh
 			Event: WebsheetEventDeleteProfileInUse,
 			ICCID: argOrQuery(args, query, 0, "iccid", "ICCID"),
 		}, nil
-	case "entitlementchanged":
+	case "entitlementchanged", "closewebview", "phoneservicesaccountstatuschanged", "workflowabandoned", "workflowcompleted":
 		return WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}, nil
 	default:
 		return WebsheetResult{}, fmt.Errorf("unknown websheet callback %q", name)

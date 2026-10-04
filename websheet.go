@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 )
 
 var (
@@ -54,16 +55,7 @@ func (c *Client) handleWebsheetResult(ctx context.Context, result *Result, callb
 		offer.TemporaryToken = TemporaryToken{}
 		return result, nil
 	case WebsheetEventCheckProfileServiceStatus:
-		credential, err := c.transferCredential(ctx, offer)
-		if err != nil {
-			return result, err
-		}
-		configuration, err := c.pollConfiguration(ctx, offer, credential)
-		result.Configuration = configuration
-		if err != nil {
-			return result, err
-		}
-		return c.applyDownloadConfiguration(result, configuration.Download)
+		return c.continueConfiguration(ctx, result)
 	case WebsheetEventDeleteProfileInUse:
 		result.State = StatePendingSourceProfileDeletion
 		session.sourceProfileICCID = firstNonEmpty(callback.ICCID, session.sourceProfileICCID, offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID)
@@ -86,19 +78,38 @@ func (c *Client) continueWebsheetNextAction(ctx context.Context, result *Result,
 	}
 	switch next {
 	case OperationAcquireConf:
-		credential, err := c.transferCredential(ctx, offer)
-		if err != nil {
-			return result, err
-		}
-		configuration, err := c.pollConfiguration(ctx, offer, credential)
-		result.Configuration = configuration
-		if err != nil {
-			return result, err
-		}
-		return c.applyDownloadConfiguration(result, configuration.Download)
+		return c.continueConfiguration(ctx, result)
 	case OperationManage:
 		return c.activate(ctx, offer, UserInputResult{Button: MessageButtonUnknown})
 	default:
 		return result, fmt.Errorf("unsupported websheet next action %q", next)
 	}
+}
+
+// Samsung appends the same parameter suffix for both GET user data and POST
+// bodies (including its json/xml content types); it does not merge JSON objects.
+func samsungWebsheet(entitlement Entitlement, sheet Websheet, target Device) Websheet {
+	if !entitlement.SamsungInjectWebsheetParams && !entitlement.SamsungInjectWebsheetParamsLGU {
+		return sheet
+	}
+	imei1, imei2 := target.IMEI, ""
+	if len(target.IMEIs) > 0 {
+		imei1 = target.IMEIs[0]
+	}
+	if len(target.IMEIs) > 1 {
+		imei2 = target.IMEIs[1]
+	}
+	fields := []formField{
+		{"IMEI1", imei1}, {"IMEI2", imei2},
+		{"serial_number", target.SerialNumber}, {"model_name", target.Model},
+	}
+	if entitlement.SamsungInjectWebsheetParamsLGU {
+		fields = append(fields, formField{"barcode_number", target.BarcodeNumber}, formField{"activated_id", target.ActivatedID})
+	}
+	for _, field := range fields {
+		if field.value != "" {
+			sheet.UserData += "&" + field.name + "=" + url.QueryEscape(field.value)
+		}
+	}
+	return sheet
 }

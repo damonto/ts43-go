@@ -9,7 +9,8 @@ func temporaryTokenOperation(entitlement Entitlement, source, target Device) ODS
 
 func checkEligibilityOperation(entitlement Entitlement, source, target Device) ODSAOperation {
 	if entitlement.Channel == EntitlementChannelSamsung {
-		return samsungCheckEligibilityOperation(source, target)
+		op := samsungCheckEligibilityOperation(source, target)
+		return samsungExtraTerminalFields(entitlement, op, target)
 	}
 	return googleCheckEligibilityOperation(entitlement, target)
 }
@@ -18,17 +19,18 @@ func manageSubscriptionRequestDevice(entitlement Entitlement, source, target Dev
 	if samsungDigitalizedTransfer(entitlement) {
 		return target
 	}
-	if transferUsesSourceCredential(entitlement) || entitlement.TransferType == TransferTypeTemporaryToken {
+	if transferUsesSourceCredential(entitlement) || (entitlement.Channel != EntitlementChannelSamsung && entitlement.TransferType == TransferTypeTemporaryToken) {
 		return source
 	}
 	return target
 }
 
-func manageSubscriptionOperation(entitlement Entitlement, source, target Device, answer UserInputResult) ODSAOperation {
+func manageSubscriptionOperation(entitlement Entitlement, req ManageSubscriptionRequest) ODSAOperation {
 	if entitlement.Channel == EntitlementChannelSamsung {
-		return samsungManageSubscriptionOperation(entitlement, source, target, answer)
+		op := samsungManageSubscriptionOperation(entitlement, req)
+		return samsungExtraTerminalFields(entitlement, op, req.Target)
 	}
-	return googleManageSubscriptionOperation(entitlement, source, target, answer)
+	return googleManageSubscriptionOperation(entitlement, req)
 }
 
 func acquireConfigurationRequestDevice(entitlement Entitlement, source, target Device) Device {
@@ -45,21 +47,24 @@ func transferUsesSourceCredential(entitlement Entitlement) bool {
 
 func acquireConfigurationOperation(entitlement Entitlement, source, target Device) ODSAOperation {
 	if entitlement.Channel == EntitlementChannelSamsung {
-		return samsungAcquireConfigurationOperation(entitlement, source, target)
+		op := samsungAcquireConfigurationOperation(entitlement, source, target)
+		return samsungExtraTerminalFields(entitlement, op, target)
 	}
 	return googleAcquireConfigurationOperation(entitlement, source, target)
 }
 
 func updateSubscriptionOperation(entitlement Entitlement, source, target Device) ODSAOperation {
 	if entitlement.Channel == EntitlementChannelSamsung {
-		return samsungUpdateSubscriptionOperation(source, target)
+		op := samsungUpdateSubscriptionOperation(source, target)
+		return samsungExtraTerminalFields(entitlement, op, target)
 	}
 	return googleUpdateSubscriptionOperation(entitlement, source, target)
 }
 
 func activationConfigurationOperation(entitlement Entitlement, target Device) ODSAOperation {
 	if entitlement.Channel == EntitlementChannelSamsung {
-		return samsungActivationConfigurationOperation(target)
+		op := samsungActivationConfigurationOperation(target)
+		return samsungExtraTerminalFields(entitlement, op, target)
 	}
 	return googleActivationConfigurationOperation(entitlement, target)
 }
