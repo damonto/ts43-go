@@ -79,4 +79,4 @@ go vet -mod=readonly ./...
 - Explain the outcome and material design choices in plain language. Report the checks actually run, skipped checks, and unresolved limitations. Do not claim tests or live-carrier compatibility without evidence.
 - Keep this file concise and update it when a documented command or contract changes. Leave task-specific plans, progress notes, and exhaustive API details out of repository instructions.
 
-Carrier catalogs are supplied by the integrating application. Keep synthetic parser and matching tests independent of private files; owner-only catalog regressions may use `SIGMO_CARRIER_CONFIG_DIR`. Do not restore carrier JSON embeds.
+Carrier catalogs are supplied by the integrating application. Keep synthetic parser and matching tests independent of private files; owner-only catalog regressions may use `TS43_CARRIER_CONFIG_DIR`. Do not restore carrier JSON embeds.

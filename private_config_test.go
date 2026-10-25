@@ -9,9 +9,9 @@ import (
 
 func privateCarrierJSON(t *testing.T, name string) []byte {
 	t.Helper()
-	dir := os.Getenv("SIGMO_CARRIER_CONFIG_DIR")
+	dir := os.Getenv("TS43_CARRIER_CONFIG_DIR")
 	if dir == "" {
-		t.Skip("private carrier catalog regression requires SIGMO_CARRIER_CONFIG_DIR")
+		t.Skip("private carrier catalog regression requires TS43_CARRIER_CONFIG_DIR")
 	}
 	data, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
