@@ -21,7 +21,9 @@ const (
 )
 
 type Config struct {
-	Logger *slog.Logger
+	// Entitlements supplies discovery records when Entitlement.Server is empty.
+	Entitlements *EntitlementConfigs
+	Logger       *slog.Logger
 	// HTTPClient performs TS.43 requests. New clones and configures a standard
 	// *http.Client whose Transport is nil or *http.Transport. Other implementations
 	// are used unchanged and must provide TS.43-compatible TLS settings.

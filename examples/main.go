@@ -3,12 +3,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +23,7 @@ import (
 )
 
 type cliOptions struct {
+	CarrierConfigDir          string
 	Server                    string
 	SourceReader              string
 	TargetReader              string
@@ -71,6 +74,17 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 		return err
 	}
 
+	var entitlements *ts43.EntitlementConfigs
+	if opts.CarrierConfigDir != "" {
+		entitlement, err := os.ReadFile(filepath.Join(opts.CarrierConfigDir, "entitlement.json"))
+		if err != nil {
+			return err
+		}
+		entitlements = new(ts43.EntitlementConfigs)
+		if err := json.Unmarshal(entitlement, entitlements); err != nil {
+			return err
+		}
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -213,7 +227,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) (err error) {
 	fmt.Fprintf(stdout, "target_eid=%s\n", opts.TargetDevice.EID)
 
 	client, err := ts43.New(&ts43.Config{
-		Logger: logger,
+		Entitlements: entitlements,
+		Logger:       logger,
 		Entitlement: ts43.Entitlement{
 			Server:                    opts.Server,
 			Version:                   opts.Version,
@@ -258,13 +273,14 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 	fs.Usage = func() {
 		fmt.Fprintf(stderr, "Usage: %s -source-imei IMEI -target-imei IMEI [flags]\n", fs.Name())
 		fmt.Fprintln(stderr, "")
-		fmt.Fprintln(stderr, "When -server is omitted, the TS.43 entitlement config is discovered from the source SIM MCC/MNC/IMSI/GID1/GID2/SPN.")
+		fmt.Fprintln(stderr, "When -server is omitted, -carrier-config-dir supplies the records matched against the source SIM identity.")
 		fmt.Fprintln(stderr, "Use -source-psim for pSIM sources so discovery can select the carrier pSIM transfer type.")
 		fmt.Fprintln(stderr, "The selected source reader is treated as the source profile; no source profile list is built.")
 		fmt.Fprintln(stderr, "")
 		fs.PrintDefaults()
 	}
 
+	fs.StringVar(&opts.CarrierConfigDir, "carrier-config-dir", "", "directory containing caller-supplied entitlement.json")
 	fs.StringVar(&opts.Server, "server", "", "TS.43 entitlement server URL")
 	fs.StringVar(&opts.SourceDevice.IMEI, "source-imei", "", "source device IMEI")
 	fs.StringVar(&opts.TargetDevice.IMEI, "target-imei", "", "target device IMEI")

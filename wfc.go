@@ -2,17 +2,12 @@ package ts43
 
 import (
 	"context"
-	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
 )
-
-//go:embed wfc.json
-var wfcJSON []byte
 
 var (
 	ErrWFCConfigNotFound  = errors.New("wfc config not found")
@@ -192,13 +187,14 @@ type wfcRecord struct {
 	WebsheetClientName               string  `json:"websheetClientName"`
 }
 
-func DiscoverWFC(identity Identity) (WFCConfig, error) {
+// Discover selects the Wi-Fi Calling configuration for the SIM identity.
+func (c *WFCConfigs) Discover(identity Identity) (WFCConfig, error) {
 	if identity.MCC == "" || identity.MNC == "" {
 		return WFCConfig{}, errors.New("source MCC/MNC is required")
 	}
 	var records []wfcRecord
-	if err := json.Unmarshal(wfcJSON, &records); err != nil {
-		return WFCConfig{}, fmt.Errorf("parse WFC config: %w", err)
+	if c != nil {
+		records = c.records
 	}
 	record, err := selectWFCRecord(records, identity)
 	if err != nil {

@@ -56,7 +56,7 @@ func (c *Client) discoverEntitlement(identity Identity) error {
 		return nil
 	}
 	requested := c.transfer.entitlement
-	discovered, err := DiscoverEntitlementForChannel(identity, requested.SourceSIMType, requested.Channel)
+	discovered, err := c.transfer.entitlements.DiscoverForChannel(identity, requested.SourceSIMType, requested.Channel)
 	if err != nil {
 		return fmt.Errorf("discover entitlement config: %w", err)
 	}

@@ -127,7 +127,7 @@ func TestSamsungPortalInjection(t *testing.T) {
 	} {
 		for _, kind := range []string{"", "json", "xml"} {
 			t.Run(tt.name+"/"+kind, func(t *testing.T) {
-				ent, err := DiscoverEntitlementForChannel(Identity{MCC: "450", MNC: tt.mnc}, SIMTypeESIM, EntitlementChannelSamsung)
+				ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: "450", MNC: tt.mnc}, SIMTypeESIM, EntitlementChannelSamsung)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -358,7 +358,7 @@ func TestTemporaryCredentialRefreshFlow(t *testing.T) {
 func TestSamsungExtraTerminalJSONList(t *testing.T) {
 	for _, operation := range []Operation{OperationCheck, OperationManage, OperationAcquireConf} {
 		t.Run(operation.String(), func(t *testing.T) {
-			ent, err := DiscoverEntitlementForChannel(Identity{MCC: "450", MNC: "02"}, SIMTypeESIM, EntitlementChannelSamsung)
+			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: "450", MNC: "02"}, SIMTypeESIM, EntitlementChannelSamsung)
 			if err != nil {
 				t.Fatal(err)
 			}

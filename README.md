@@ -6,7 +6,7 @@ The library authenticates with a source SIM through EAP-AKA and coordinates the 
 
 ## Features
 
-- Carrier configuration discovery from embedded Google and Samsung records.
+- Carrier configuration discovery from caller-supplied Google and Samsung records.
 - pSIM-to-eSIM and eSIM-to-eSIM transfer flows, including temporary tokens and carrier-specific request formats.
 - Transfer events for user input, carrier websheets, source profile deletion, profile download, SM-DS discovery, and activation confirmation.
 - Wi-Fi Calling entitlement, terms and conditions, emergency-address status, provisioning status, and portal callbacks.
@@ -45,6 +45,7 @@ Set `SOURCE_IMEI` and `TARGET_IMEI` to your devices' IMEIs, then start an eSIM-t
 
 ```sh
 go run . \
+  -carrier-config-dir /path/to/private-files \
   -source-reader "Source Reader" \
   -target-reader "Target Reader" \
   -source-imei "$SOURCE_IMEI" \
@@ -63,25 +64,33 @@ Carrier websheets run in a browser or WebView that you provide. The CLI prints t
 
 ### Discover carrier configuration
 
-Discovery reads the embedded configuration database without contacting a carrier. This complete example looks up an illustrative source identity:
+Discovery matches a caller-supplied catalog without contacting a carrier. This example loads private files from the current directory:
 
 ```go
 package main
 
 import (
 	"fmt"
+	"encoding/json"
 	"log"
+	"os"
 
 	"github.com/damonto/ts43-go"
 )
 
 func main() {
+	entitlementJSON, err := os.ReadFile("entitlement.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+ var entitlements ts43.EntitlementConfigs
+ if err := json.Unmarshal(entitlementJSON, &entitlements); err != nil { log.Fatal(err) }
 	identity := ts43.Identity{
 		MCC: "262",
 		MNC: "01",
 		SPN: "Telekom.de",
 	}
-	entitlement, err := ts43.DiscoverEntitlement(identity, ts43.SIMTypeESIM)
+	entitlement, err := entitlements.Discover(identity, ts43.SIMTypeESIM)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -134,9 +143,9 @@ Use `Config.Logger` to supply a `*slog.Logger`. Debug logging includes HTTP URLs
 
 ## Wi-Fi Calling
 
-Wi-Fi Calling uses its own embedded configuration database and does not require a target eUICC or a transfer.
+Wi-Fi Calling uses the supplied WFC records and does not require a target eUICC or a transfer.
 
-1. Read the source `Identity` and call `ts43.DiscoverWFC(identity)`.
+1. Decode `wfc.json` into `ts43.WFCConfigs`, read the source `Identity`, and call `configs.Discover(identity)`.
 2. Call the package-level `ts43.CheckWFCEntitlement(ctx, cfg, req)` with `cfg.Source.Channel` and a `WFCEntitlementRequest` containing the identity, device metadata, and discovered `WFCConfig`. This entry point does not require the transfer fields validated by `ts43.New`.
 3. Inspect `WFCResult.Status`. Methods such as `Entitled`, `InProgress`, and `Incompatible` describe the provisioning state. Use `WFCConfig.ShouldShowWebFlow` to decide whether to open the activation portal, and `ShouldShowAddressUpdate` for emergency-address updates.
 4. If your application already uses a `Client`, call its `CheckWFCEntitlement` method and pass the previous result and portal callback to `Client.ContinueWFC`. An entitlement-change callback rechecks the carrier; cancellation preserves the previous status and marks the result as cancelled. With the package-level API, issue another entitlement check after portal completion and pass the previous `AuthToken` when appropriate.
@@ -147,8 +156,8 @@ Set `WFCConfig.NeedsIMSProvisioning` when your integration requires VERS-driven 
 
 ## Carrier compatibility and limitations
 
-- [entitlement.json](entitlement.json) and [wfc.json](wfc.json) are embedded snapshots. Carrier settings and device-specific behavior can change independently of a library release.
-- Transfer discovery tries Google records before Samsung records. The embedded transfer database includes Samsung entries only for MCC/MNC values absent from the Google list. Explicit Samsung discovery through `DiscoverEntitlementForChannel` can therefore return `ErrEntitlementNotFound` for an MCC/MNC covered by Google.
+- Carrier configuration is supplied by the integrating application. Decode entitlement arrays into `EntitlementConfigs` and WFC arrays into `WFCConfigs` with `json.Unmarshal` or `UnmarshalBinary`. Set `Config.Entitlements` for transfer discovery; WFC consumers receive their own `WFCConfigs`. Both types implement JSON and binary marshal/unmarshal interfaces; binary encoding is the same UTF-8 JSON array. No private dataset is embedded or downloaded by this library.
+- Transfer discovery tries Google records before Samsung records. The supplied catalog can include Samsung entries only for MCC/MNC values absent from the Google list. Explicit Samsung discovery through `DiscoverEntitlementForChannel` can therefore return `ErrEntitlementNotFound` for an MCC/MNC covered by Google.
 - Use `errors.Is` to distinguish `ErrEntitlementNotFound`, `ErrEntitlementAmbiguous`, and `ErrEntitlementUnsupported`. WFC discovery exposes `ErrWFCConfigNotFound` and `ErrWFCConfigAmbiguous`.
 - Samsung flows can require `Device.IMEIs`, `SerialNumber`, and `Model`; LG U+ can additionally require `BarcodeNumber` and `ActivatedID`. Extra HTTP terminal parameters and websheet parameters have separate capability flags in `Entitlement`.
 - Configurations that require Android's `Ts43Operation` backend return `ErrAndroidEntitlementRequired`. That backend is outside this library's scope.
@@ -172,8 +181,12 @@ go mod tidy
 go test ./...
 ```
 
-The unit tests use simulated SIM and HTTP behavior. Tests that compare embedded carrier records with a local `refs` corpus skip those comparisons when the corpus is absent; it is not required to build or use the library.
+The unit tests use simulated SIM and HTTP behavior. Owner-only tests that compare private carrier records with a local `refs` corpus skip those comparisons when the corpus is absent; it is not required to build or use the library.
 
 ## License
 
 Licensed under the [GNU General Public License v3.0](LICENSE).
+
+### Caller-supplied carrier files
+
+The example accepts `-carrier-config-dir /path/to/private-files`. Carrier files are not included in this repository. The integrating application owns loading, authorization and any remote delivery. Public tests use synthetic inputs; owner-only catalog regression tests accept `SIGMO_CARRIER_CONFIG_DIR`.

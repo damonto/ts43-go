@@ -150,15 +150,15 @@ func TestDiscoverEntitlement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DiscoverEntitlement(tt.identity, tt.sourceSIMType)
+			got, err := privateEntitlementConfigs(t).Discover(tt.identity, tt.sourceSIMType)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("DiscoverEntitlement() error = %v, want %v", err, tt.wantErr)
+					t.Errorf("privateEntitlementConfigs(t).Discover() error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("DiscoverEntitlement() error = %v", err)
+				t.Fatalf("privateEntitlementConfigs(t).Discover() error = %v", err)
 			}
 			if got.Server != tt.want.Server {
 				t.Errorf("Server = %q, want %q", got.Server, tt.want.Server)
@@ -293,9 +293,9 @@ func TestDiscoverEntitlementForSamsungChannel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DiscoverEntitlementForChannel(tt.identity, tt.sourceSIMType, EntitlementChannelSamsung)
+			got, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, tt.sourceSIMType, EntitlementChannelSamsung)
 			if err != nil {
-				t.Fatalf("DiscoverEntitlementForChannel() error = %v", err)
+				t.Fatalf("privateEntitlementConfigs(t).DiscoverForChannel() error = %v", err)
 			}
 			if got.Server != tt.want.Server {
 				t.Errorf("Server = %q, want %q", got.Server, tt.want.Server)
@@ -363,9 +363,9 @@ func TestDiscoverEntitlementAutoChannel(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DiscoverEntitlement(tt.identity, tt.sourceSIMType)
+			got, err := privateEntitlementConfigs(t).Discover(tt.identity, tt.sourceSIMType)
 			if err != nil {
-				t.Fatalf("DiscoverEntitlement() error = %v", err)
+				t.Fatalf("privateEntitlementConfigs(t).Discover() error = %v", err)
 			}
 			if got.Channel != tt.wantChannel {
 				t.Errorf("Channel = %q, want %q", got.Channel, tt.wantChannel)
@@ -378,12 +378,12 @@ func TestDiscoverEntitlementAutoChannel(t *testing.T) {
 }
 
 func TestDiscoverEntitlementSamsungTeliaHalebopIsAmbiguous(t *testing.T) {
-	_, err := DiscoverEntitlementForChannel(
+	_, err := privateEntitlementConfigs(t).DiscoverForChannel(
 		Identity{MCC: "240", MNC: "01"},
 		SIMTypeESIM,
 		EntitlementChannelSamsung,
 	)
 	if !errors.Is(err, ErrEntitlementAmbiguous) {
-		t.Errorf("DiscoverEntitlementForChannel() error = %v, want %v", err, ErrEntitlementAmbiguous)
+		t.Errorf("privateEntitlementConfigs(t).DiscoverForChannel() error = %v, want %v", err, ErrEntitlementAmbiguous)
 	}
 }

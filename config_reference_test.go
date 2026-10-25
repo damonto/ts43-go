@@ -14,7 +14,7 @@ import (
 
 func TestEntitlementChannelPolicy(t *testing.T) {
 	var rows []entitlementRecord
-	if err := json.Unmarshal(entitlementJSON, &rows); err != nil {
+	if err := json.Unmarshal(privateCarrierJSON(t, "entitlement.json"), &rows); err != nil {
 		t.Fatal(err)
 	}
 	google := make(map[string]bool)
@@ -34,7 +34,7 @@ func TestEntitlementChannelPolicy(t *testing.T) {
 
 func TestWFCReferenceConfiguration(t *testing.T) {
 	var rows []wfcRecord
-	if err := json.Unmarshal(wfcJSON, &rows); err != nil {
+	if err := json.Unmarshal(privateCarrierJSON(t, "wfc.json"), &rows); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
@@ -123,7 +123,7 @@ func TestSamsungReferenceConfiguration(t *testing.T) {
 	}
 
 	var rows []entitlementRecord
-	if err := json.Unmarshal(entitlementJSON, &rows); err != nil {
+	if err := json.Unmarshal(privateCarrierJSON(t, "entitlement.json"), &rows); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
@@ -190,7 +190,7 @@ func TestGoogleReferenceConfiguration(t *testing.T) {
 		t.Fatal(err)
 	}
 	var rows []map[string]json.RawMessage
-	if err := json.Unmarshal(entitlementJSON, &rows); err != nil {
+	if err := json.Unmarshal(privateCarrierJSON(t, "entitlement.json"), &rows); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
@@ -272,7 +272,7 @@ func optionalString(value *string) string {
 func TestSamsungAndroidBackendGuard(t *testing.T) {
 	for _, mccmnc := range []string{"24214", "312012"} {
 		t.Run(mccmnc, func(t *testing.T) {
-			ent, err := DiscoverEntitlementForChannel(Identity{MCC: mccmnc[:3], MNC: mccmnc[3:]}, SIMTypeESIM, EntitlementChannelSamsung)
+			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: mccmnc[:3], MNC: mccmnc[3:]}, SIMTypeESIM, EntitlementChannelSamsung)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -65,18 +65,18 @@ func TestDiscoverWFC(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DiscoverWFC(tt.identity)
+			got, err := privateWFCConfigs(t).Discover(tt.identity)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("DiscoverWFC() error = %v, want %v", err, tt.wantErr)
+					t.Errorf("privateWFCConfigs(t).Discover() error = %v, want %v", err, tt.wantErr)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("DiscoverWFC() error = %v", err)
+				t.Fatalf("privateWFCConfigs(t).Discover() error = %v", err)
 			}
 			if got != tt.want {
-				t.Errorf("DiscoverWFC() = %+v, want %+v", got, tt.want)
+				t.Errorf("privateWFCConfigs(t).Discover() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}
@@ -106,9 +106,9 @@ func TestDiscoverWFCWebsheetClientName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DiscoverWFC(tt.identity)
+			got, err := privateWFCConfigs(t).Discover(tt.identity)
 			if err != nil {
-				t.Fatalf("DiscoverWFC() error = %v", err)
+				t.Fatalf("privateWFCConfigs(t).Discover() error = %v", err)
 			}
 			if got.WebsheetClientName != tt.want {
 				t.Errorf("WebsheetClientName = %q, want %q", got.WebsheetClientName, tt.want)

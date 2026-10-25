@@ -39,3 +39,9 @@ driver/mbim/libmbim
 
 # Other
 refs
+
+# Private carrier configuration is supplied by the application.
+/entitlement.json
+/wfc.json
+/ims.json
+/wfc_config.json

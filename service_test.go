@@ -241,10 +241,11 @@ func TestNewValidatesSamsungSubscriptionType(t *testing.T) {
 
 func TestNewAllowsMissingEntitlementServer(t *testing.T) {
 	client, err := New(&Config{
-		HTTPClient:  fakeDoer(func(*http.Request) (*http.Response, error) { return response(500, ""), nil }),
-		Entitlement: Entitlement{},
-		Source:      Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
-		Target:      Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
+		HTTPClient:   fakeDoer(func(*http.Request) (*http.Response, error) { return response(500, ""), nil }),
+		Entitlement:  Entitlement{},
+		Entitlements: privateEntitlementConfigs(t),
+		Source:       Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
+		Target:       Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -290,10 +291,11 @@ func TestTransferDiscoversEntitlementServer(t *testing.T) {
 				return response(500, ""), nil
 			}
 		}),
-		Entitlement: Entitlement{},
-		Source:      Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
-		Target:      Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
-		Logger:      slog.Default(),
+		Entitlement:  Entitlement{},
+		Entitlements: privateEntitlementConfigs(t),
+		Source:       Endpoint{Channel: fakeChannel{}, Device: Device{IMEI: "111111111111111"}},
+		Target:       Endpoint{Device: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},
+		Logger:       slog.Default(),
 	})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -372,7 +374,7 @@ func TestDiscoverEntitlementPreservesSamsungSubscriptionType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := newClient(Config{Entitlement: Entitlement{
+			client := newClient(Config{Entitlements: privateEntitlementConfigs(t), Entitlement: Entitlement{
 				Channel:                 EntitlementChannelSamsung,
 				SamsungSubscriptionType: tt.subscriptionType,
 			}})

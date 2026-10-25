@@ -1,19 +1,14 @@
 package ts43
 
 import (
-	_ "embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"time"
 )
 
-//go:embed entitlement.json
-var entitlementJSON []byte
-
 var (
-	// ErrEntitlementNotFound reports that no embedded carrier entitlement
+	// ErrEntitlementNotFound reports that no supplied carrier entitlement
 	// record matches the source SIM identity.
 	ErrEntitlementNotFound = errors.New("entitlement config not found")
 
@@ -60,21 +55,21 @@ type entitlementRecord struct {
 	RestrictOldTerminalFields                  bool    `json:"restrictOldTerminalFields"`
 }
 
-// DiscoverEntitlement returns the carrier TS.43 entitlement configuration for
-// the source SIM identity embedded in this package's entitlement list.
-func DiscoverEntitlement(identity Identity, sourceSIMType SIMType) (Entitlement, error) {
-	return DiscoverEntitlementForChannel(identity, sourceSIMType, "")
+// Discover returns the carrier TS.43 entitlement configuration for
+// the source SIM identity in the supplied carrier configuration.
+func (c *EntitlementConfigs) Discover(identity Identity, sourceSIMType SIMType) (Entitlement, error) {
+	return c.DiscoverForChannel(identity, sourceSIMType, "")
 }
 
-// DiscoverEntitlementForChannel returns a carrier TS.43 entitlement
+// DiscoverForChannel returns a carrier TS.43 entitlement
 // configuration for the requested client channel.
-func DiscoverEntitlementForChannel(identity Identity, sourceSIMType SIMType, channel EntitlementChannel) (Entitlement, error) {
+func (c *EntitlementConfigs) DiscoverForChannel(identity Identity, sourceSIMType SIMType, channel EntitlementChannel) (Entitlement, error) {
 	if identity.MCC == "" || identity.MNC == "" {
 		return Entitlement{}, errors.New("source MCC/MNC is required")
 	}
 	var records []entitlementRecord
-	if err := json.Unmarshal(entitlementJSON, &records); err != nil {
-		return Entitlement{}, fmt.Errorf("parse entitlement config: %w", err)
+	if c != nil {
+		records = c.records
 	}
 	if channel == "" {
 		return discoverEntitlementAuto(records, identity, sourceSIMType)

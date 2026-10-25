@@ -67,8 +67,8 @@ func TestEmbeddedCarrierConfigsIncludeIdentityFields(t *testing.T) {
 		name string
 		data []byte
 	}{
-		{name: "WFC", data: wfcJSON},
-		{name: "entitlement", data: entitlementJSON},
+		{name: "WFC", data: privateCarrierJSON(t, "wfc.json")},
+		{name: "entitlement", data: privateCarrierJSON(t, "entitlement.json")},
 	}
 	wantFields := []string{"gid1", "gid2", "spn", "imsiPrefixXpattern"}
 	for _, tt := range tests {

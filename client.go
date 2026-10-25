@@ -29,13 +29,14 @@ type clientRuntime struct {
 }
 
 type transferDefaults struct {
-	entitlement Entitlement
-	source      Endpoint
-	target      Endpoint
-	companion   Device
-	appVersion  string
-	clientTS43  string
-	realm       string
+	entitlements *EntitlementConfigs
+	entitlement  Entitlement
+	source       Endpoint
+	target       Endpoint
+	companion    Device
+	appVersion   string
+	clientTS43   string
+	realm        string
 }
 
 // TransferTokenResult carries the source auth token and, for transfer types
@@ -115,13 +116,14 @@ func newClient(cfg Config) *Client {
 			sleep:             cfg.Sleep,
 		},
 		transfer: transferDefaults{
-			entitlement: cfg.Entitlement,
-			source:      cfg.Source,
-			target:      cfg.Target,
-			companion:   cfg.Companion,
-			appVersion:  cfg.AppVersion,
-			clientTS43:  cfg.ClientTS43,
-			realm:       cfg.Realm,
+			entitlement:  cfg.Entitlement,
+			entitlements: cfg.Entitlements,
+			source:       cfg.Source,
+			target:       cfg.Target,
+			companion:    cfg.Companion,
+			appVersion:   cfg.AppVersion,
+			clientTS43:   cfg.ClientTS43,
+			realm:        cfg.Realm,
 		},
 	}
 }

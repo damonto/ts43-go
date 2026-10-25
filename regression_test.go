@@ -107,7 +107,7 @@ func TestRegressionSamsungExtraFields(t *testing.T) {
 	}{{"KT eligibility", OperationCheck}, {"KT manage", OperationManage}, {"KT acquire", OperationAcquireConf}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ent, err := DiscoverEntitlementForChannel(Identity{MCC: "450", MNC: "02"}, SIMTypeESIM, EntitlementChannelSamsung)
+			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: "450", MNC: "02"}, SIMTypeESIM, EntitlementChannelSamsung)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -169,7 +169,7 @@ func TestRegressionGoogleAppName(t *testing.T) {
 	}{{"Verizon", Identity{MCC: "310", MNC: "012"}}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ent, err := DiscoverEntitlementForChannel(tt.identity, SIMTypeESIM, EntitlementChannelGoogle)
+			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, SIMTypeESIM, EntitlementChannelGoogle)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -189,7 +189,7 @@ func TestRegressionSamsungUserAgent(t *testing.T) {
 	}{{"KT", Identity{MCC: "450", MNC: "02"}}, {"SKT", Identity{MCC: "450", MNC: "05"}}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ent, err := DiscoverEntitlementForChannel(tt.identity, SIMTypeESIM, EntitlementChannelSamsung)
+			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, SIMTypeESIM, EntitlementChannelSamsung)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -212,7 +212,7 @@ func TestRegressionGoogleCarrierMatching(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := DiscoverEntitlementForChannel(tt.identity, SIMTypeESIM, EntitlementChannelGoogle)
+			got, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, SIMTypeESIM, EntitlementChannelGoogle)
 			if err != nil {
 				t.Fatalf("discovery error = %v", err)
 			}
