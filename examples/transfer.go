@@ -21,19 +21,20 @@ func runTransfer(ctx context.Context, reader *bufio.Reader, w io.Writer, client 
 		return err
 	}
 	for {
+		var transferErr error
 		switch event := result.Event.(type) {
 		case ts43.UserInputEvent:
 			answer, err := ts43UserInput(reader, w, event)
 			if err != nil {
 				return err
 			}
-			result, err = client.Continue(ctx, result, ts43.ContinueRequest{UserInput: answer})
+			result, transferErr = client.Continue(ctx, result, ts43.ContinueRequest{UserInput: answer})
 		case ts43.WebsheetEvent:
 			callback, err := ts43Websheet(reader, w, event)
 			if err != nil {
 				return err
 			}
-			result, err = client.Continue(ctx, result, ts43.ContinueRequest{Websheet: callback})
+			result, transferErr = client.Continue(ctx, result, ts43.ContinueRequest{Websheet: callback})
 		case ts43.SourceProfileDeletionEvent:
 			if sourceLPA == nil {
 				return errors.New("source LPA client factory is required")
@@ -45,37 +46,37 @@ func runTransfer(ctx context.Context, reader *bufio.Reader, w io.Writer, client 
 			if err := deleteSourceProfile(reader, w, sourceClient, event); err != nil {
 				return err
 			}
-			result, err = client.Continue(ctx, result, ts43.ContinueRequest{SourceProfileDeleted: true})
+			result, transferErr = client.Continue(ctx, result, ts43.ContinueRequest{SourceProfileDeleted: true})
 		case ts43.DownloadReadyEvent:
 			iccid, err := downloadTS43Profile(ctx, reader, w, lpaClient, event.Config)
 			if err != nil {
 				return err
 			}
-			result, err = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
+			result, transferErr = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
 		case ts43.SMDSDiscoveryEvent:
 			iccid, err := downloadTS43DiscoveredProfile(ctx, reader, w, lpaClient, event)
 			if err != nil {
 				return err
 			}
-			result, err = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
+			result, transferErr = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
 		case ts43.DelayedDownloadEvent:
 			iccid, err := ts43DelayedDownloadICCID(reader, w, event)
 			if err != nil {
 				return err
 			}
-			result, err = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
+			result, transferErr = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
 		case ts43.ConfigurationPendingEvent:
 			fmt.Fprintln(w, "Waiting for the carrier to prepare download configuration.")
 			if _, err := prompt(reader, w, "After the carrier signals readiness, press Enter to check again: "); err != nil {
 				return err
 			}
-			result, err = client.Continue(ctx, result, ts43.ContinueRequest{})
+			result, transferErr = client.Continue(ctx, result, ts43.ContinueRequest{})
 		case ts43.ActivationPendingEvent:
 			fmt.Fprintf(w, "TS.43 activation is pending for ICCID %s.\n", event.ICCID)
 			if _, err := prompt(reader, w, "After the carrier signals readiness, press Enter to check again: "); err != nil {
 				return err
 			}
-			result, err = client.Continue(ctx, result, ts43.ContinueRequest{})
+			result, transferErr = client.Continue(ctx, result, ts43.ContinueRequest{})
 		case ts43.DismissEvent:
 			fmt.Fprintf(w, "TS.43 transfer dismissed by carrier; subscription_result=%d\n", event.SubscriptionResult)
 			return nil
@@ -85,8 +86,8 @@ func runTransfer(ctx context.Context, reader *bufio.Reader, w io.Writer, client 
 		default:
 			return fmt.Errorf("unexpected TS.43 event %T", result.Event)
 		}
-		if err != nil {
-			return err
+		if transferErr != nil {
+			return transferErr
 		}
 	}
 }

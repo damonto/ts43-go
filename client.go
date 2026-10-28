@@ -567,10 +567,10 @@ func (c *Client) usesTemporaryToken() bool {
 func validateSamsungSubscriptionType(entitlement Entitlement) error {
 	subscriptionType := entitlement.SamsungSubscriptionType
 	if subscriptionType >= samsungSubscriptionTypeCount {
-		return fmt.Errorf("Samsung subscription type %d is invalid", subscriptionType)
+		return fmt.Errorf("invalid Samsung subscription type %d", subscriptionType)
 	}
 	if subscriptionType != SamsungSubscriptionUnspecified && entitlement.Channel != EntitlementChannelSamsung {
-		return errors.New("Samsung subscription type requires the Samsung entitlement channel")
+		return errors.New("subscription type requires the Samsung entitlement channel")
 	}
 	return nil
 }
