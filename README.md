@@ -183,10 +183,11 @@ go test ./...
 
 The unit tests use simulated SIM and HTTP behavior. Owner-only tests that compare private carrier records with a local `refs` corpus skip those comparisons when the corpus is absent; it is not required to build or use the library.
 
+## Caller-supplied carrier files
+
+The example accepts `-carrier-config-dir /path/to/private-files`. Carrier files are not included in this repository. The integrating application owns loading, authorization and any remote delivery. Public tests use synthetic inputs; owner-only catalog regression tests accept `TS43_CARRIER_CONFIG_DIR`.
+
 ## License
 
 Licensed under the [GNU General Public License v3.0](LICENSE).
 
-### Caller-supplied carrier files
-
-The example accepts `-carrier-config-dir /path/to/private-files`. Carrier files are not included in this repository. The integrating application owns loading, authorization and any remote delivery. Public tests use synthetic inputs; owner-only catalog regression tests accept `TS43_CARRIER_CONFIG_DIR`.
