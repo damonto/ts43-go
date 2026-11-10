@@ -36,12 +36,22 @@ type ODSAResponse struct {
 	cookies             []string
 }
 
+// UnmarshalBinary decodes an XML or JSON response. A successful decode replaces
+// the previous response; on error the receiver remains unchanged.
 func (r *ODSAResponse) UnmarshalBinary(data []byte) error {
-	r.Raw = append(r.Raw[:0], data...)
+	var next ODSAResponse
+	var err error
 	if json.Valid(data) {
-		return r.unmarshalJSON(data)
+		err = next.unmarshalJSON(data)
+	} else {
+		err = next.unmarshalXML(data)
 	}
-	return r.unmarshalXML(data)
+	if err != nil {
+		return err
+	}
+	next.Raw = append(r.Raw[:0], data...)
+	*r = next
+	return nil
 }
 
 func (r *ODSAResponse) unmarshalJSON(data []byte) error {
@@ -55,7 +65,15 @@ func (r *ODSAResponse) unmarshalJSON(data []byte) error {
 func (r *ODSAResponse) unmarshalXML(data []byte) error {
 	var doc odsaPayload
 	if err := xml.Unmarshal(data, &doc); err != nil {
-		return err
+		// Pixel normalizes bare ampersands in carrier XML before parsing.
+		escaped, ok := escapeBareXMLAmpersands(data)
+		if !ok {
+			return err
+		}
+		doc = odsaPayload{}
+		if retryErr := xml.Unmarshal(escaped, &doc); retryErr != nil {
+			return err
+		}
 	}
 	return r.apply(doc)
 }
@@ -68,23 +86,49 @@ type odsaPayload struct {
 
 func (p *odsaPayload) UnmarshalJSON(data []byte) error {
 	var named struct {
-		Token       *tokenFields       `json:"TOKEN"`
-		Application *applicationFields `json:"APPLICATION"`
+		Token       *tokenFields    `json:"TOKEN"`
+		Application json.RawMessage `json:"APPLICATION"`
+		Primary     json.RawMessage `json:"ap2009"`
 	}
 	if err := json.Unmarshal(data, &named); err != nil {
 		return err
 	}
-	var root applicationFields
-	if err := json.Unmarshal(data, &root); err != nil {
-		return err
+	// TS.43 JSON names application objects by AppID. Decode the chosen
+	// application only; unused legacy containers must not override it.
+	var application *applicationFields
+	if named.Primary != nil {
+		if err := json.Unmarshal(named.Primary, &application); err != nil {
+			return err
+		}
 	}
-	p.Token = named.Token
-	p.Application = named.Application
-	p.Root = root
+	if application != nil {
+		if application.AppID != "" && !strings.EqualFold(application.AppID.String(), AppODSAPrimary) {
+			return fmt.Errorf("ODSA application ID %q does not match %s", application.AppID, AppODSAPrimary)
+		}
+	} else if named.Application != nil {
+		if err := json.Unmarshal(named.Application, &application); err != nil {
+			return err
+		}
+		if application != nil && application.AppID != "" && !strings.EqualFold(application.AppID.String(), AppODSAPrimary) {
+			application = nil
+		}
+	}
+	var root applicationFields
+	if application == nil {
+		if err := json.Unmarshal(data, &root); err != nil {
+			return err
+		}
+		if root.AppID != "" && !strings.EqualFold(root.AppID.String(), AppODSAPrimary) {
+			root = applicationFields{}
+		}
+	}
+	*p = odsaPayload{Token: named.Token, Application: application, Root: root}
 	return nil
 }
 
 func (p *odsaPayload) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	var generic *applicationFields
+	applications := 0
 	for {
 		tok, err := decoder.Token()
 		if err != nil {
@@ -110,7 +154,13 @@ func (p *odsaPayload) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement)
 				if err := decoder.DecodeElement(&app, &t); err != nil {
 					return err
 				}
-				p.Application = &app
+				applications++
+				switch {
+				case strings.EqualFold(app.AppID.String(), AppODSAPrimary):
+					p.Application = &app
+				case app.AppID == "":
+					generic = &app
+				}
 			default:
 				if err := decoder.Skip(); err != nil {
 					return err
@@ -118,6 +168,9 @@ func (p *odsaPayload) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement)
 			}
 		case xml.EndElement:
 			if t.Name.Local == start.Name.Local {
+				if p.Application == nil && applications == 1 {
+					p.Application = generic
+				}
 				return nil
 			}
 		}
@@ -167,6 +220,7 @@ func (f *tokenFields) set(name, value string) {
 }
 
 type applicationFields struct {
+	AppID                           stringField            `json:"AppID"`
 	OperationResult                 stringField            `json:"OperationResult"`
 	PrimaryAppEligibility           stringField            `json:"PrimaryAppEligibility"`
 	SubscriptionResult              stringField            `json:"SubscriptionResult"`
@@ -247,6 +301,8 @@ func (f *applicationFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartEl
 
 func (f *applicationFields) set(name, value string) {
 	switch name {
+	case "AppID":
+		f.AppID = stringField(value)
 	case "OperationResult":
 		f.OperationResult = stringField(value)
 	case "PrimaryAppEligibility":

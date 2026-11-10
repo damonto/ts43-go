@@ -448,7 +448,7 @@ func relayResponseAccept(entitlement Entitlement, req ServiceEntitlementRequest)
 	if req.App == AppVoWiFi || req.ClientTS43 == DefaultWFCClientTS43 {
 		return firstNonEmpty(req.Accept, WFCResponseAccept)
 	}
-	return eapRelayAccept(req.Accept)
+	return eapRelayAccept(responseAccept(entitlement, req))
 }
 
 func relayPacket(data []byte) string {
@@ -538,6 +538,9 @@ func (c *Client) appName() string {
 func (c *Client) accept() string {
 	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
 		return ""
+	}
+	if c.app() == AppODSAPrimary {
+		return ODSAResponseAccept
 	}
 	return DefaultResponseAccept
 }

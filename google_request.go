@@ -91,7 +91,7 @@ func setGoogleTargetTerminalFields(op *ODSAOperation, target Device, includeIden
 
 func addGoogleOldTerminalFields(op *ODSAOperation, entitlement Entitlement, source Device) {
 	op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
-	if !googleIncludeOldTerminalIDs(entitlement) {
+	if !googleIncludeOldTerminalIDs(entitlement, op.OperationType) {
 		return
 	}
 	op.OldTerminalID = source.IMEI
@@ -107,8 +107,13 @@ func googleIncludeTargetTerminalIdentity(entitlement Entitlement) bool {
 	}
 }
 
-func googleIncludeOldTerminalIDs(entitlement Entitlement) bool {
+func googleIncludeOldTerminalIDs(entitlement Entitlement, operationType OperationType) bool {
 	if !entitlement.RestrictOldTerminalFields {
+		return true
+	}
+	// GMS btod preserves source IDs for source-credential transfers. Its btoe
+	// post-installation update applies the narrower type 7/9 rule instead.
+	if operationType == OperationTypeTransferSubscription && IsSourceCredentialTransferType(entitlement.TransferType) {
 		return true
 	}
 	switch entitlement.TransferType {

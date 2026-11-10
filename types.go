@@ -11,6 +11,7 @@ const (
 	AppODSAPrimary        = "ap2009"
 	AppVoWiFi             = "ap2004"
 	DefaultResponseAccept = "application/json, text/vnd.wap.connectivity-xml"
+	ODSAResponseAccept    = "text/vnd.wap.connectivity-xml"
 	WFCResponseAccept     = "text/vnd.wap.connectivity-xml"
 	SamsungResponseAccept = "application/xml, text/xml"
 	EAPRelayContentType   = "application/vnd.gsma.eap-relay.v1.0+json"
@@ -63,9 +64,10 @@ type Entitlement struct {
 	SamsungAndroidEntitlement bool
 	UseTempTokenConversion    bool
 	SetTargetTerminalFields   bool
-	// RestrictOldTerminalFields mirrors the GMS Ljotr.Q feature flag. When it
-	// is false, GMS sends old terminal IDs broadly; when true, it only sends
-	// them for transfer types 7 and 9.
+	// RestrictOldTerminalFields mirrors the GMS Ljotr.Q feature flag. When true,
+	// initial transfers send old terminal IDs for types 3, 6, 7, and 9;
+	// post-installation updates send them only for types 7 and 9.
+	// When false, both operations include old terminal IDs for all types.
 	RestrictOldTerminalFields bool
 	// UseSMDSDelayedDownload routes server-delayed downloads through SM-DS discovery.
 	UseSMDSDelayedDownload bool

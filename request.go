@@ -150,6 +150,9 @@ func responseAccept(entitlement Entitlement, req ServiceEntitlementRequest) stri
 	if entitlement.Channel == EntitlementChannelSamsung {
 		return SamsungResponseAccept
 	}
+	if req.App == AppODSAPrimary {
+		return ODSAResponseAccept
+	}
 	return DefaultResponseAccept
 }
 

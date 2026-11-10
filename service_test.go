@@ -888,7 +888,7 @@ func TestAcquireTemporaryTokenRequiresExpiry(t *testing.T) {
 func TestAuthenticateInitialEAPRequestUsesRelayAccept(t *testing.T) {
 	client := newClient(Config{
 		HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
-			wantAccept := EAPRelayContentType + ", " + DefaultResponseAccept
+			wantAccept := EAPRelayContentType + ", " + ODSAResponseAccept
 			if got := req.Header.Get("Accept"); got != wantAccept {
 				t.Errorf("Accept = %q, want %q", got, wantAccept)
 			}
@@ -2287,7 +2287,8 @@ func TestManageSubscriptionOldTerminalIDGating(t *testing.T) {
 		{name: "type two sends old IDs by default", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken}, wantOld: true},
 		{name: "type eleven sends old IDs by default", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryTokenVariant11}, wantOld: true},
 		{name: "restricted type two omits old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken, RestrictOldTerminalFields: true}},
-		{name: "restricted type three omits old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeReusableActivationCode, RestrictOldTerminalFields: true}},
+		{name: "restricted type three sends old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeReusableActivationCode, RestrictOldTerminalFields: true}, wantOld: true},
+		{name: "restricted type six sends old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTS43V8, RestrictOldTerminalFields: true}, wantOld: true},
 		{name: "restricted type seven sends old IDs", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeOldTerminalIDs, RestrictOldTerminalFields: true}, wantOld: true},
 		{name: "Samsung ignores Google restricted old ID gate", entitlement: Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung, TransferType: TransferTypeTemporaryToken, RestrictOldTerminalFields: true}, wantOld: true},
 		{name: "Samsung sends old IDs without Google proto", entitlement: Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung, TransferType: TransferTypeTemporaryToken, RestrictOldTerminalFields: true}, sourceProto: 1, wantOld: true},
@@ -3291,10 +3292,7 @@ func TestManageSubscriptionTargetIdentityGating(t *testing.T) {
 					if got := query.Get("target_terminal_model"); got != wantModel {
 						t.Errorf("target_terminal_model = %q, want %q", got, wantModel)
 					}
-					wantOldICCID := ""
-					if googleIncludeOldTerminalIDs(tt.entitlement) {
-						wantOldICCID = "8910000000000000000"
-					}
+					wantOldICCID := "8910000000000000000"
 					if got := query.Get("old_terminal_iccid"); got != wantOldICCID {
 						t.Errorf("old_terminal_iccid = %q, want %q", got, wantOldICCID)
 					}

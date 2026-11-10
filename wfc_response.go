@@ -84,7 +84,7 @@ func (p *wfcPayload) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	var next wfcPayload
-	var generic *wfcFields
+	var generic, specific json.RawMessage
 	for name, raw := range fields {
 		switch strings.ToUpper(name) {
 		case "VERS":
@@ -105,20 +105,28 @@ func (p *wfcPayload) UnmarshalJSON(data []byte) error {
 				next.Root.set(name, value.String())
 				continue
 			}
-			app, err := decodeWFCJSONFields(raw, appID)
-			if err != nil {
-				return err
-			}
-			switch app.AppID.String() {
+			switch appID {
 			case AppVoWiFi:
-				next.Application = &app
+				specific = raw
 			case "":
-				generic = &app
+				generic = raw
 			}
 		}
 	}
-	if next.Application == nil {
-		next.Application = generic
+	// An explicitly keyed service wins over a legacy APPLICATION object,
+	// independently of JSON map iteration order. Decode only that service.
+	raw, appID := specific, AppVoWiFi
+	if raw == nil {
+		raw, appID = generic, ""
+	}
+	if raw != nil {
+		app, err := decodeWFCJSONFields(raw, appID)
+		if err != nil {
+			return err
+		}
+		if app.AppID == "" || app.AppID.String() == AppVoWiFi {
+			next.Application = &app
+		}
 	}
 	*p = next
 	return nil
@@ -144,7 +152,10 @@ func decodeWFCJSONFields(data []byte, appID string) (wfcFields, error) {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		return wfcFields{}, err
 	}
-	if fields.AppID == "" && appID != "" {
+	if appID != "" {
+		if fields.AppID != "" && !strings.EqualFold(fields.AppID.String(), appID) {
+			return wfcFields{}, fmt.Errorf("WFC application ID %q does not match %s", fields.AppID, appID)
+		}
 		fields.AppID = stringField(appID)
 	}
 	return fields, nil

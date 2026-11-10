@@ -54,3 +54,47 @@ func TestWFCPayloadReuseClearsAbsentMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestWFCJSONExplicitApplicationPrecedence(t *testing.T) {
+	const body = `{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2},"ap2004":{"EntitlementStatus":2,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	// Selection must not depend on the iteration order of JSON object keys.
+	for range 50 {
+		var status WFCStatus
+		if err := status.UnmarshalBinary([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+		if !status.Incompatible() {
+			t.Fatalf("explicit application did not win: %+v", status)
+		}
+	}
+}
+
+func TestWFCJSONIgnoresUnrelatedApplicationBodies(t *testing.T) {
+	var status WFCStatus
+	body := `{"ap2003":5,"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	if err := status.UnmarshalBinary([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Entitled() {
+		t.Fatalf("status=%+v", status)
+	}
+}
+
+func TestWFCJSONIgnoresUnusedLegacyApplication(t *testing.T) {
+	var status WFCStatus
+	body := `{"APPLICATION":5,"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	if err := status.UnmarshalBinary([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Entitled() {
+		t.Fatalf("status=%+v", status)
+	}
+}
+
+func TestWFCJSONRejectsConflictingApplicationID(t *testing.T) {
+	var status WFCStatus
+	body := `{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2},"ap2004":{"AppID":"ap2003","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	if err := status.UnmarshalBinary([]byte(body)); err == nil {
+		t.Fatal("conflicting application ID was accepted")
+	}
+}
