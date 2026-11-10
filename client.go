@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/http/cookiejar"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -19,13 +21,14 @@ type Client struct {
 }
 
 type clientRuntime struct {
-	logger            *slog.Logger
-	httpClient        HTTPDoer
-	defaultHTTPClient bool
-	explicitTimeout   bool
-	events            chan<- Event
-	now               func() time.Time
-	sleep             func(context.Context, time.Duration) error
+	logger             *slog.Logger
+	httpClient         HTTPDoer
+	defaultHTTPClient  bool
+	explicitTimeout    bool
+	explicitRetryLimit bool
+	events             chan<- Event
+	now                func() time.Time
+	sleep              func(context.Context, time.Duration) error
 }
 
 type transferDefaults struct {
@@ -61,7 +64,10 @@ type entitlementTransport struct {
 	channel Channel
 }
 
-const defaultEntitlementTimeout = 30 * time.Second
+const (
+	defaultEntitlementTimeout = 30 * time.Second
+	maxEAPRelayRounds         = 3
+)
 
 func New(cfg *Config) (*Client, error) {
 	if cfg == nil {
@@ -87,6 +93,7 @@ func newClient(cfg Config) *Client {
 		cfg.Logger = slog.Default()
 	}
 	explicitTimeout := cfg.Entitlement.Timeout != 0
+	explicitRetryLimit := cfg.Entitlement.AutoRetry511Limit != 0
 	cfg.Entitlement.TransferType = selectedTransferType(cfg.Entitlement)
 	if cfg.Entitlement.Timeout == 0 {
 		cfg.Entitlement.Timeout = defaultEntitlementTimeout
@@ -107,13 +114,14 @@ func newClient(cfg Config) *Client {
 	}
 	return &Client{
 		runtime: clientRuntime{
-			logger:            cfg.Logger,
-			httpClient:        cfg.HTTPClient,
-			defaultHTTPClient: defaultHTTPClient,
-			explicitTimeout:   explicitTimeout,
-			events:            cfg.Events,
-			now:               cfg.Now,
-			sleep:             cfg.Sleep,
+			logger:             cfg.Logger,
+			httpClient:         cfg.HTTPClient,
+			defaultHTTPClient:  defaultHTTPClient,
+			explicitTimeout:    explicitTimeout,
+			explicitRetryLimit: explicitRetryLimit,
+			events:             cfg.Events,
+			now:                cfg.Now,
+			sleep:              cfg.Sleep,
 		},
 		transfer: transferDefaults{
 			entitlement:  cfg.Entitlement,
@@ -146,10 +154,7 @@ func (c *Client) authenticate(ctx context.Context, channel Channel, identity Ide
 	if resp.AuthenticationToken == "" {
 		return AuthToken{}, errors.New("authentication token is missing")
 	}
-	expires := time.Time{}
-	if resp.AuthTokenValidity > 0 {
-		expires = c.now().Add(time.Duration(resp.AuthTokenValidity) * time.Second)
-	}
+	expires := c.now().Add(time.Duration(resp.AuthTokenValidity) * time.Second)
 	return AuthToken{Value: resp.AuthenticationToken, ExpiresAt: expires, Cookies: cookies}, nil
 }
 
@@ -178,13 +183,12 @@ func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, ide
 	if err != nil {
 		return TransferTokenResult{}, err
 	}
-	mergedCookies := mergeCookieHeaders(auth.Cookies, cookies)
 	return TransferTokenResult{
-		Auth: authTokenFromResponse(auth, resp, mergedCookies, c.now()),
+		Auth: authTokenFromResponse(auth, resp, cookies, c.now()),
 		Temporary: TemporaryToken{
 			Value:     resp.TemporaryToken,
 			ExpiresAt: expiresAt,
-			Cookies:   mergedCookies,
+			Cookies:   cookies,
 			Targets:   append([]Operation(nil), resp.OperationTargets...),
 		},
 	}, nil
@@ -205,7 +209,7 @@ func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity
 	if resp.OperationResult != OperationResultSuccess || resp.PrimaryAppEligibility != AppEligibilityEnabled {
 		return AuthToken{}, &CarrierDeniedError{Operation: OperationCheck, Result: resp}
 	}
-	return authTokenFromResponse(auth, resp, mergeCookieHeaders(auth.Cookies, cookies), c.now()), nil
+	return authTokenFromResponse(auth, resp, cookies, c.now()), nil
 }
 
 func (c *Client) ManageSubscription(ctx context.Context, req ManageSubscriptionRequest, auth AuthToken) (*ODSAResponse, error) {
@@ -250,7 +254,7 @@ func (c *Client) acquireConfiguration(ctx context.Context, identity Identity, so
 	op := acquireConfigurationOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.call(ctx, identity, req, op)
-	return resp, err
+	return checkedConfiguration(resp, err)
 }
 
 func (c *Client) UpdateSubscription(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (*ODSAResponse, error) {
@@ -296,7 +300,19 @@ func (c *Client) acquireActivationConfigurationOnChannel(ctx context.Context, ch
 	op := activationConfigurationOperation(c.transfer.entitlement, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.callWithChannel(ctx, channel, identity, req, op)
-	return resp, err
+	return checkedConfiguration(resp, err)
+}
+
+func checkedConfiguration(resp *ODSAResponse, err error) (*ODSAResponse, error) {
+	if err != nil {
+		return resp, err
+	}
+	// Some Google servers omit OperationResult. An explicit rejection must
+	// never be interpreted as download or activation readiness.
+	if resp.OperationResult != OperationResultUnknown && resp.OperationResult != OperationResultSuccess {
+		return resp, &CarrierDeniedError{Operation: OperationAcquireConf, Result: resp}
+	}
+	return resp, nil
 }
 
 func (c *Client) call(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) (*ODSAResponse, []string, error) {
@@ -312,6 +328,7 @@ func (c *Client) callWithChannel(ctx context.Context, channel Channel, identity 
 	if err := resp.UnmarshalBinary(body); err != nil {
 		return nil, cookies, err
 	}
+	resp.cookies = cookies
 	return &resp, cookies, nil
 }
 
@@ -343,12 +360,30 @@ func (t entitlementTransport) callRaw(ctx context.Context, identity Identity, re
 
 func (t entitlementTransport) eapRelay(ctx context.Context, identity Identity, body []byte, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
 	c := t.client
-	requestCookies := cookies
-	responseCookies := cookies
-	for range 3 {
+	serverURL, err := url.Parse(c.transfer.entitlement.Server)
+	if err != nil {
+		return nil, cookies, fmt.Errorf("parse entitlement URL: %w", err)
+	}
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return nil, cookies, fmt.Errorf("create entitlement cookie jar: %w", err)
+	}
+	seed := &http.Request{Header: make(http.Header)}
+	for _, header := range req.Cookies {
+		seed.Header.Add("Cookie", header)
+	}
+	// Return the complete effective cookie set so callers do not resurrect
+	// cookies deleted during authentication or a token-authenticated request.
+	jar.SetCookies(serverURL, seed.Cookies())
+	jar.SetCookies(serverURL, cookies)
+	responseCookies := jar.Cookies(serverURL)
+	for attempt := 0; ; attempt++ {
 		packet := relayPacket(body)
 		if packet == "" {
 			return body, responseCookies, nil
+		}
+		if attempt == maxEAPRelayRounds {
+			return nil, responseCookies, errors.New("EAP-AKA relay exhausted")
 		}
 		var challenge AKAChallenge
 		if err := challenge.UnmarshalText([]byte(packet)); err != nil {
@@ -369,15 +404,14 @@ func (t entitlementTransport) eapRelay(ctx context.Context, identity Identity, b
 		if err != nil {
 			return nil, responseCookies, err
 		}
-		next, nextCookies, err := t.postRelay(ctx, responseText, req, requestCookies)
+		next, nextCookies, err := t.postRelay(ctx, responseText, req, responseCookies)
+		jar.SetCookies(serverURL, nextCookies)
+		responseCookies = jar.Cookies(serverURL)
 		if err != nil {
 			return nil, responseCookies, err
 		}
-		requestCookies = nextCookies
-		responseCookies = nextCookies
 		body = next
 	}
-	return nil, responseCookies, errors.New("EAP-AKA relay exhausted")
 }
 
 func (c *Client) postRelay(ctx context.Context, packet string, req ServiceEntitlementRequest, cookies []*http.Cookie) ([]byte, []*http.Cookie, error) {
@@ -601,7 +635,7 @@ func manageSubscriptionAccepted(resp *ODSAResponse) bool {
 }
 
 func subscriptionUpdateAccepted(entitlement Entitlement, resp *ODSAResponse) bool {
-	if resp.OperationResult != OperationResultSuccess {
+	if resp == nil || resp.OperationResult != OperationResultSuccess {
 		return false
 	}
 	if entitlement.Channel != EntitlementChannelSamsung {
@@ -658,10 +692,7 @@ func authTokenFromResponse(current AuthToken, resp *ODSAResponse, cookies []stri
 		return next
 	}
 	next.Value = resp.AuthenticationToken
-	next.ExpiresAt = time.Time{}
-	if resp.AuthTokenValidity > 0 {
-		next.ExpiresAt = now.Add(time.Duration(resp.AuthTokenValidity) * time.Second)
-	}
+	next.ExpiresAt = now.Add(time.Duration(resp.AuthTokenValidity) * time.Second)
 	return next
 }
 

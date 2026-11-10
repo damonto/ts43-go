@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	ErrWebsheetDismissed              = errors.New("websheet dismissed")
+	ErrWebsheetDismissed = errors.New("websheet dismissed")
+	// Deprecated: default SM-DP+ callbacks now produce a DownloadReadyEvent.
 	ErrWebsheetDefaultSMDPUnsupported = errors.New("websheet default SM-DP+ callback is unsupported")
 )
 
@@ -20,24 +21,38 @@ func (c *Client) handleWebsheetResult(ctx context.Context, result *Result, callb
 	offer := session.offer
 	switch callback.Event {
 	case WebsheetEventProfileReadyWithActivationCode:
+		if session.profileInstalled {
+			return result, nil
+		}
 		if callback.ActivationCode == "" {
 			return result, errors.New("activation code is required")
 		}
-		result.DownloadConfig = completeDownloadConfig(DownloadConfig{
+		return c.applyDownloadConfiguration(result, DownloadConfig{
 			ActivationCode: callback.ActivationCode,
 			ProfileICCID:   callback.ICCID,
-			IMEI:           firstNonEmpty(callback.IMEI, offer.TargetDevice.IMEI),
-		}, offer.TargetDevice)
-		result.State = StatePendingDownload
-		result.Event = DownloadReadyEvent{Config: result.DownloadConfig}
-		c.emit(result.Event)
-		return result, nil
+			IMEI:           callback.IMEI,
+		})
 	case WebsheetEventProfileReadyWithDefaultSMDP:
-		return result, ErrWebsheetDefaultSMDPUnsupported
+		if session.profileInstalled {
+			return result, nil
+		}
+		if callback.SMDPFQDN == "" {
+			return result, errors.New("default SM-DP+ is required")
+		}
+		iccid := callback.ICCID
+		if iccid == "0" {
+			iccid = ""
+		}
+		return c.applyDownloadConfiguration(result, DownloadConfig{
+			SMDPFQDN:     callback.SMDPFQDN,
+			ProfileICCID: iccid,
+			IMEI:         callback.IMEI,
+		})
 	case WebsheetEventSelectionCompleted:
 		if callback.ICCID == "" && callback.IMEI == "" {
 			return result, errors.New("selected ICCID or IMEI is required")
 		}
+		session.websheetOpen = false
 		if callback.ICCID != "" {
 			offer.SourceDevice.ICCID = callback.ICCID
 			offer.SourceIdentity.ICCID = callback.ICCID
@@ -47,14 +62,19 @@ func (c *Client) handleWebsheetResult(ctx context.Context, result *Result, callb
 		}
 		return c.activate(ctx, offer, UserInputResult{Button: MessageButtonUnknown})
 	case WebsheetEventDismissFlow:
+		session.websheetOpen = false
 		return result, ErrWebsheetDismissed
 	case WebsheetEventFinishFlow:
+		session.websheetOpen = false
 		return c.continueWebsheetNextAction(ctx, result, callback.NextAction)
 	case WebsheetEventDeleteToken:
 		offer.AuthToken = AuthToken{}
 		offer.TemporaryToken = TemporaryToken{}
 		return result, nil
 	case WebsheetEventCheckProfileServiceStatus:
+		if session.profileInstalled {
+			return c.resumeActivation(ctx, result)
+		}
 		return c.continueConfiguration(ctx, result)
 	case WebsheetEventDeleteProfileInUse:
 		result.State = StatePendingSourceProfileDeletion
@@ -75,6 +95,11 @@ func (c *Client) continueWebsheetNextAction(ctx context.Context, result *Result,
 	offer := session.offer
 	if next == "" {
 		next = OperationAcquireConf
+	}
+	if session.profileInstalled && (next == OperationAcquireConf || next == OperationManage) {
+		// Continue activation reporting or confirmation after installation;
+		// a portal callback must never request another transfer or download.
+		return c.resumeActivation(ctx, result)
 	}
 	switch next {
 	case OperationAcquireConf:

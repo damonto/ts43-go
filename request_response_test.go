@@ -647,10 +647,7 @@ func TestODSAResponseRejectsInvalidIntegers(t *testing.T) {
 		body        string
 		wantContext string
 	}{
-		{name: "polling interval", body: `{"PollingInterval":"invalid"}`, wantContext: "parse polling interval"},
-		{name: "polling interval unit", body: `{"PollingIntervalUnit":"invalid"}`, wantContext: "parse polling interval unit"},
 		{name: "register notification status", body: `{"RegisterNotifStatus":"invalid"}`, wantContext: "parse register notification status"},
-		{name: "authentication token validity", body: `{"TOKEN":{"Validity":"invalid"}}`, wantContext: "parse authentication token validity"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -275,6 +275,8 @@ type Result struct {
 type transferSession struct {
 	offer              *transferOffer
 	sourceProfileICCID string
+	websheetOpen       bool
+	profileInstalled   bool
 }
 
 type transferOffer struct {

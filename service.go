@@ -71,7 +71,15 @@ func (c *Client) applyDiscoveredEntitlement(discovered Entitlement) {
 	if c.runtime.explicitTimeout || discovered.Timeout == 0 {
 		discovered.Timeout = requested.Timeout
 	}
-	discovered.AutoRetry511Limit = requested.AutoRetry511Limit
+	if c.runtime.explicitRetryLimit {
+		discovered.AutoRetry511Limit = requested.AutoRetry511Limit
+	}
+	if discovered.PollInterval <= 0 {
+		discovered.PollInterval = requested.PollInterval
+	}
+	if discovered.PollTimeout <= 0 {
+		discovered.PollTimeout = requested.PollTimeout
+	}
 	c.transfer.entitlement = discovered
 	if c.runtime.defaultHTTPClient {
 		c.runtime.httpClient = NewHTTPClient(c.runtime.logger, discovered.Timeout)
@@ -86,6 +94,9 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 	if err != nil {
 		return result, err
 	}
+	if req.Websheet != nil && session.websheetOpen {
+		return c.handleWebsheetResult(ctx, result, *req.Websheet)
+	}
 	switch result.State {
 	case StatePendingUserInput:
 		if req.UserInput == nil {
@@ -94,13 +105,23 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 		if req.UserInput.Button == MessageButtonUnknown {
 			return result, errors.New("user input button is required")
 		}
-		return c.activate(ctx, session.offer, *req.UserInput)
+		next, err := c.activate(ctx, session.offer, *req.UserInput)
+		var denied *CarrierDeniedError
+		if errors.As(err, &denied) && denied.Operation == OperationManage && denied.Result != nil && denied.Result.OperationResult == OperationResultInvalidMessageResponse {
+			result.ManageSubscription = denied.Result
+			if denied.Result.Message.Text != "" {
+				result.Event = UserInputEvent{Message: denied.Result.Message}
+			}
+			c.emit(result.Event)
+			return result, nil
+		}
+		return next, err
 	case StatePendingWebsheet:
 		if req.Websheet == nil {
 			return result, errors.New("websheet result is required")
 		}
 		return c.handleWebsheetResult(ctx, result, *req.Websheet)
-	case StatePendingConfiguration:
+	case StatePendingConfiguration, StatePendingDelayedDownload:
 		return c.continueConfiguration(ctx, result)
 	case StatePendingActivation:
 		return c.resumeActivation(ctx, result)
@@ -123,6 +144,8 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 	}
 }
 
+// CompleteActivation records an installed profile and reports activation to the
+// carrier. Retain the returned result alongside an error to resume this phase.
 func (c *Client) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
 	if result == nil {
 		return nil, errors.New("result is required")
@@ -134,56 +157,44 @@ func (c *Client) CompleteActivation(ctx context.Context, result *Result, activat
 	if result.State == StateDone || result.State == StateDismissed {
 		return result, nil
 	}
-	if result.State == StatePendingActivation {
+	if result.State == StatePendingActivation && subscriptionUpdateAccepted(c.transfer.entitlement, result.UpdateSubscription) {
 		return c.resumeActivation(ctx, result)
 	}
 	if result.State == StatePendingConfiguration {
 		return result, errors.New("download configuration is still pending")
 	}
+	session.profileInstalled = true
 	offer := session.offer
 	if iccid := firstNonEmpty(activation.ICCID, result.DownloadConfig.ProfileICCID); iccid != "" {
 		offer.TargetDevice.ICCID = iccid
 		result.DownloadConfig.ProfileICCID = iccid
 	}
+	return c.resumeActivation(ctx, result)
+}
+
+// reportActivation submits the post-installation update. An accepted update is
+// retained on the result so later continuation only polls its configuration.
+func (c *Client) reportActivation(ctx context.Context, result *Result, offer *transferOffer) error {
 	auth, err := c.activationAuth(ctx, offer)
 	if err != nil {
-		return result, err
+		return err
 	}
-	var update *ODSAResponse
 	for attempt := 0; ; attempt++ {
-		update, err = c.updateSubscriptionOnChannel(ctx, auth.channel, auth.identity, offer.SourceDevice, offer.TargetDevice, auth.credential)
-		if auth.credential.rejectedBy(err) && attempt < c.transfer.entitlement.AutoRetry511Limit {
-			nextAuth, refreshErr := c.refreshActivationAuth(ctx, offer)
-			if refreshErr != nil {
-				result.UpdateSubscription = update
-				return result, refreshErr
+		update, err := c.updateSubscriptionOnChannel(ctx, auth.channel, auth.identity, offer.SourceDevice, offer.TargetDevice, auth.credential)
+		result.UpdateSubscription = update
+		if !auth.credential.rejectedBy(err) || attempt >= c.transfer.entitlement.AutoRetry511Limit {
+			if err != nil {
+				return err
 			}
-			auth = nextAuth
-			result.DownloadConfig.ProfileICCID = offer.TargetDevice.ICCID
-			continue
+			c.updateTransferCredential(offer, update, auth.credential)
+			return nil
 		}
-		break
+		auth, err = c.refreshActivationAuth(ctx, offer)
+		if err != nil {
+			return err
+		}
+		result.DownloadConfig.ProfileICCID = offer.TargetDevice.ICCID
 	}
-	result.UpdateSubscription = update
-	if err != nil {
-		return result, err
-	}
-	c.updateTransferCredential(offer, update, auth.credential)
-	// Once the update is accepted, errors from subsequent polling must leave
-	// the result resumable without submitting the subscription update again.
-	result.State = StatePendingActivation
-	result.Event = ActivationPendingEvent{ICCID: offer.TargetDevice.ICCID, SubscriptionResult: update.SubscriptionResult}
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung && update.SubscriptionResult == SubscriptionResultDismiss {
-		result.State = StateDismissed
-		result.Event = DismissEvent{SubscriptionResult: update.SubscriptionResult}
-		c.emit(result.Event)
-		return result, nil
-	}
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung && update.SubscriptionResult == SubscriptionResultDelayedDownload {
-		c.emit(result.Event)
-		return result, nil
-	}
-	return c.resumeActivation(ctx, result)
 }
 
 func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result, error) {
@@ -192,6 +203,31 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 		return result, err
 	}
 	offer := session.offer
+	// Installation is complete even if authentication or reporting fails.
+	// Retrying this phase must never offer another download.
+	result.State = StatePendingActivation
+	result.Event = ActivationPendingEvent{ICCID: offer.TargetDevice.ICCID}
+	needsUpdate := !subscriptionUpdateAccepted(c.transfer.entitlement, result.UpdateSubscription)
+	if needsUpdate {
+		if err := c.reportActivation(ctx, result, offer); err != nil {
+			return result, err
+		}
+	}
+	update := result.UpdateSubscription
+	result.Event = ActivationPendingEvent{ICCID: offer.TargetDevice.ICCID, SubscriptionResult: update.SubscriptionResult}
+	if needsUpdate && c.transfer.entitlement.Channel == EntitlementChannelSamsung {
+		switch update.SubscriptionResult {
+		case SubscriptionResultDismiss:
+			session.websheetOpen = false
+			result.State = StateDismissed
+			result.Event = DismissEvent{SubscriptionResult: update.SubscriptionResult}
+			c.emit(result.Event)
+			return result, nil
+		case SubscriptionResultDelayedDownload:
+			c.emit(result.Event)
+			return result, nil
+		}
+	}
 	auth, err := c.activationAuth(ctx, offer)
 	if err != nil {
 		return result, err
@@ -200,11 +236,6 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 	result.DownloadConfig.ProfileICCID = offer.TargetDevice.ICCID
 	result.UpdateConfiguration = configuration
 	if errors.Is(err, errPollingNotTriggered) {
-		result.State = StatePendingActivation
-		result.Event = ActivationPendingEvent{
-			ICCID:              offer.TargetDevice.ICCID,
-			SubscriptionResult: result.UpdateSubscription.SubscriptionResult,
-		}
 		c.emit(result.Event)
 		return result, nil
 	}
@@ -283,6 +314,7 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 		return result, nil
 	}
 	if websheetRequired(manage) {
+		result.session.websheetOpen = true
 		result.State = StatePendingWebsheet
 		sheet := manage.Websheet
 		if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
@@ -370,7 +402,8 @@ func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, cr
 		if err != nil {
 			return resp, err
 		}
-		ready, err := c.waitForConfiguration(ctx, resp)
+		credential = c.updateTransferCredential(offer, resp, credential)
+		ready, err := c.waitForDownloadConfiguration(ctx, resp)
 		if ready || err != nil {
 			return resp, err
 		}
@@ -397,6 +430,7 @@ func (c *Client) pollActivationConfiguration(ctx context.Context, offer *transfe
 		if err != nil {
 			return resp, err
 		}
+		auth.credential = c.updateTransferCredential(offer, resp, auth.credential)
 		ready, err := c.waitForConfiguration(ctx, resp)
 		if ready || err != nil {
 			return resp, err
@@ -405,6 +439,19 @@ func (c *Client) pollActivationConfiguration(ctx context.Context, offer *transfe
 }
 
 func (c *Client) refreshTransferCredential(ctx context.Context, offer *transferOffer) (transferCredential, error) {
+	// A temporary token can expire while the source authentication token is
+	// still usable, including after the source subscription stops authenticating.
+	if c.usesTemporaryToken() && authCredential(offer.AuthToken).validAt(c.now()) {
+		tokens, err := c.acquireTemporaryToken(ctx, c.transfer.source.Channel, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, offer.AuthToken)
+		if err == nil {
+			offer.AuthToken = tokens.Auth
+			offer.TemporaryToken = tokens.Temporary
+			return temporaryCredential(tokens.Temporary), nil
+		}
+		if !isHTTPStatus(err, 511) || c.transfer.entitlement.AutoRetry511Limit <= 0 {
+			return transferCredential{}, fmt.Errorf("renew temporary token: %w", err)
+		}
+	}
 	tokens, err := c.fetchTransferToken(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice)
 	if err != nil {
 		return transferCredential{}, fmt.Errorf("refresh transfer credential: %w", err)
@@ -480,14 +527,14 @@ func (c *Client) transferCredentialFromTokens(tokens TransferTokenResult) transf
 }
 
 func (c *Client) updateTransferCredential(offer *transferOffer, resp *ODSAResponse, credential transferCredential) transferCredential {
-	if resp.AuthenticationToken == "" {
-		return credential
+	offer.AuthToken = authTokenFromResponse(offer.AuthToken, resp, resp.cookies, c.now())
+	if credential.temporaryToken {
+		next := credential.temporary
+		next.Cookies = resp.cookies
+		offer.TemporaryToken = next
+		return temporaryCredential(next)
 	}
-	offer.AuthToken = authTokenFromResponse(offer.AuthToken, resp, offer.AuthToken.Cookies, c.now())
-	if c.usesTemporaryToken() {
-		return credential
-	}
-	next := authTokenFromResponse(credential.auth, resp, credential.auth.Cookies, c.now())
+	next := authTokenFromResponse(credential.auth, resp, resp.cookies, c.now())
 	offer.AuthToken = next
 	return authCredential(next)
 }
@@ -631,6 +678,17 @@ func (c *Client) offerCredential(offer *transferOffer) transferCredential {
 	return authCredential(offer.AuthToken)
 }
 
+func (c *Client) waitForDownloadConfiguration(ctx context.Context, resp *ODSAResponse) (bool, error) {
+	// Pixel accepts a reusable download while its service is deactivated.
+	// Samsung also delivers DownloadInfo before service activation finishes.
+	hasDownload := resp.Download.ActivationCode != "" || resp.Download.SMDPFQDN != ""
+	if hasDownload && (resp.ServiceStatus == ServiceStatusDeactivated ||
+		(c.transfer.entitlement.Channel == EntitlementChannelSamsung && resp.ServiceStatus == ServiceStatusActivating)) {
+		return true, nil
+	}
+	return c.waitForConfiguration(ctx, resp)
+}
+
 func (c *Client) waitForConfiguration(ctx context.Context, resp *ODSAResponse) (bool, error) {
 	switch resp.ServiceStatus {
 	case ServiceStatusActivated:
@@ -642,9 +700,9 @@ func (c *Client) waitForConfiguration(ctx context.Context, resp *ODSAResponse) (
 		}
 		return false, c.sleep(ctx, interval)
 	case ServiceStatusDeactivated:
-		return false, errors.New("service is deactivated")
+		return false, &CarrierDeniedError{Operation: OperationAcquireConf, Result: resp}
 	case ServiceStatusDeactivatedNoReuse:
-		return false, errors.New("service is deactivated with no ICCID reuse")
+		return false, &CarrierDeniedError{Operation: OperationAcquireConf, Result: resp}
 	default:
 		return false, fmt.Errorf("unexpected service status %q", resp.ServiceStatus)
 	}

@@ -4,7 +4,7 @@ func temporaryTokenOperation(entitlement Entitlement, source, target Device) ODS
 	if entitlement.Channel == EntitlementChannelSamsung {
 		return samsungTemporaryTokenOperation(source)
 	}
-	return googleTemporaryTokenOperation(entitlement, target)
+	return googleTemporaryTokenOperation()
 }
 
 func checkEligibilityOperation(entitlement Entitlement, source, target Device) ODSAOperation {
@@ -12,14 +12,14 @@ func checkEligibilityOperation(entitlement Entitlement, source, target Device) O
 		op := samsungCheckEligibilityOperation(source, target)
 		return samsungExtraTerminalFields(entitlement, op, target)
 	}
-	return googleCheckEligibilityOperation(entitlement, target)
+	return googleCheckEligibilityOperation()
 }
 
 func manageSubscriptionRequestDevice(entitlement Entitlement, source, target Device) Device {
 	if samsungDigitalizedTransfer(entitlement) {
 		return target
 	}
-	if transferUsesSourceCredential(entitlement) || (entitlement.Channel != EntitlementChannelSamsung && entitlement.TransferType == TransferTypeTemporaryToken) {
+	if transferUsesSourceCredential(entitlement) {
 		return source
 	}
 	return target

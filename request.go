@@ -433,35 +433,3 @@ func cookieHeaders(cookies []*http.Cookie) []string {
 	}
 	return headers
 }
-
-func mergeCookieHeaders(current, next []string) []string {
-	if len(next) == 0 {
-		return append([]string(nil), current...)
-	}
-	merged := append([]string(nil), current...)
-	for _, cookie := range next {
-		if cookie == "" {
-			continue
-		}
-		name := cookie
-		if before, _, ok := strings.Cut(cookie, "="); ok {
-			name = before
-		}
-		replaced := false
-		for i, existing := range merged {
-			existingName := existing
-			if before, _, ok := strings.Cut(existing, "="); ok {
-				existingName = before
-			}
-			if existingName == name {
-				merged[i] = cookie
-				replaced = true
-				break
-			}
-		}
-		if !replaced {
-			merged = append(merged, cookie)
-		}
-	}
-	return merged
-}

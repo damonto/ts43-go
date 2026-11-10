@@ -1,26 +1,18 @@
 package ts43
 
-func googleTemporaryTokenOperation(entitlement Entitlement, target Device) ODSAOperation {
-	op := ODSAOperation{
+func googleTemporaryTokenOperation() ODSAOperation {
+	return ODSAOperation{
 		Operation:        OperationTempToken,
 		OperationType:    OperationTypeOmit,
 		OperationTargets: []Operation{OperationManage, OperationAcquireConf},
 	}
-	if googleIncludeTargetTerminalIdentity(entitlement) {
-		setGoogleTargetTerminalFields(&op, target, true)
-	}
-	return op
 }
 
-func googleCheckEligibilityOperation(entitlement Entitlement, target Device) ODSAOperation {
-	op := ODSAOperation{
+func googleCheckEligibilityOperation() ODSAOperation {
+	return ODSAOperation{
 		Operation:     OperationCheck,
 		OperationType: OperationTypeOmit,
 	}
-	if googleIncludeTargetTerminalIdentity(entitlement) {
-		setGoogleTargetTerminalFields(&op, target, true)
-	}
-	return op
 }
 
 func googleManageSubscriptionOperation(entitlement Entitlement, req ManageSubscriptionRequest) ODSAOperation {
@@ -42,13 +34,13 @@ func googleManageSubscriptionOperation(entitlement Entitlement, req ManageSubscr
 
 func googleAcquireConfigurationOperation(entitlement Entitlement, source, target Device) ODSAOperation {
 	op := ODSAOperation{
-		Operation:     OperationAcquireConf,
-		OperationType: OperationTypeOmit,
+		Operation:                   OperationAcquireConf,
+		OperationType:               OperationTypeOmit,
+		OldTerminalEntitlementProto: oldTerminalEntitlementProtocol(source),
 	}
 	if IsSourceCredentialTransferType(entitlement.TransferType) {
 		op.TargetTerminalID = target.IMEI
 		op.TargetTerminalEID = target.EID
-		op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
 		return op
 	}
 	op.TerminalEID = target.EID
@@ -98,12 +90,12 @@ func setGoogleTargetTerminalFields(op *ODSAOperation, target Device, includeIden
 }
 
 func addGoogleOldTerminalFields(op *ODSAOperation, entitlement Entitlement, source Device) {
+	op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
 	if !googleIncludeOldTerminalIDs(entitlement) {
 		return
 	}
 	op.OldTerminalID = source.IMEI
 	op.OldTerminalICCID = source.ICCID
-	op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
 }
 
 func googleIncludeTargetTerminalIdentity(entitlement Entitlement) bool {

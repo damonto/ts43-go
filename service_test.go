@@ -1444,8 +1444,8 @@ func TestActivateTypeTwoDelayedDownloadWithTemporaryToken(t *testing.T) {
 						if got := query.Get("temporary_token"); got != "old-temp" {
 							t.Errorf("ManageSubscription temporary_token = %q, want old-temp", got)
 						}
-						if got := query.Get("terminal_id"); got != "111111111111111" {
-							t.Errorf("ManageSubscription terminal_id = %q, want source IMEI", got)
+						if got := query.Get("terminal_id"); got != "222222222222222" {
+							t.Errorf("ManageSubscription terminal_id = %q, want target IMEI", got)
 						}
 						if got := query.Get("terminal_eid"); got != "89049032000001000000000000000000" {
 							t.Errorf("ManageSubscription terminal_eid = %q, want target EID", got)
@@ -2231,6 +2231,10 @@ func TestPollConfigurationHandlesDeactivatedServiceStatus(t *testing.T) {
 			}, authCredential(AuthToken{Value: "tmp"}))
 			if err == nil {
 				t.Fatal("pollConfiguration() error = nil, want deactivated error")
+			}
+			var denied *CarrierDeniedError
+			if !errors.As(err, &denied) || denied.Operation != OperationAcquireConf || denied.Result != resp {
+				t.Fatalf("error = %v, want classified carrier denial with response", err)
 			}
 			if resp == nil || (resp.ServiceStatus != ServiceStatusDeactivated && resp.ServiceStatus != ServiceStatusDeactivatedNoReuse) {
 				t.Errorf("ServiceStatus = %v", resp)
@@ -3326,8 +3330,8 @@ func TestCheckEligibilityTargetIdentityGating(t *testing.T) {
 		wantTarget  bool
 	}{
 		{name: "type two omits target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken}},
-		{name: "type two with set target fields sends target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken, SetTargetTerminalFields: true}, wantTarget: true},
-		{name: "source credential type six sends target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTS43V8}, wantTarget: true},
+		{name: "type two with set target fields omits target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken, SetTargetTerminalFields: true}},
+		{name: "source credential type six omits target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTS43V8}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3372,8 +3376,8 @@ func TestAcquireTemporaryTokenTargetIdentityGating(t *testing.T) {
 		wantTarget  bool
 	}{
 		{name: "type two omits target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken}},
-		{name: "type two with set target fields sends target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken, SetTargetTerminalFields: true}, wantTarget: true},
-		{name: "type nine sends target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryTokenOldTerminalIDs}, wantTarget: true},
+		{name: "type two with set target fields omits target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryToken, SetTargetTerminalFields: true}},
+		{name: "type nine omits target fields", entitlement: Entitlement{Server: "https://example.test/ts43", TransferType: TransferTypeTemporaryTokenOldTerminalIDs}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -149,8 +149,8 @@ func websheetResultFromName(name string, args []string, query url.Values) (Websh
 	case "profilereadywithdefaultsmdp", "defaultsmdp":
 		smdp := argOrQuery(args, query, 0, "defaultSmdpAddress", "smdp", "smdpFqdn")
 		iccid := argOrQuery(args, query, 1, "iccid", "ICCID")
-		if smdp == "" || iccid == "" {
-			return WebsheetResult{}, errors.New("default SM-DP+ and ICCID are required")
+		if smdp == "" {
+			return WebsheetResult{}, errors.New("default SM-DP+ is required")
 		}
 		return WebsheetResult{
 			Event:    WebsheetEventProfileReadyWithDefaultSMDP,

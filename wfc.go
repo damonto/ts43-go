@@ -414,7 +414,7 @@ func (c *Client) checkWFCEntitlementOnce(ctx context.Context, input WFCEntitleme
 	if err != nil {
 		return WFCResult{}, err
 	}
-	token.Cookies = mergeCookieHeaders(token.Cookies, cookies)
+	token.Cookies = cookies
 	result.AuthToken, err = payload.authToken(token, next.now())
 	if err != nil {
 		return WFCResult{}, err

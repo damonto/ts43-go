@@ -83,8 +83,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
- var entitlements ts43.EntitlementConfigs
- if err := json.Unmarshal(entitlementJSON, &entitlements); err != nil { log.Fatal(err) }
+	var entitlements ts43.EntitlementConfigs
+	if err := json.Unmarshal(entitlementJSON, &entitlements); err != nil {
+		log.Fatal(err)
+	}
 	identity := ts43.Identity{
 		MCC: "262",
 		MNC: "01",
@@ -125,7 +127,7 @@ For a real subscription, read the full identity from the source SIM. Carrier mat
 | `SMDSDiscoveryEvent` | Discover the profile through SM-DS, then download, install, and enable it. | `CompleteActivation(ctx, result, ActivationResult{ICCID: installedICCID})` |
 | `DelayedDownloadEvent` | Complete installation through the carrier-provided download path. | `CompleteActivation(ctx, result, ActivationResult{ICCID: installedICCID})` |
 | `ConfigurationPendingEvent` | Wait for the carrier to prepare download configuration. | `Continue(ctx, result, ContinueRequest{})` |
-| `ActivationPendingEvent` | Wait for the carrier to confirm activation. | `Continue(ctx, result, ContinueRequest{})` |
+| `ActivationPendingEvent` | Retry activation reporting or wait for carrier confirmation. | `Continue(ctx, result, ContinueRequest{})` |
 | `DoneEvent` | The transfer is complete. | No further call. |
 | `DismissEvent` | The carrier dismissed the flow. | No further call. |
 
@@ -133,7 +135,45 @@ The table omits the `ts43.` prefix for readability. `answer` and `callback` are 
 
 Keep the returned result in memory throughout the flow. It contains an unexported session; JSON serialization does not preserve a resumable transfer. Configuration and activation polling can return both a result and an error. Retain the result so your application can retry an appropriate pending state after handling the error. Continuing activation confirmation does not resubmit an already accepted subscription update.
 
+After installation, authentication or subscription-update errors also retain the activation-pending state and installed ICCID. Continue the same result to retry reporting activation; do not reinstall the profile. Once the update is accepted, continuation only checks activation configuration.
+
+A pending result does not make every error retryable. `AcquireConfiguration`
+service state 3 without usable download data and state 4 (deactivated, no ICCID reuse) return
+`*CarrierDeniedError` with the response attached; end the flow on that rejection.
+Transient HTTP failures can retain the same pending session for a later retry.
+
 Provide `Target.Channel` when the flow needs to refresh expired or rejected credentials using the newly activated target profile. The example CLI does not configure this channel.
+
+### Carrier behavior
+
+Download readiness and activation confirmation use separate checks: a Google
+configuration with service status 3 and usable `DownloadInfo` is downloadable,
+but does not confirm activation. Samsung can also provide download data while
+service status is 2. Explicit configuration-operation failures are returned as
+`CarrierDeniedError` even if other fields look ready. Configuration polling
+retains refreshed authentication tokens and cookies. Before installation, an
+expired temporary token is renewed with a still-valid source authentication
+token before attempting full SIM authentication. After installation, credential
+refresh continues to require the target subscription.
+
+A `DelayedDownloadEvent` may be continued with `Continue` to check for download
+configuration without submitting `ManageSubscription` again.
+
+Carrier discovery preserves the default polling interval and timeout when the
+catalog omits them. `autoRetry511Limit` in supplied records is honored, including
+an explicit zero; an explicitly configured nonzero client limit takes precedence.
+Malformed optional polling hints fall back to the Google interval or disable
+Samsung polling; an unavailable authentication-token validity defaults to one hour.
+An invalid user response (`OperationResult=104`) keeps the input prompt available.
+
+Keep a carrier websheet open for `deleteToken`, `checkProfileServiceStatus`,
+`profileReadyWithActivationCode`, and `profileReadyWithDefaultSmdp` callbacks.
+The latter supports default SM-DP+ download without a matching ID. After a
+download-ready callback, install and call `CompleteActivation` normally, then
+continue receiving callbacks from the same page. `Continue` accepts further
+websheet callbacks while that session remains open. Finishing or checking the
+portal after installation continues activation reporting or confirmation without
+repeating an accepted subscription update or downloading the profile again.
 
 ### HTTP and logging
 
@@ -163,6 +203,7 @@ Set `WFCConfig.NeedsIMSProvisioning` when your integration requires VERS-driven 
 - Configurations that require Android's `Ts43Operation` backend return `ErrAndroidEntitlementRequired`. That backend is outside this library's scope.
 - Transfer type 8 requires LPA metadata lookup and source profile deletion outside the TS.43 flow; `Transfer` returns `ErrSMDPTransferRequiresLPA` for this type.
 - Carrier denials return `*CarrierDeniedError`, retaining the carrier response and error text. Non-2xx HTTP responses return `*HTTPError`, retaining response headers, including `Retry-After`, for your application's retry scheduler.
+- ODSA responses accept standalone `PrimaryConfiguration` and nested `PrimaryConfigurations` in XML and JSON. A standalone entry takes precedence; otherwise the first collection entry is used, matching the Android clients.
 - LPA operations, browser/WebView hosting, persistent scheduling, and transfer recovery across process restarts are application responsibilities.
 
 ## Development
@@ -190,4 +231,3 @@ The example accepts `-carrier-config-dir /path/to/private-files`. Carrier files 
 ## License
 
 Licensed under the [GNU General Public License v3.0](LICENSE).
-

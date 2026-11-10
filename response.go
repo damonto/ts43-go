@@ -1,6 +1,7 @@
 package ts43
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -32,6 +33,7 @@ type ODSAResponse struct {
 	Message             Message
 	Websheet            Websheet
 	Raw                 []byte
+	cookies             []string
 }
 
 func (r *ODSAResponse) UnmarshalBinary(data []byte) error {
@@ -165,22 +167,23 @@ func (f *tokenFields) set(name, value string) {
 }
 
 type applicationFields struct {
-	OperationResult                 stringField     `json:"OperationResult"`
-	PrimaryAppEligibility           stringField     `json:"PrimaryAppEligibility"`
-	SubscriptionResult              stringField     `json:"SubscriptionResult"`
-	PollingInterval                 stringField     `json:"PollingInterval"`
-	PollingIntervalUnit             stringField     `json:"PollingIntervalUnit"`
-	TemporaryToken                  stringField     `json:"TemporaryToken"`
-	TemporaryTokenExpiry            stringField     `json:"TemporaryTokenExpiry"`
-	OperationTargets                stringField     `json:"OperationTargets"`
-	RegisterNotifStatus             stringField     `json:"RegisterNotifStatus"`
-	GeneralErrorText                stringField     `json:"GeneralErrorText"`
-	SubscriptionServiceURL          stringField     `json:"SubscriptionServiceURL"`
-	SubscriptionServiceUserData     stringField     `json:"SubscriptionServiceUserData"`
-	SubscriptionServiceContentsType stringField     `json:"SubscriptionServiceContentsType"`
-	PrimaryConfiguration            *primaryFields  `json:"PrimaryConfiguration"`
-	Download                        *downloadFields `json:"DownloadInfo"`
-	Message                         *messageFields  `json:"MSG"`
+	OperationResult                 stringField            `json:"OperationResult"`
+	PrimaryAppEligibility           stringField            `json:"PrimaryAppEligibility"`
+	SubscriptionResult              stringField            `json:"SubscriptionResult"`
+	PollingInterval                 stringField            `json:"PollingInterval"`
+	PollingIntervalUnit             stringField            `json:"PollingIntervalUnit"`
+	TemporaryToken                  stringField            `json:"TemporaryToken"`
+	TemporaryTokenExpiry            stringField            `json:"TemporaryTokenExpiry"`
+	OperationTargets                stringField            `json:"OperationTargets"`
+	RegisterNotifStatus             stringField            `json:"RegisterNotifStatus"`
+	GeneralErrorText                stringField            `json:"GeneralErrorText"`
+	SubscriptionServiceURL          stringField            `json:"SubscriptionServiceURL"`
+	SubscriptionServiceUserData     stringField            `json:"SubscriptionServiceUserData"`
+	SubscriptionServiceContentsType stringField            `json:"SubscriptionServiceContentsType"`
+	PrimaryConfiguration            *primaryFields         `json:"PrimaryConfiguration"`
+	PrimaryConfigurations           *primaryConfigurations `json:"PrimaryConfigurations"`
+	Download                        *downloadFields        `json:"DownloadInfo"`
+	Message                         *messageFields         `json:"MSG"`
 }
 
 func (f *applicationFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
@@ -206,6 +209,12 @@ func (f *applicationFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartEl
 						return err
 					}
 					f.PrimaryConfiguration = &primary
+				case "PrimaryConfigurations":
+					var primary primaryConfigurations
+					if err := decoder.DecodeElement(&primary, &t); err != nil {
+						return err
+					}
+					f.PrimaryConfigurations = &primary
 				case "DownloadInfo":
 					var download downloadFields
 					if err := decoder.DecodeElement(&download, &t); err != nil {
@@ -267,7 +276,70 @@ func (f *applicationFields) set(name, value string) {
 	}
 }
 
+// primaryConfigurations preserves the first entry, as the Android clients do.
+// A standalone PrimaryConfiguration takes precedence over this fallback.
+type primaryConfigurations struct {
+	first *primaryFields
+}
+
+func (f *primaryConfigurations) UnmarshalJSON(data []byte) error {
+	type entry struct {
+		PrimaryConfiguration *primaryFields `json:"PrimaryConfiguration"`
+	}
+	var entries []entry
+	if bytes.HasPrefix(bytes.TrimSpace(data), []byte("[")) {
+		if err := json.Unmarshal(data, &entries); err != nil {
+			return err
+		}
+	} else {
+		var single entry
+		if err := json.Unmarshal(data, &single); err != nil {
+			return err
+		}
+		entries = []entry{single}
+	}
+	f.first = nil
+	for _, entry := range entries {
+		if entry.PrimaryConfiguration != nil {
+			f.first = entry.PrimaryConfiguration
+			break
+		}
+	}
+	return nil
+}
+
+func (f *primaryConfigurations) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	f.first = nil
+	for {
+		tok, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		switch t := tok.(type) {
+		case xml.StartElement:
+			if t.Name.Local != "characteristic" || characteristicType(t) != "PrimaryConfiguration" {
+				if err := decoder.Skip(); err != nil {
+					return err
+				}
+				continue
+			}
+			var primary primaryFields
+			if err := decoder.DecodeElement(&primary, &t); err != nil {
+				return err
+			}
+			if f.first == nil {
+				f.first = &primary
+			}
+		case xml.EndElement:
+			if t.Name.Local == start.Name.Local {
+				return nil
+			}
+		}
+	}
+}
+
 type primaryFields struct {
+	ICCID               stringField     `json:"ICCID"`
 	ServiceStatus       stringField     `json:"ServiceStatus"`
 	PollingInterval     stringField     `json:"PollingInterval"`
 	PollingIntervalUnit stringField     `json:"PollingIntervalUnit"`
@@ -324,6 +396,8 @@ func (f *primaryFields) UnmarshalXML(decoder *xml.Decoder, start xml.StartElemen
 
 func (f *primaryFields) set(name, value string) {
 	switch name {
+	case "ICCID":
+		f.ICCID = stringField(value)
 	case "ServiceStatus":
 		f.ServiceStatus = stringField(value)
 	case "PollingInterval":
@@ -529,6 +603,8 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 	var primary primaryFields
 	if app.PrimaryConfiguration != nil {
 		primary = *app.PrimaryConfiguration
+	} else if app.PrimaryConfigurations != nil && app.PrimaryConfigurations.first != nil {
+		primary = *app.PrimaryConfigurations.first
 	}
 	var download downloadFields
 	switch {
@@ -572,21 +648,17 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 		pollingInterval = app.PollingInterval.String()
 		pollingIntervalUnit = app.PollingIntervalUnit.String()
 	}
-	pollingIntervalValue, err := parseOptionalInt(pollingInterval)
-	if err != nil {
-		return fmt.Errorf("parse polling interval: %w", err)
-	}
-	pollingIntervalUnitValue, err := parseOptionalInt(pollingIntervalUnit)
-	if err != nil {
-		return fmt.Errorf("parse polling interval unit: %w", err)
-	}
+	// Android clients fall back when optional polling hints are malformed.
+	pollingIntervalValue, _ := parseOptionalInt(pollingInterval)
+	pollingIntervalUnitValue, _ := parseOptionalInt(pollingIntervalUnit)
 	registerNotifStatus, err := parseOptionalInt(app.RegisterNotifStatus.String())
 	if err != nil {
 		return fmt.Errorf("parse register notification status: %w", err)
 	}
 	authTokenValidity, err := parseOptionalInt(token.Validity.String())
-	if err != nil {
-		return fmt.Errorf("parse authentication token validity: %w", err)
+	if err != nil || !authTokenValidity.set || authTokenValidity.value < 0 {
+		// GMS uses one hour when the authentication validity is unavailable.
+		authTokenValidity = optionalInt{value: 3600, set: true}
 	}
 	r.PollingIntervalSet = pollingIntervalValue.set
 	r.PollingInterval = pollingIntervalValue.value
@@ -616,7 +688,7 @@ func (r *ODSAResponse) apply(doc odsaPayload) error {
 		smdp = download.SubscriptionService.String()
 	}
 	r.Download.SMDPFQDN = smdpFQDN(smdp)
-	r.Download.ProfileICCID = download.ProfileICCID.String()
+	r.Download.ProfileICCID = firstNonEmpty(download.ProfileICCID.String(), primary.ICCID.String())
 	r.Download.MatchingID = download.MatchingID.String()
 	return nil
 }

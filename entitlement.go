@@ -47,6 +47,7 @@ type entitlementRecord struct {
 	AcquireConfigurationPollingIntervalMinutes int     `json:"acquireConfigurationPollingIntervalMinutes"`
 	AcquireConfigurationPollingTimeoutMinutes  int     `json:"acquireConfigurationPollingTimeoutMinutes"`
 	UseHTTPPost                                bool    `json:"useHttpPost"`
+	AutoRetry511Limit                          *int    `json:"autoRetry511Limit"`
 	SupportPsimToEsimTransfer                  bool    `json:"supportPsimToEsimTransfer"`
 	SupportEsimToEsimTransfer                  bool    `json:"supportEsimToEsimTransfer"`
 	UseSMDSDelayedDownload                     bool    `json:"useSmdsDelayedDownload"`
@@ -188,6 +189,12 @@ func (r entitlementRecord) toEntitlement(sourceSIMType SIMType, transferType Tra
 		ProvisioningVersion: r.ProvisioningVersion,
 		RequestVersion:      r.RequestVersion,
 		Version:             r.EntitlementVersion,
+	}
+	// An explicit zero retry limit disables retries; an absent field uses
+	// the same default as a directly configured client.
+	entitlement.AutoRetry511Limit = 1
+	if r.AutoRetry511Limit != nil {
+		entitlement.AutoRetry511Limit = *r.AutoRetry511Limit
 	}
 	if r.AppName != nil {
 		entitlement.AppName = *r.AppName
