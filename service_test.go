@@ -1750,6 +1750,7 @@ func TestCompleteActivationPollsConfigurationAfterUpdateSubscription(t *testing.
 	}
 
 	result := &Result{
+		State: StatePendingDownload,
 		session: &transferSession{
 			offer: &transferOffer{
 				SourceIdentity: sourceIdentity,
@@ -1808,6 +1809,7 @@ func TestCompleteActivationReturnsDismissEvent(t *testing.T) {
 	}
 
 	result, err := client.CompleteActivation(context.Background(), &Result{
+		State: StatePendingDownload,
 		session: &transferSession{
 			offer: &transferOffer{
 				SourceIdentity: Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
@@ -1858,6 +1860,7 @@ func TestCompleteActivationReturnsPendingActivationForDelayedDownload(t *testing
 	}
 
 	result, err := client.CompleteActivation(context.Background(), &Result{
+		State: StatePendingDownload,
 		session: &transferSession{
 			offer: &transferOffer{
 				SourceIdentity: Identity{ICCID: "8910000000000000000", IMSI: "310260123456789", MCC: "310", MNC: "260"},
@@ -2132,7 +2135,7 @@ func TestApplyDownloadConfigurationRejectsMissingDownloadInfo(t *testing.T) {
 				TargetDevice: Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"},
 			},
 		},
-	}, DownloadConfig{})
+	}, DownloadConfig{}, ServiceStatusUnknown)
 	if !errors.Is(err, errDownloadInfoMissing) {
 		t.Fatalf("applyDownloadConfiguration() error = %v, want errDownloadInfoMissing", err)
 	}

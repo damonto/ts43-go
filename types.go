@@ -279,6 +279,9 @@ type transferSession struct {
 	sourceProfileICCID string
 	websheetOpen       bool
 	profileInstalled   bool
+
+	// downloadActivated carries Google's isActivated download-credential flag.
+	downloadActivated bool
 }
 
 type transferOffer struct {

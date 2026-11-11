@@ -7,11 +7,8 @@ import (
 	"net/url"
 )
 
-var (
-	ErrWebsheetDismissed = errors.New("websheet dismissed")
-	// Deprecated: default SM-DP+ callbacks now produce a DownloadReadyEvent.
-	ErrWebsheetDefaultSMDPUnsupported = errors.New("websheet default SM-DP+ callback is unsupported")
-)
+// ErrWebsheetDismissed reports that the carrier websheet dismissed the flow.
+var ErrWebsheetDismissed = errors.New("websheet dismissed")
 
 func (c *Client) handleWebsheetResult(ctx context.Context, result *Result, callback WebsheetResult) (*Result, error) {
 	session, err := requireTransferSession(result)
@@ -31,7 +28,7 @@ func (c *Client) handleWebsheetResult(ctx context.Context, result *Result, callb
 			ActivationCode: callback.ActivationCode,
 			ProfileICCID:   callback.ICCID,
 			IMEI:           callback.IMEI,
-		})
+		}, ServiceStatusUnknown)
 	case WebsheetEventProfileReadyWithDefaultSMDP:
 		if session.profileInstalled {
 			return result, nil
@@ -47,8 +44,11 @@ func (c *Client) handleWebsheetResult(ctx context.Context, result *Result, callb
 			SMDPFQDN:     callback.SMDPFQDN,
 			ProfileICCID: iccid,
 			IMEI:         callback.IMEI,
-		})
+		}, ServiceStatusUnknown)
 	case WebsheetEventSelectionCompleted:
+		if session.profileInstalled {
+			return result, nil
+		}
 		if callback.ICCID == "" && callback.IMEI == "" {
 			return result, errors.New("selected ICCID or IMEI is required")
 		}

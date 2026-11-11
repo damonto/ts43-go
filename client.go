@@ -66,7 +66,7 @@ type entitlementTransport struct {
 
 const (
 	defaultEntitlementTimeout = 30 * time.Second
-	maxEAPRelayRounds         = 3
+	maxEAPRelayRounds         = 4
 )
 
 func New(cfg *Config) (*Client, error) {
@@ -136,18 +136,23 @@ func newClient(cfg Config) *Client {
 	}
 }
 
+// Authenticate obtains an authentication token, retrying HTTP 511 responses up
+// to Entitlement.AutoRetry511Limit times.
 func (c *Client) Authenticate(ctx context.Context, identity Identity, device Device) (AuthToken, error) {
-	return c.authenticate(ctx, c.transfer.source.Channel, identity, device)
+	for attempt := 0; ; attempt++ {
+		token, err := c.authenticate(ctx, c.transfer.source.Channel, identity, device)
+		if !isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) || attempt >= c.transfer.entitlement.AutoRetry511Limit {
+			return token, err
+		}
+	}
 }
 
+// authenticate performs one authentication attempt. Transfer flows apply their
+// retry budget around authentication, eligibility, and temporary-token issuance.
 func (c *Client) authenticate(ctx context.Context, channel Channel, identity Identity, device Device) (AuthToken, error) {
 	req := c.baseRequest(device, "", "")
 	op := ODSAOperation{}
 	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
-	if isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) {
-		req.OmitEAPID = true
-		resp, cookies, err = c.callWithChannel(ctx, channel, identity, req, op)
-	}
 	if err != nil {
 		return AuthToken{}, err
 	}
@@ -270,7 +275,7 @@ func (c *Client) updateSubscription(ctx context.Context, identity Identity, sour
 }
 
 func (c *Client) updateSubscriptionOnChannel(ctx context.Context, channel Channel, identity Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
-	req := c.transferRequest(target, credential)
+	req := c.activationRequest(target, credential)
 	op := updateSubscriptionOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.callWithChannel(ctx, channel, identity, req, op)
@@ -296,7 +301,7 @@ func (c *Client) acquireActivationConfiguration(ctx context.Context, identity Id
 }
 
 func (c *Client) acquireActivationConfigurationOnChannel(ctx context.Context, channel Channel, identity Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
-	req := c.transferRequest(target, credential)
+	req := c.activationRequest(target, credential)
 	op := activationConfigurationOperation(c.transfer.entitlement, target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.callWithChannel(ctx, channel, identity, req, op)
@@ -496,6 +501,15 @@ func (c *Client) transferRequest(device Device, credential transferCredential) S
 	return c.authRequest(device, credential.auth)
 }
 
+func (c *Client) activationRequest(target Device, credential transferCredential) ServiceEntitlementRequest {
+	req := c.transferRequest(target, credential)
+	if c.transfer.entitlement.Channel != EntitlementChannelSamsung {
+		// GMS btoe builds a fresh activation request without the transfer app_name.
+		req.AppName = ""
+	}
+	return req
+}
+
 func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
 	companion := c.transfer.companion
 	op.CompanionTerminalID = companion.IMEI
@@ -567,13 +581,6 @@ func (c *Client) requestVersion() string {
 
 func (c *Client) entitlementVersion() string {
 	return firstNonEmpty(c.transfer.entitlement.Version, "9.0")
-}
-
-func oldTerminalEntitlementProtocol(source Device) string {
-	if source.EntitlementProtocol != 0 {
-		return entitlementProtocol(source.EntitlementProtocol)
-	}
-	return ""
 }
 
 func selectedTransferType(entitlement Entitlement) TransferType {

@@ -66,7 +66,7 @@ func activationConfigurationOperation(entitlement Entitlement, target Device) OD
 		op := samsungActivationConfigurationOperation(target)
 		return samsungExtraTerminalFields(entitlement, op, target)
 	}
-	return googleActivationConfigurationOperation(entitlement, target)
+	return googleActivationConfigurationOperation(target)
 }
 
 func baseManageSubscriptionOperation(operationType OperationType, answer UserInputResult) ODSAOperation {

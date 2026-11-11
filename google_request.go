@@ -25,7 +25,7 @@ func googleManageSubscriptionOperation(entitlement Entitlement, req ManageSubscr
 		op.TerminalEID = target.EID
 		op.TerminalICCID = target.ICCID
 		if googleIncludeTargetTerminalIdentity(entitlement) {
-			setGoogleTargetTerminalFields(&op, target, true)
+			setGoogleTargetTerminalFields(&op, target)
 		}
 	}
 	addGoogleOldTerminalFields(&op, entitlement, source)
@@ -36,7 +36,7 @@ func googleAcquireConfigurationOperation(entitlement Entitlement, source, target
 	op := ODSAOperation{
 		Operation:                   OperationAcquireConf,
 		OperationType:               OperationTypeOmit,
-		OldTerminalEntitlementProto: oldTerminalEntitlementProtocol(source),
+		OldTerminalEntitlementProto: entitlementProtocol(source.EntitlementProtocol),
 	}
 	if IsSourceCredentialTransferType(entitlement.TransferType) {
 		op.TargetTerminalID = target.IMEI
@@ -46,7 +46,7 @@ func googleAcquireConfigurationOperation(entitlement Entitlement, source, target
 	op.TerminalEID = target.EID
 	op.TerminalICCID = target.ICCID
 	if googleIncludeTargetTerminalIdentity(entitlement) {
-		setGoogleTargetTerminalFields(&op, target, true)
+		setGoogleTargetTerminalFields(&op, target)
 	}
 	return op
 }
@@ -58,30 +58,21 @@ func googleUpdateSubscriptionOperation(entitlement Entitlement, source, target D
 		TerminalEID:   target.EID,
 		TerminalICCID: target.ICCID,
 	}
-	if googleIncludeTargetTerminalIdentity(entitlement) {
-		setGoogleTargetTerminalFields(&op, target, true)
-	}
 	addGoogleOldTerminalFields(&op, entitlement, source)
 	return op
 }
 
-func googleActivationConfigurationOperation(entitlement Entitlement, target Device) ODSAOperation {
-	op := ODSAOperation{
+func googleActivationConfigurationOperation(target Device) ODSAOperation {
+	return ODSAOperation{
 		Operation:     OperationAcquireConf,
 		OperationType: OperationTypeOmit,
 		TerminalEID:   target.EID,
 	}
-	if googleIncludeTargetTerminalIdentity(entitlement) {
-		setGoogleTargetTerminalFields(&op, target, true)
-	}
-	return op
 }
 
-func setGoogleTargetTerminalFields(op *ODSAOperation, target Device, includeIdentity bool) {
-	if includeIdentity {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
-	}
+func setGoogleTargetTerminalFields(op *ODSAOperation, target Device) {
+	op.TargetTerminalID = target.IMEI
+	op.TargetTerminalEID = target.EID
 	op.TargetTerminalICCID = target.ICCID
 	op.TargetTerminalModel = target.Model
 	op.TargetTerminalSN = target.SerialNumber
@@ -90,7 +81,7 @@ func setGoogleTargetTerminalFields(op *ODSAOperation, target Device, includeIden
 }
 
 func addGoogleOldTerminalFields(op *ODSAOperation, entitlement Entitlement, source Device) {
-	op.OldTerminalEntitlementProto = oldTerminalEntitlementProtocol(source)
+	op.OldTerminalEntitlementProto = entitlementProtocol(source.EntitlementProtocol)
 	if !googleIncludeOldTerminalIDs(entitlement, op.OperationType) {
 		return
 	}

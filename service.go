@@ -144,8 +144,9 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 	}
 }
 
-// CompleteActivation records an installed profile and reports activation to the
-// carrier. Retain the returned result alongside an error to resume this phase.
+// CompleteActivation records installation after a requested download and completes
+// any remaining carrier activation. It can also resume pending activation. Retain
+// the returned result alongside an error to resume this phase.
 func (c *Client) CompleteActivation(ctx context.Context, result *Result, activation ActivationResult) (*Result, error) {
 	if result == nil {
 		return nil, errors.New("result is required")
@@ -154,14 +155,19 @@ func (c *Client) CompleteActivation(ctx context.Context, result *Result, activat
 	if err != nil {
 		return result, err
 	}
-	if result.State == StateDone || result.State == StateDismissed {
+	switch result.State {
+	case StateDone, StateDismissed:
 		return result, nil
-	}
-	if result.State == StatePendingActivation && subscriptionUpdateAccepted(c.transfer.entitlement, result.UpdateSubscription) {
-		return c.resumeActivation(ctx, result)
-	}
-	if result.State == StatePendingConfiguration {
+	case StatePendingDownload, StatePendingSMDSDiscovery, StatePendingDelayedDownload:
+		// The caller owns installation for these download events.
+	case StatePendingActivation:
+		if subscriptionUpdateAccepted(c.transfer.entitlement, result.UpdateSubscription) {
+			return c.resumeActivation(ctx, result)
+		}
+	case StatePendingConfiguration:
 		return result, errors.New("download configuration is still pending")
+	default:
+		return result, fmt.Errorf("state %d cannot complete activation", result.State)
 	}
 	session.profileInstalled = true
 	offer := session.offer
@@ -201,6 +207,14 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 	session, err := requireTransferSession(result)
 	if err != nil {
 		return result, err
+	}
+	if session.profileInstalled && session.downloadActivated {
+		// GMS returns an already-activated download when ServiceStatus is 1.
+		// Installation still has to finish, but no activation request is needed.
+		result.State = StateDone
+		result.Event = DoneEvent{}
+		c.emit(result.Event)
+		return result, nil
 	}
 	offer := session.offer
 	// Installation is complete even if authentication or reporting fails.
@@ -296,10 +310,13 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 		break
 	}
 	result := &Result{ManageSubscription: manage, session: &transferSession{offer: offer}}
+	if manage != nil {
+		// A carrier can rotate credentials even when it rejects user input.
+		c.updateTransferCredential(offer, manage, credential)
+	}
 	if err != nil {
 		return result, err
 	}
-	c.updateTransferCredential(offer, manage, credential)
 	if sourceProfileDeletionRequired(manage) {
 		result.session.sourceProfileICCID = firstNonEmpty(offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID)
 		result.State = StatePendingSourceProfileDeletion
@@ -325,11 +342,7 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 		return result, nil
 	}
 	if downloadProfileReady(manage) {
-		result.DownloadConfig = completeDownloadConfig(manage.Download, offer.TargetDevice)
-		result.State = StatePendingDownload
-		result.Event = DownloadReadyEvent{Config: result.DownloadConfig}
-		c.emit(result.Event)
-		return result, nil
+		return c.applyDownloadConfiguration(result, manage.Download, ServiceStatusUnknown)
 	}
 	updateConfigurationRequired := samsungUpdateConfigurationRequired(c.transfer.entitlement, manage)
 	if subscriptionDone(manage) && !updateConfigurationRequired {
@@ -379,7 +392,7 @@ func (c *Client) continueConfiguration(ctx context.Context, result *Result) (*Re
 		c.emit(result.Event)
 		return result, nil
 	}
-	return c.applyDownloadConfiguration(result, configuration.Download)
+	return c.applyDownloadConfiguration(result, configuration.Download, configuration.ServiceStatus)
 }
 
 func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, credential transferCredential) (*ODSAResponse, error) {
@@ -590,7 +603,7 @@ func (c *Client) delayedDownloadState(offer *transferOffer, subscriptionResult S
 	return StatePendingDelayedDownload, event
 }
 
-func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig) (*Result, error) {
+func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig, status ServiceStatus) (*Result, error) {
 	session, err := requireTransferSession(result)
 	if err != nil {
 		return result, err
@@ -599,6 +612,8 @@ func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig) 
 	if cfg.ActivationCode == "" && cfg.SMDPFQDN == "" {
 		return result, errDownloadInfoMissing
 	}
+	session.downloadActivated = c.transfer.entitlement.Channel != EntitlementChannelSamsung &&
+		status == ServiceStatusActivated
 	result.DownloadConfig = cfg
 	result.State = StatePendingDownload
 	result.Event = DownloadReadyEvent{Config: result.DownloadConfig}

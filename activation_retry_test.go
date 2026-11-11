@@ -120,13 +120,15 @@ func TestTokenOperationPreservesCookieDeletion(t *testing.T) {
 	}
 }
 
-func TestEAPRelayRetainsCookiesAndAcceptsThirdResponse(t *testing.T) {
+func TestEAPRelayRetainsCookiesAndBoundsReplies(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
+		replies   int
 		exhausted bool
 	}{
-		{name: "success"},
-		{name: "exhausted", exhausted: true},
+		{name: "third reply succeeds", replies: 3},
+		{name: "fourth reply succeeds", replies: 4},
+		{name: "fifth challenge exhausts retries", replies: 4, exhausted: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			posts := 0
@@ -152,19 +154,19 @@ func TestEAPRelayRetainsCookiesAndAcceptsThirdResponse(t *testing.T) {
 					r.Header.Add("Set-Cookie", "remove=; Max-Age=0")
 					return r, nil
 				}
-				if posts == 2 || tt.exhausted {
+				if posts < tt.replies || tt.exhausted {
 					return response(200, eapRelayBody(t, byte(posts+1))), nil
 				}
 				return response(200, `{"TOKEN":{"token":"new","Validity":3600}}`), nil
 			})})
 			body, cookies, err := (entitlementTransport{client: client, channel: akaChannel{}}).eapRelay(t.Context(), Identity{MCC: "310", MNC: "260", IMSI: "310260123456789"}, []byte(eapRelayBody(t, 1)), ServiceEntitlementRequest{}, []*http.Cookie{{Name: "sticky", Value: "keep"}, {Name: "relay", Value: "one"}, {Name: "remove", Value: "gone"}})
 			if tt.exhausted {
-				if err == nil || posts != 3 {
+				if err == nil || posts != tt.replies {
 					t.Fatalf("posts=%d err=%v", posts, err)
 				}
 				return
 			}
-			if err != nil || posts != 3 || relayPacket(body) != "" {
+			if err != nil || posts != tt.replies || relayPacket(body) != "" {
 				t.Fatalf("posts=%d err=%v", posts, err)
 			}
 			values := map[string]string{}

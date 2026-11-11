@@ -107,8 +107,8 @@ func TestJSONApplicationTransferCompletes(t *testing.T) {
 					}
 					return response(200, `{"ap2009":{"OperationResult":1,"TemporaryToken":"temporary","TemporaryTokenExpiry":"2030-01-01T00:00:00Z","OperationTargets":"ManageSubscription,AcquireConfiguration"}}`), nil
 				case OperationManage:
-					if fields.Get("operation_type") == "4" {
-						return response(200, `{"ap2009":{"OperationResult":1,"SubscriptionResult":3}}`), nil
+					if fields.Get("operation_type") != "3" {
+						t.Fatal("already-activated download triggered another subscription update")
 					}
 					return response(200, `{"ap2009":{"OperationResult":1,"SubscriptionResult":4}}`), nil
 				case OperationAcquireConf:
@@ -129,7 +129,7 @@ func TestJSONApplicationTransferCompletes(t *testing.T) {
 			if err != nil || result.State != StateDone {
 				t.Fatalf("state=%v err=%v", result.State, err)
 			}
-			want := []string{":", "CheckEligibility:", "AcquireTemporaryToken:", "ManageSubscription:3", "AcquireConfiguration:", "ManageSubscription:4", "AcquireConfiguration:"}
+			want := []string{":", "CheckEligibility:", "AcquireTemporaryToken:", "ManageSubscription:3", "AcquireConfiguration:"}
 			if !reflect.DeepEqual(operations, want) {
 				t.Fatalf("operations=%v, want %v", operations, want)
 			}
