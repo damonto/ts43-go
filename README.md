@@ -42,19 +42,7 @@ For carrier portals, provide a browser or WebView using the [JavaScript bridge](
 
 ## Carrier configuration
 
-No carrier catalog is bundled. Decode your Google transfer records from `entitlement.json` into `ts43.EntitlementConfigs` using `json.Unmarshal`, then pass them through `Config.Entitlements`. For direct configuration, set `Config.Entitlement` instead.
-
-Transfer requests follow the inspected GMS 26.44.63 implementation. Carrier records supply `autoRetry511Limit`, `setCheckEligibilityTargetTerminalId`, `supportRetryAfter`, and `useServerRetryAfterDelay`. An omitted `useServerRetryAfterDelay` defaults to true in catalog records; explicit false selects the carrier interval. With retry support enabled, download-configuration polling retries HTTP 503 using the server's `Retry-After` seconds when configured, or the carrier polling interval when the header is missing or invalid. Waiting stays within `PollTimeout`; keep a non-nil result returned with an error to resume using `Continue`.
-
-For entitlement version 14.0 or later, set `Device.IMEIs` to the target's full IMEI list. Requests join these values with commas in `target_terminal_id`, falling back to `Device.IMEI` when the list is empty. `CheckEligibility` includes this identifier when the version enables it or the carrier requests it. Transfer types 2, 9, and 11 still follow `setTargetTerminalFields` for download requests. The request's `terminal_id` remains the device's primary `IMEI`.
-
-Transfer operations populate only `target_terminal_id` and `target_terminal_eid` as target fields. Types 3, 6, and 7 place the EID in `target_terminal_eid`; types 2, 9, and 11 use `terminal_eid` and may also send the target fields when configured. The installed profile's ICCID is sent with the post-installation subscription update.
-
-Both request parameters and `User-Agent` truncate the device vendor, model, and software version to 4, 10, and 20 UTF-16 code units respectively, matching GMS. For example, `Google` becomes `Goog` and `Pixel 10 Pro XL` becomes `Pixel 10 P`.
-
-`enableDelayedEsimPushNotification` and `supportsMultipleTransfer` are preserved as carrier capabilities. Push registration and delivery are not implemented, and each `Transfer` handles one subscription.
-
-For Wi-Fi Calling, decode `wfc.json` into `ts43.WFCConfigs` and select a configuration with `Discover`.
+Your application supplies `entitlement.json` for eSIM transfers and `wfc.json` for Wi-Fi Calling. Load them with `json.Unmarshal` into `ts43.EntitlementConfigs` or `ts43.WFCConfigs`.
 
 ## Use the library
 
@@ -99,11 +87,6 @@ Run these commands from the repository root and separately from `examples`:
 go test -mod=readonly ./...
 go vet -mod=readonly ./...
 ```
-
-Owner-only carrier regressions use `TS43_CARRIER_CONFIG_DIR`. For a full Google
-comparison against the current device snapshot, also set `TS43_GMS_SNAPSHOT`
-to its Phenotype `.pb` and `TS43_AOSP_CARRIER_LIST` to the binary AOSP
-`CarrierList`. Ordinary tests skip those comparisons when the inputs are absent.
 
 ## License
 
