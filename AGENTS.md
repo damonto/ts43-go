@@ -15,13 +15,13 @@ Read the implementation and nearby tests relevant to the task; use [README.md](R
 
 | Concern | Main files |
 | --- | --- |
-| Public API and transfer lifecycle | `types.go`, `client.go`, `service.go`, `service_test.go`, `service_resume_test.go` |
-| Request construction and carrier differences | `request.go`, `operation.go`, `operation_test.go`, `request_response_test.go` |
-| Response and value codecs | `response.go`, `constants.go`, `encoding_test.go`, `conformance_test.go` |
-| Carrier matching and supplied data | `identity.go`, `entitlement.go`, `config_codecs.go`, `config_reference_test.go` |
-| Wi-Fi Calling | `wfc.go`, `wfc_response.go`, `wfc_test.go`, `wfc_response_test.go` |
+| Public API and transfer lifecycle | `types.go`, `client.go`, `service.go`, `client_test.go`, `service_test.go`, `activation_test.go` |
+| Request construction and carrier differences | `request.go`, `operation.go`, `request_test.go`, `operation_test.go` |
+| Response and value codecs | `response.go`, `constants.go`, `response_test.go`, `encoding_test.go` |
+| Carrier matching and supplied data | `identity.go`, `entitlement.go`, `config_codecs.go`, `entitlement_test.go` |
+| Wi-Fi Calling | `wfc.go`, `wfc_response.go`, `wfc_test.go` |
 | SIM authentication and HTTP | `source.go`, `aka.go`, `http_client.go`, and their matching test files |
-| Websheet callbacks and CLI integration | `websheet.go`, `websheet_result.go`, `examples/*.go`, `examples/*_service_flow.js` |
+| Websheet callbacks and CLI integration | `websheet.go`, `websheet_result.go`, `websheet_test.go`, `examples/*.go`, `examples/*_service_flow.js` |
 
 ## Go conventions
 
@@ -46,7 +46,7 @@ Read the implementation and nearby tests relevant to the task; use [README.md](R
 
 ## Tests and verification
 
-Use native `testing`, table-driven cases, and `t.Run` for related scenarios. Extend nearby tests or add a focused regression test for changed behavior. Test externally observable results, emitted requests, and state transitions rather than duplicating implementation details.
+Use native `testing`, table-driven cases, and `t.Run` for related scenarios. Group tests by functional module in the existing test files instead of adding files for individual regressions. Test externally observable results, emitted requests, and state transitions rather than duplicating implementation details.
 
 Reuse existing fake channels and HTTP doers where their behavior fits. Keep ordinary tests independent of carrier services, PC/SC, and physical SIMs. Use synthetic subscriber data, and use `Config.Now` and `Config.Sleep` for deterministic expiry and polling tests instead of wall-clock delays.
 
@@ -68,7 +68,7 @@ go vet -mod=readonly ./...
 
 - Use `go test -race -mod=readonly ./...` for concurrency changes when supported. For CLI flag or usage changes, also run `go run -mod=readonly . -h` from `examples`.
 - Run `go mod tidy` in each affected module when the task changes imports or dependencies, and review both module files and checksums. Avoid unrelated version upgrades. For an existing dependency mismatch outside the task, report it and use an isolated copy or alternate module files if needed for verification.
-- Tests in `config_reference_test.go` skip reference comparisons when the optional local `refs` corpus is absent. Keep ordinary tests independent of it, and report skipped reference checks when relevant to carrier-data changes. Do not add that corpus as a runtime dependency.
+- Google reference comparisons in `entitlement_test.go` use `TS43_GMS_SNAPSHOT` and `TS43_AOSP_CARRIER_LIST` alongside `TS43_CARRIER_CONFIG_DIR`; WFC comparisons use optional local `refs`. Keep ordinary tests independent of these inputs, report skipped reference checks when relevant, and do not add the corpus as a runtime dependency.
 - For documentation-only edits, check referenced paths, commands, and examples; skip Go test suites when no executable behavior or examples changed. Before finishing, check the diff for unintended edits and whitespace issues with `git diff --check`.
 
 ## Working boundaries and handoff

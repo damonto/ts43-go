@@ -47,6 +47,11 @@ type entitlementRecord struct {
 	UseSMDSDelayedDownload                     bool    `json:"useSmdsDelayedDownload"`
 	UseTempTokenConversion                     bool    `json:"useTempTokenConversion"`
 	SetTargetTerminalFields                    bool    `json:"setTargetTerminalFields"`
+	SetCheckEligibilityTargetTerminalID        bool    `json:"setCheckEligibilityTargetTerminalId"`
+	SupportRetryAfter                          bool    `json:"supportRetryAfter"`
+	UseServerRetryAfterDelay                   *bool   `json:"useServerRetryAfterDelay,omitempty"`
+	EnableDelayedESIMPushNotification          bool    `json:"enableDelayedEsimPushNotification"`
+	SupportsMultipleTransfer                   bool    `json:"supportsMultipleTransfer"`
 	RestrictOldTerminalFields                  bool    `json:"restrictOldTerminalFields"`
 }
 
@@ -125,17 +130,22 @@ func (r entitlementRecord) entitlement(sourceSIMType SIMType) (Entitlement, erro
 
 func (r entitlementRecord) toEntitlement(sourceSIMType SIMType, transferType TransferType) Entitlement {
 	entitlement := Entitlement{
-		Server:                    r.EntitlementServer,
-		UsePost:                   r.UseHTTPPost,
-		SourceSIMType:             sourceSIMType,
-		TransferType:              transferType,
-		UseTempTokenConversion:    r.UseTempTokenConversion,
-		SetTargetTerminalFields:   r.SetTargetTerminalFields,
-		RestrictOldTerminalFields: r.RestrictOldTerminalFields,
-		UseSMDSDelayedDownload:    r.UseSMDSDelayedDownload,
-		PollInterval:              time.Duration(r.AcquireConfigurationPollingIntervalMinutes) * time.Minute,
-		PollTimeout:               time.Duration(r.AcquireConfigurationPollingTimeoutMinutes) * time.Minute,
-		App:                       r.App,
+		Server:                              r.EntitlementServer,
+		UsePost:                             r.UseHTTPPost,
+		SourceSIMType:                       sourceSIMType,
+		TransferType:                        transferType,
+		UseTempTokenConversion:              r.UseTempTokenConversion,
+		SetTargetTerminalFields:             r.SetTargetTerminalFields,
+		SetCheckEligibilityTargetTerminalID: r.SetCheckEligibilityTargetTerminalID,
+		SupportRetryAfter:                   r.SupportRetryAfter,
+		UseServerRetryAfterDelay:            true,
+		EnableDelayedESIMPushNotification:   r.EnableDelayedESIMPushNotification,
+		SupportsMultipleTransfer:            r.SupportsMultipleTransfer,
+		RestrictOldTerminalFields:           r.RestrictOldTerminalFields,
+		UseSMDSDelayedDownload:              r.UseSMDSDelayedDownload,
+		PollInterval:                        time.Duration(r.AcquireConfigurationPollingIntervalMinutes) * time.Minute,
+		PollTimeout:                         time.Duration(r.AcquireConfigurationPollingTimeoutMinutes) * time.Minute,
+		App:                                 r.App,
 
 		ProvisioningVersion: r.ProvisioningVersion,
 		RequestVersion:      r.RequestVersion,
@@ -146,6 +156,11 @@ func (r entitlementRecord) toEntitlement(sourceSIMType SIMType, transferType Tra
 	entitlement.AutoRetry511Limit = 1
 	if r.AutoRetry511Limit != nil {
 		entitlement.AutoRetry511Limit = *r.AutoRetry511Limit
+	}
+	// GMS's carrier protobuf defaults this flag to true. Keep explicit false
+	// distinct from an omitted field when loading application-supplied records.
+	if r.UseServerRetryAfterDelay != nil {
+		entitlement.UseServerRetryAfterDelay = *r.UseServerRetryAfterDelay
 	}
 	if r.AppName != nil {
 		entitlement.AppName = *r.AppName

@@ -453,3 +453,24 @@ func (r *trackedReadCloser) Close() error {
 	r.closed = true
 	return r.closeErr
 }
+
+func TestRegressionTimeout(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		cfg  Config
+		want time.Duration
+	}{
+		{"discovered timeout", Config{}, time.Minute},
+		{"explicit timeout", Config{Entitlement: Entitlement{Timeout: 30 * time.Second}}, 30 * time.Second},
+		{"custom HTTP client", Config{HTTPClient: &http.Client{Timeout: 7 * time.Second}}, 7 * time.Second},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newClient(tt.cfg)
+			t.Cleanup(c.CloseIdleConnections)
+			c.applyDiscoveredEntitlement(Entitlement{Server: "https://example.test", Timeout: time.Minute})
+			if got := c.runtime.httpClient.(*http.Client).Timeout; got != tt.want {
+				t.Errorf("timeout = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

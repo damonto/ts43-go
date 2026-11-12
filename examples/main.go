@@ -305,7 +305,7 @@ func parseFlags(args []string, stderr io.Writer) (cliOptions, error) {
 	fs.BoolVar(&sourcePSIM, "source-psim", false, "source subscription is pSIM; otherwise eSIM")
 	fs.BoolVar(&opts.UseTempTokenConversion, "use-temp-token-conversion", false, "use temporary token for pSIM-to-eSIM conversion")
 	fs.BoolVar(&opts.SetTargetTerminalFields, "set-target-terminal-fields", false, "carrier entitlement setTargetTerminalFields value")
-	fs.BoolVar(&opts.RestrictOldTerminalFields, "restrict-old-terminal-fields", false, "GMS Ljotr.Q value; when true only transfer types 7 and 9 send old terminal fields")
+	fs.BoolVar(&opts.RestrictOldTerminalFields, "restrict-old-terminal-fields", false, "restrict source IDs to GMS types 3/6/7/9 for transfer and 7/9 for update")
 	fs.IntVar(&opts.TransferType, "transfer-type", 0, "TS.43 transfer type from carrier config; Vodafone CZ uses 2 for pSIM and 3 for eSIM")
 	fs.BoolVar(&opts.UseSMDSDelayedDownload, "use-smds-delayed-download", false, "handle delayed download through SM-DS discovery")
 	fs.DurationVar(&opts.Timeout, "timeout", opts.Timeout, "HTTP request timeout")

@@ -2,15 +2,35 @@ package ts43
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
-	"strconv"
+	"net/url"
 	"strings"
 	"testing"
 )
+
+func TestRegressionGoogleAppName(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity Identity
+	}{{"Verizon", Identity{MCC: "310", MNC: "012"}}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ent, err := privateEntitlementConfigs(t).Discover(tt.identity, SIMTypeESIM)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c := newClient(Config{Entitlement: ent})
+			defer c.CloseIdleConnections()
+			if got := c.baseRequest(Device{}, "audit", "").AppName; got != "" {
+				t.Errorf("configured appName=%q became request app_name=%q", ent.AppName, got)
+			}
+		})
+	}
+}
 
 func TestBuildHTTPRequest(t *testing.T) {
 	tests := []struct {
@@ -127,38 +147,81 @@ func TestBuildHTTPSendsConfiguredApp(t *testing.T) {
 
 func TestBuildHTTPTruncatesDeviceFields(t *testing.T) {
 	for _, post := range []bool{false, true} {
-		t.Run("post_"+strconv.FormatBool(post), func(t *testing.T) {
-			req, err := buildHTTPRequest(
-				t.Context(),
-				Entitlement{Server: "https://example.test/ts43", UsePost: post},
-				Identity{IMSI: "001010123456789", MCC: "001", MNC: "01"},
-				ServiceEntitlementRequest{
-					AuthenticationToken: "auth",
-					App:                 AppODSAPrimary,
-					EntitlementVersion:  "9.0",
-					TerminalID:          "123456789012345",
-					TerminalVendor:      "ExampleVendor",
-					TerminalModel:       "ExampleDevice-ENTERPRISE",
-					TerminalSoftware:    "16/UP1A.231005.007/long-build",
-				},
-				ODSAOperation{},
-				DefaultODSAClientTS43,
-				DefaultEAPAKARealm,
-			)
-			if err != nil {
-				t.Fatalf("buildHTTPRequest() error = %v", err)
-			}
-			fields := requestFields(t, req)
-			for key, want := range map[string]string{
-				"terminal_vendor":     "Exam",
-				"terminal_model":      "ExampleDev",
-				"terminal_sw_version": "16/UP1A.231005.007/l",
-			} {
-				if got := fields[key]; got != want {
-					t.Errorf("%s = %q, want %q", key, got, want)
+		for _, tt := range []struct {
+			name         string
+			fields, want [3]string
+		}{
+			{
+				name:   "ASCII above limit",
+				fields: [3]string{"ExampleVendor", "ExampleDevice-ENTERPRISE", "16/UP1A.231005.007/long-build"},
+				want:   [3]string{"Exam", "ExampleDev", "16/UP1A.231005.007/l"},
+			},
+			{
+				name:   "Pixel model",
+				fields: [3]string{"Google", "Pixel 10 Pro XL", "16/BP4A.251005.001/12345678"},
+				want:   [3]string{"Goog", "Pixel 10 P", "16/BP4A.251005.001/1"},
+			},
+			{
+				name:   "exact limit",
+				fields: [3]string{"ABCD", "0123456789", "01234567890123456789"},
+				want:   [3]string{"ABCD", "0123456789", "01234567890123456789"},
+			},
+			{
+				name:   "below limit",
+				fields: [3]string{"A", "Pixel", "16"},
+				want:   [3]string{"A", "Pixel", "16"},
+			},
+			{name: "empty"},
+			{
+				name:   "Chinese UTF-16 units",
+				fields: [3]string{"谷歌设备公司", "一二三四五六七八九十百", strings.Repeat("版本", 11)},
+				want:   [3]string{"谷歌设备", "一二三四五六七八九十", strings.Repeat("版本", 10)},
+			},
+			{
+				name:   "surrogate pairs count twice",
+				fields: [3]string{"A😀BC", "12345678😀X", strings.Repeat("A", 18) + "😀tail"},
+				want:   [3]string{"A😀B", "12345678😀", strings.Repeat("A", 18) + "😀"},
+			},
+			{
+				name:   "split surrogate uses Java UTF-8 replacement",
+				fields: [3]string{"ABC😀", "123456789😀", strings.Repeat("A", 19) + "😀"},
+				want:   [3]string{"ABC?", "123456789?", strings.Repeat("A", 19) + "?"},
+			},
+		} {
+			t.Run(fmt.Sprintf("post_%t/%s", post, tt.name), func(t *testing.T) {
+				req, err := buildHTTPRequest(
+					t.Context(),
+					Entitlement{Server: "https://example.test/ts43", UsePost: post},
+					Identity{IMSI: "001010123456789", MCC: "001", MNC: "01"},
+					ServiceEntitlementRequest{
+						AuthenticationToken: "auth",
+						App:                 AppODSAPrimary,
+						EntitlementVersion:  "9.0",
+						TerminalID:          "123456789012345",
+						TerminalVendor:      tt.fields[0],
+						TerminalModel:       tt.fields[1],
+						TerminalSoftware:    tt.fields[2],
+						AppVersion:          "1.0",
+					},
+					ODSAOperation{},
+					DefaultODSAClientTS43,
+					DefaultEAPAKARealm,
+				)
+				if err != nil {
+					t.Fatal(err)
 				}
-			}
-		})
+				fields := requestFields(t, req)
+				for i, key := range []string{"terminal_vendor", "terminal_model", "terminal_sw_version"} {
+					if got := fields[key]; got != tt.want[i] {
+						t.Errorf("%s=%q, want %q", key, got, tt.want[i])
+					}
+				}
+				wantAgent := fmt.Sprintf("PRD-TS43 term-%s/%s %s/1.0 OS-Android/%s", tt.want[0], tt.want[1], DefaultODSAClientTS43, tt.want[2])
+				if got := req.Header.Get("User-Agent"); got != wantAgent {
+					t.Errorf("User-Agent=%q, want %q", got, wantAgent)
+				}
+			})
+		}
 	}
 }
 
@@ -336,116 +399,6 @@ func TestBuildHTTPRequestsSendsExtendedFields(t *testing.T) {
 	}
 }
 
-func TestODSAResponseDownloadConfig(t *testing.T) {
-	activationCode := "LPA:1$smdp.example$MATCH"
-	tests := []struct {
-		name string
-		body []byte
-		want DownloadConfig
-	}{
-		{
-			name: "profile activation code",
-			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="` + base64.StdEncoding.EncodeToString([]byte(activationCode)) + `"/><parm name="ProfileIccid" value="8900000000000000000"/></characteristic></characteristic></wap-provisioningdoc>`),
-			want: DownloadConfig{ActivationCode: activationCode, ProfileICCID: "8900000000000000000"},
-		},
-		{
-			name: "smdp and iccid",
-			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><characteristic type="DownloadInfo"><parm name="ProfileIccid" value="8900000000000000000"/><parm name="ProfileSmdpAddress" value="smdp1.example, smdp2.example"/></characteristic></characteristic></characteristic></wap-provisioningdoc>`),
-			want: DownloadConfig{SMDPFQDN: "smdp1.example", ProfileICCID: "8900000000000000000"},
-		},
-		{
-			name: "explicit matching id",
-			body: []byte(`{"DownloadInfo":{"MatchingID":"MATCH","ProfileIccid":"8900000000000000000","ProfileSmdpAddress":"smdp.example"}}`),
-			want: DownloadConfig{SMDPFQDN: "smdp.example", MatchingID: "MATCH", ProfileICCID: "8900000000000000000"},
-		},
-		{
-			name: "absent download information",
-			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var got ODSAResponse
-			if err := got.UnmarshalBinary(tt.body); err != nil {
-				t.Fatalf("UnmarshalBinary() error = %v", err)
-			}
-			if got.Download != tt.want {
-				t.Errorf("Download = %+v, want %+v", got.Download, tt.want)
-			}
-		})
-	}
-}
-
-func TestOptionalIntUnmarshalText(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    optionalInt
-		wantErr bool
-	}{
-		{name: "empty", input: "  ", want: optionalInt{}},
-		{name: "zero", input: "0", want: optionalInt{value: 0, set: true}},
-		{name: "positive", input: " 42 ", want: optionalInt{value: 42, set: true}},
-		{name: "invalid", input: "forty-two", wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var got optionalInt
-			err := got.UnmarshalText([]byte(tt.input))
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("UnmarshalText(%q) error = %v, wantErr %t", tt.input, err, tt.wantErr)
-			}
-			if got != tt.want {
-				t.Errorf("UnmarshalText(%q) = %+v, want %+v", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestODSAResponseRejectsInvalidIntegers(t *testing.T) {
-	tests := []struct {
-		name        string
-		body        string
-		wantContext string
-	}{
-		{name: "register notification status", body: `{"RegisterNotifStatus":"invalid"}`, wantContext: "parse register notification status"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var response ODSAResponse
-			err := response.UnmarshalBinary([]byte(tt.body))
-			if err == nil {
-				t.Fatalf("UnmarshalBinary(%s) error = nil, want error", tt.body)
-			}
-			if _, ok := errors.AsType[*strconv.NumError](err); !ok {
-				t.Errorf("UnmarshalBinary(%s) error = %T, want *strconv.NumError in chain", tt.body, err)
-			}
-			if !strings.Contains(err.Error(), tt.wantContext) {
-				t.Errorf("UnmarshalBinary(%s) error = %q, want context %q", tt.body, err, tt.wantContext)
-			}
-		})
-	}
-}
-
-func TestODSAResponseMessageAndWebsheet(t *testing.T) {
-	validation := base64.StdEncoding.EncodeToString([]byte(`^\d{4}$`))
-	body := []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="8"/><characteristic type="MSG"><parm name="Message" value="Enter PIN"/><parm name="Accept_btn" value="1"/><parm name="Accept_freetext" value="1"/><parm name="Accept_freetext_validation" value="encodedValue=` + validation + `"/></characteristic></characteristic></wap-provisioningdoc>`)
-
-	var got ODSAResponse
-	if err := got.UnmarshalBinary(body); err != nil {
-		t.Fatalf("UnmarshalBinary() error = %v", err)
-	}
-	if got.SubscriptionResult != SubscriptionResultRequiresUserInput {
-		t.Errorf("SubscriptionResult = %s, want %s", got.SubscriptionResult, SubscriptionResultRequiresUserInput)
-	}
-	if got.Message.Text != "Enter PIN" || !got.Message.AcceptButton || !got.Message.AcceptFreeText {
-		t.Errorf("Message = %+v", got.Message)
-	}
-	if got.Message.AcceptFreeTextValidation != `^\d{4}$` {
-		t.Errorf("AcceptFreeTextValidation = %q", got.Message.AcceptFreeTextValidation)
-	}
-}
-
 func requestFields(t *testing.T, req *http.Request) map[string]string {
 	t.Helper()
 	if req.Method == http.MethodGet {
@@ -464,6 +417,51 @@ func requestFields(t *testing.T, req *http.Request) map[string]string {
 	var fields map[string]string
 	if err := json.Unmarshal(data, &fields); err != nil {
 		t.Fatalf("unmarshal body: %v", err)
+	}
+	return fields
+}
+
+func TestTransferResponseNegotiation(t *testing.T) {
+	for _, post := range []bool{false, true} {
+		for _, tt := range []struct {
+			name                string
+			token, accept, want string
+		}{
+			{name: "Google authentication", want: EAPRelayContentType + ", " + ODSAResponseAccept},
+			{name: "Google operation", token: "auth", want: ODSAResponseAccept},
+			{name: "Google explicit JSON", token: "auth", accept: "application/json", want: "application/json"},
+		} {
+			t.Run(fmt.Sprintf("post_%v/%s", post, tt.name), func(t *testing.T) {
+				client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", UsePost: post}})
+				offer := alignmentOffer()
+				request := client.baseRequest(offer.SourceDevice, tt.token, "")
+				if tt.accept != "" {
+					request.Accept = tt.accept
+				}
+				built, err := buildHTTPRequest(t.Context(), client.transfer.entitlement, offer.SourceIdentity, request, ODSAOperation{}, client.clientTS43(), client.realm())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := built.Header.Get("Accept"); got != tt.want {
+					t.Fatalf("Accept=%q, want %q", got, tt.want)
+				}
+			})
+		}
+	}
+}
+
+func alignmentRequestFields(t *testing.T, req *http.Request) url.Values {
+	t.Helper()
+	if req.Method == http.MethodGet {
+		return req.URL.Query()
+	}
+	var body map[string]string
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	fields := make(url.Values)
+	for key, value := range body {
+		fields.Set(key, value)
 	}
 	return fields
 }

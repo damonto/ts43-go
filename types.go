@@ -43,14 +43,32 @@ type Config struct {
 }
 
 type Entitlement struct {
-	Server                  string
-	UsePost                 bool
-	Timeout                 time.Duration
-	SourceSIMType           SIMType
-	TransferType            TransferType
-	UseTempTokenConversion  bool
+	Server                 string
+	UsePost                bool
+	Timeout                time.Duration
+	SourceSIMType          SIMType
+	TransferType           TransferType
+	UseTempTokenConversion bool
+	// SetTargetTerminalFields includes target identity fields for transfer
+	// types 2, 9, and 11. Types 3, 6, and 7 include them unconditionally.
 	SetTargetTerminalFields bool
-	// RestrictOldTerminalFields mirrors the GMS Ljotr.Q feature flag. When true,
+	// SetCheckEligibilityTargetTerminalID includes the target identifier in
+	// CheckEligibility. TS.43 14.0+ includes it regardless of this flag.
+	SetCheckEligibilityTargetTerminalID bool
+	// SupportRetryAfter allows download-configuration polling to continue on HTTP
+	// 503. UseServerRetryAfterDelay selects the Retry-After delay in seconds when
+	// valid; otherwise the carrier's PollInterval is used.
+	SupportRetryAfter bool
+	// UseServerRetryAfterDelay defaults to true in catalog records when omitted.
+	// Direct Entitlement configuration uses this value as supplied.
+	UseServerRetryAfterDelay bool
+	// EnableDelayedESIMPushNotification preserves the carrier capability. This
+	// library does not register notification tokens or receive push messages.
+	EnableDelayedESIMPushNotification bool
+	// SupportsMultipleTransfer preserves the carrier capability for integrating
+	// applications. Each Transfer invocation still manages one subscription.
+	SupportsMultipleTransfer bool
+	// RestrictOldTerminalFields mirrors the GMS flag 45764267. When true,
 	// initial transfers send old terminal IDs for types 3, 6, 7, and 9;
 	// post-installation updates send them only for types 7 and 9.
 	// When false, both operations include old terminal IDs for all types.
@@ -80,7 +98,10 @@ type Channel interface {
 }
 
 type Device struct {
-	IMEI                string
+	IMEI string
+	// IMEIs lists all device IMEIs. TS.43 14.0+ joins target IMEIs with commas
+	// in target_terminal_id where that field is sent, falling back to IMEI
+	// when this list is empty. The request's terminal_id remains IMEI.
 	IMEIs               []string
 	ICCID               string
 	EID                 string

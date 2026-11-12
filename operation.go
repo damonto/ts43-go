@@ -1,5 +1,10 @@
 package ts43
 
+import (
+	"strconv"
+	"strings"
+)
+
 func temporaryTokenOperation() ODSAOperation {
 	return ODSAOperation{
 		Operation:        OperationTempToken,
@@ -15,6 +20,19 @@ func checkEligibilityOperation() ODSAOperation {
 	}
 }
 
+func targetTerminalID(entitlement Entitlement, target Device) string {
+	if sendAllTargetTerminalIDs(entitlement) && len(target.IMEIs) > 0 {
+		return strings.Join(target.IMEIs, ",")
+	}
+	return target.IMEI
+}
+
+func sendAllTargetTerminalIDs(entitlement Entitlement) bool {
+	// Pixel enables multi-IMEI sharing for carriers advertising TS.43 14.0+.
+	version, err := strconv.ParseFloat(strings.TrimSpace(entitlement.Version), 64)
+	return err == nil && version >= 14
+}
+
 func manageSubscriptionOperation(entitlement Entitlement, req ManageSubscriptionRequest) ODSAOperation {
 	source, target, answer := req.Source, req.Target, req.UserInput
 	op := ODSAOperation{
@@ -24,16 +42,7 @@ func manageSubscriptionOperation(entitlement Entitlement, req ManageSubscription
 		MessageButton:    answer.Button,
 		MessageButtonSet: answer.Button != MessageButtonUnknown,
 	}
-	if IsSourceCredentialTransferType(entitlement.TransferType) {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
-	} else {
-		op.TerminalEID = target.EID
-		op.TerminalICCID = target.ICCID
-		if includeTargetTerminalIdentity(entitlement) {
-			setTargetTerminalFields(&op, target)
-		}
-	}
+	addTransferTerminalFields(&op, entitlement, target)
 	addOldTerminalFields(&op, entitlement, source)
 	return op
 }
@@ -44,16 +53,7 @@ func acquireConfigurationOperation(entitlement Entitlement, source, target Devic
 		OperationType:               OperationTypeOmit,
 		OldTerminalEntitlementProto: entitlementProtocol(source.EntitlementProtocol),
 	}
-	if IsSourceCredentialTransferType(entitlement.TransferType) {
-		op.TargetTerminalID = target.IMEI
-		op.TargetTerminalEID = target.EID
-		return op
-	}
-	op.TerminalEID = target.EID
-	op.TerminalICCID = target.ICCID
-	if includeTargetTerminalIdentity(entitlement) {
-		setTargetTerminalFields(&op, target)
-	}
+	addTransferTerminalFields(&op, entitlement, target)
 	return op
 }
 
@@ -76,14 +76,17 @@ func activationConfigurationOperation(target Device) ODSAOperation {
 	}
 }
 
-func setTargetTerminalFields(op *ODSAOperation, target Device) {
-	op.TargetTerminalID = target.IMEI
+func addTransferTerminalFields(op *ODSAOperation, entitlement Entitlement, target Device) {
+	if !IsSourceCredentialTransferType(entitlement.TransferType) && entitlement.TransferType != TransferTypeOldTerminalIDs {
+		op.TerminalEID = target.EID
+	}
+	if !includeTargetTerminalIdentity(entitlement) {
+		return
+	}
+	// Pixel's transfer operations populate only these two target fields. The
+	// IMEI list belongs in target_terminal_id, not target_terminal_imeis.
+	op.TargetTerminalID = targetTerminalID(entitlement, target)
 	op.TargetTerminalEID = target.EID
-	op.TargetTerminalICCID = target.ICCID
-	op.TargetTerminalModel = target.Model
-	op.TargetTerminalSN = target.SerialNumber
-	op.TargetTerminalIMEIs = terminalIMEIs(target)
-	op.TargetTerminalEntitlementProto = entitlementProtocol(target.EntitlementProtocol)
 }
 
 func addOldTerminalFields(op *ODSAOperation, entitlement Entitlement, source Device) {
@@ -97,7 +100,7 @@ func addOldTerminalFields(op *ODSAOperation, entitlement Entitlement, source Dev
 
 func includeTargetTerminalIdentity(entitlement Entitlement) bool {
 	switch entitlement.TransferType {
-	case TransferTypeTemporaryToken, TransferTypeTemporaryTokenVariant11:
+	case TransferTypeTemporaryToken, TransferTypeTemporaryTokenOldTerminalIDs, TransferTypeTemporaryTokenVariant11:
 		return entitlement.SetTargetTerminalFields
 	default:
 		return true
@@ -108,7 +111,7 @@ func includeOldTerminalIDs(entitlement Entitlement, operationType OperationType)
 	if !entitlement.RestrictOldTerminalFields {
 		return true
 	}
-	// GMS btod preserves source IDs for source-credential transfers. Its btoe
+	// GMS cets preserves source IDs for source-credential transfers. Its cett
 	// post-installation update applies the narrower type 7/9 rule instead.
 	if operationType == OperationTypeTransferSubscription && IsSourceCredentialTransferType(entitlement.TransferType) {
 		return true

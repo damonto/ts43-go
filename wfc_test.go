@@ -9,7 +9,229 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestWFCResetAndContinuation(t *testing.T) {
+	for _, tt := range []struct {
+		name             string
+		ims, enabled     bool
+		body             string
+		wantError, reset bool
+	}{
+		{"reset disabled", true, false, `{"VERS":{"version":0,"validity":0}}`, false, true},
+		{"reset enabled", true, true, `{"VERS":{"version":-1,"validity":-1}}`, false, true},
+		{"stop until setting changes", true, true, `{"VERS":{"version":-2,"validity":-2}}`, false, true},
+		{"setup mode missing WFC", false, true, `{"VERS":{"version":-1,"validity":-1}}`, true, false},
+		{"empty body is not default", true, true, "", true, false},
+		{"other application", false, false, `{"ap2003":{"EntitlementStatus":1}}`, true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newClient(Config{HTTPClient: &queueDoer{bodies: []string{tt.body}}})
+			got, err := c.CheckWFCEntitlement(context.Background(), WFCEntitlementRequest{Identity: Identity{MCC: "208", MNC: "01", IMSI: "208011234567890"}, AuthToken: AuthToken{Value: "old"}, Config: WFCConfig{Server: "https://example.test", NeedsIMSProvisioning: tt.ims, DefaultServiceEntitlementEnabled: tt.enabled}})
+			if (err != nil) != tt.wantError {
+				t.Fatalf("error=%v", err)
+			}
+			if err != nil {
+				return
+			}
+			if got.ConfigurationReset != tt.reset || got.Status.Entitled() != tt.enabled || got.AuthToken.Value != "" {
+				t.Errorf("result = %+v", got)
+			}
+		})
+	}
+	for _, event := range []WebsheetCallbackEvent{WebsheetEventVoWiFiDismissFlow, WebsheetEventVoWiFiEntitlementChanged} {
+		t.Run(fmt.Sprintf("callback_%v", event), func(t *testing.T) {
+			doer := &queueDoer{bodies: []string{`{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":0,"TC_Status":0,"AddrStatus":0,"ProvStatus":0}}`, `{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`}}
+			c := newClient(Config{HTTPClient: doer})
+			previous, err := c.CheckWFCEntitlement(context.Background(), WFCEntitlementRequest{Identity: Identity{MCC: "208", MNC: "01", IMSI: "208011234567890"}, Config: WFCConfig{Server: "https://example.test"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := c.ContinueWFC(context.Background(), previous, WebsheetResult{Event: event})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if event == WebsheetEventVoWiFiDismissFlow {
+				if !got.Cancelled || got.Status != previous.Status || doer.calls != 1 {
+					t.Errorf("cancel = %+v calls=%d", got, doer.calls)
+				}
+			} else if !got.Status.Entitled() || doer.calls != 2 {
+				t.Errorf("complete = %+v calls=%d", got, doer.calls)
+			}
+		})
+	}
+}
+
+func TestRegressionWFCProvisioning(t *testing.T) {
+	tests := []struct {
+		name   string
+		status WFCStatus
+	}{
+		{"entitlement provisioning", WFCStatus{EntitlementStatus: WFCEntitlementProvisioning, TCStatus: WFCTCAvailable, AddrStatus: WFCAddressAvailable, ProvStatus: WFCProvisionProvisioned}},
+		{"disabled awaiting provisioning", WFCStatus{EntitlementStatus: WFCEntitlementDisabled, TCStatus: WFCTCAvailable, AddrStatus: WFCAddressAvailable, ProvStatus: WFCProvisionNotProvisioned}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.status.ActivationMode(); got != WFCActivationInProgress {
+				t.Errorf("ActivationMode() = %d, want in-progress %d", got, WFCActivationInProgress)
+			}
+		})
+	}
+}
+
+func TestRegressionWFCReset(t *testing.T) {
+	tests := []struct {
+		name, body string
+		want       WFCEntitlementStatus
+	}{
+		{"reset minus one", `<wap-provisioningdoc><characteristic type="VERS"><parm name="version" value="-1"/><parm name="validity" value="-1"/></characteristic></wap-provisioningdoc>`, WFCEntitlementEnabled},
+		{"reset minus two", `<wap-provisioningdoc><characteristic type="VERS"><parm name="version" value="-2"/><parm name="validity" value="-2"/></characteristic></wap-provisioningdoc>`, WFCEntitlementEnabled},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := CheckWFCEntitlement(context.Background(), Config{HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) { return response(200, tt.body), nil })}, WFCEntitlementRequest{Identity: Identity{MCC: "208", MNC: "01", IMSI: "208011234567890"}, Config: WFCConfig{Server: "https://example.test", DefaultServiceEntitlementEnabled: true, NeedsIMSProvisioning: true}, AuthToken: AuthToken{Value: "audit"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Status.EntitlementStatus != tt.want {
+				t.Errorf("status = %d, want %d; web flow = %v", got.Status.EntitlementStatus, tt.want, got.Status.NeedsUserWebFlow())
+			}
+		})
+	}
+}
+
+func TestRegressionEmptyWFCApplication(t *testing.T) {
+	tests := []struct{ name, body string }{
+		{"JSON empty", `{}`},
+		{"XML only token", `<wap-provisioningdoc><characteristic type="TOKEN"><parm name="token" value="audit"/></characteristic></wap-provisioningdoc>`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var s WFCStatus
+			if err := s.UnmarshalBinary([]byte(tt.body)); err == nil && s.NeedsUserWebFlow() {
+				t.Errorf("missing application became actionable web flow: %+v", s)
+			}
+		})
+	}
+}
+
+func TestRegressionWFCCallbacks(t *testing.T) {
+	tests := []string{"WiFiCallingWebViewController.entitlementChanged()", "WiFiCallingWebViewController.cancelButtonClicked()", "WiFiCallingWebViewController.CloseWebView()"}
+	for _, tt := range tests {
+		t.Run(tt, func(t *testing.T) {
+			var got WebsheetResult
+			if err := got.UnmarshalText([]byte(tt)); err != nil {
+				t.Errorf("configured controller callback rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestRegressionWFCAdverseApplication(t *testing.T) {
+	tests := []string{"ap2003", "ap2005"}
+	for _, app := range tests {
+		t.Run(app, func(t *testing.T) {
+			body := strings.ReplaceAll(`{"APPLICATION":{"AppID":"APP","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`, "APP\"", app+`"`)
+			var s WFCStatus
+			if err := s.UnmarshalBinary([]byte(body)); err == nil && s.Entitled() {
+				t.Errorf("response for %s entitled Wi-Fi Calling", app)
+			}
+		})
+	}
+}
+
+func TestWFCResponseIncludesStatusVersionAndToken(t *testing.T) {
+	tests := []struct{ name, body string }{
+		{"JSON", `{"VERS":{"version":2,"validity":60},"TOKEN":{"token":"next","validity":120},"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2,"ServiceFlow_URL":"https://portal.test/?a=1&b=2"}}`},
+		{"XML", `<wap-provisioningdoc><characteristic type="VERS"><parm name="version" value="2"/><parm name="validity" value="60"/></characteristic><characteristic type="TOKEN"><parm name="token" value="next"/><parm name="validity" value="120"/></characteristic><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="1"/><parm name="TC_Status" value="2"/><parm name="AddrStatus" value="2"/><parm name="ProvStatus" value="2"/><parm name="ServiceFlow_URL" value="https://portal.test/?a=1&amp;b=2"/></characteristic></wap-provisioningdoc>`},
+		{"carrier XML with bare ampersand", `<wap-provisioningdoc><characteristic type="VERS"><parm name="version" value="2"/><parm name="validity" value="60"/></characteristic><characteristic type="TOKEN"><parm name="token" value="next"/><parm name="validity" value="120"/></characteristic><characteristic type="APPLICATION"><parm name="AppID" value="ap2004"/><parm name="EntitlementStatus" value="1"/><parm name="TC_Status" value="2"/><parm name="AddrStatus" value="2"/><parm name="ProvStatus" value="2"/><parm name="ServiceFlow_URL" value="https://portal.test/?a=1&b=2"/></characteristic></wap-provisioningdoc>`},
+	}
+	now := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newClient(Config{Now: func() time.Time { return now }, HTTPClient: fakeDoer(func(*http.Request) (*http.Response, error) {
+				resp := response(200, tt.body)
+				resp.Header = http.Header{"Set-Cookie": {"session=next"}}
+				return resp, nil
+			})})
+			got, err := client.CheckWFCEntitlement(context.Background(), WFCEntitlementRequest{Identity: Identity{MCC: "208", MNC: "01", IMSI: "208011234567890"}, Config: WFCConfig{Server: "https://example.test"}, AuthToken: AuthToken{Value: "previous"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !got.Status.Entitled() || got.Status.ServiceFlowURL != "https://portal.test/?a=1&b=2" {
+				t.Errorf("status=%+v", got.Status)
+			}
+			if got.Configuration != (WFCConfiguration{Present: true, Version: 2, Validity: 60}) {
+				t.Errorf("VERS=%+v", got.Configuration)
+			}
+			if got.AuthToken.Value != "next" || !got.AuthToken.ExpiresAt.Equal(now.Add(2*time.Minute)) || len(got.AuthToken.Cookies) != 1 {
+				t.Errorf("token metadata=%+v", got.AuthToken)
+			}
+		})
+	}
+}
+
+func TestWFCPayloadReuseClearsAbsentMetadata(t *testing.T) {
+	for _, body := range []string{`{}`, `<wap-provisioningdoc/>`} {
+		t.Run(body, func(t *testing.T) {
+			var payload wfcPayload
+			if err := payload.UnmarshalBinary([]byte(`{"TOKEN":{"token":"stale"},"VERS":{"version":2,"validity":60}}`)); err != nil {
+				t.Fatal(err)
+			}
+			if err := payload.UnmarshalBinary([]byte(body)); err != nil {
+				t.Fatal(err)
+			}
+			if payload.Token != nil || payload.Configuration.Present {
+				t.Fatalf("stale metadata=%+v", payload)
+			}
+		})
+	}
+}
+
+func TestWFCJSONExplicitApplicationPrecedence(t *testing.T) {
+	const body = `{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2},"ap2004":{"EntitlementStatus":2,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	// Selection must not depend on the iteration order of JSON object keys.
+	for range 50 {
+		var status WFCStatus
+		if err := status.UnmarshalBinary([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+		if !status.Incompatible() {
+			t.Fatalf("explicit application did not win: %+v", status)
+		}
+	}
+}
+
+func TestWFCJSONIgnoresUnrelatedApplicationBodies(t *testing.T) {
+	var status WFCStatus
+	body := `{"ap2003":5,"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	if err := status.UnmarshalBinary([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Entitled() {
+		t.Fatalf("status=%+v", status)
+	}
+}
+
+func TestWFCJSONIgnoresUnusedLegacyApplication(t *testing.T) {
+	var status WFCStatus
+	body := `{"APPLICATION":5,"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	if err := status.UnmarshalBinary([]byte(body)); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Entitled() {
+		t.Fatalf("status=%+v", status)
+	}
+}
+
+func TestWFCJSONRejectsConflictingApplicationID(t *testing.T) {
+	var status WFCStatus
+	body := `{"APPLICATION":{"AppID":"ap2004","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2},"ap2004":{"AppID":"ap2003","EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}}`
+	if err := status.UnmarshalBinary([]byte(body)); err == nil {
+		t.Fatal("conflicting application ID was accepted")
+	}
+}
 
 func TestDiscoverWFC(t *testing.T) {
 	tests := []struct {

@@ -1,27 +1,34 @@
 package ts43
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"testing"
 )
 
-func alignmentRequestFields(t *testing.T, req *http.Request) url.Values {
-	t.Helper()
-	if req.Method == http.MethodGet {
-		return req.URL.Query()
+func TestWebsheetWaitsForConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		event WebsheetCallbackEvent
+	}{{"finish flow", WebsheetEventFinishFlow}, {"check status", WebsheetEventCheckProfileServiceStatus}} {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newClient(Config{Entitlement: Entitlement{Server: "https://example.test"}, HTTPClient: &queueDoer{bodies: []string{`{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":2,"PollingInterval":0}}}`}}})
+			result := &Result{State: StatePendingWebsheet, session: &transferSession{offer: &transferOffer{SourceIdentity: Identity{MCC: "450", MNC: "05", IMSI: "450051234567890"}, AuthToken: AuthToken{Value: "auth"}}}}
+			got, err := client.Continue(t.Context(), result, ContinueRequest{Websheet: &WebsheetResult{Event: tt.event}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.State != StatePendingConfiguration {
+				t.Fatalf("state=%v", got.State)
+			}
+			if _, ok := got.Event.(ConfigurationPendingEvent); !ok {
+				t.Fatalf("event=%T", got.Event)
+			}
+			if _, err := client.CompleteActivation(t.Context(), got, ActivationResult{}); err == nil {
+				t.Fatal("activated before download configuration")
+			}
+		})
 	}
-	var body map[string]string
-	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-		t.Fatal(err)
-	}
-	fields := make(url.Values)
-	for key, value := range body {
-		fields.Set(key, value)
-	}
-	return fields
 }
 
 func TestGoogleTypeTwoFieldsForEachPhase(t *testing.T) {
@@ -64,7 +71,7 @@ func TestGoogleTypeTwoFieldsForEachPhase(t *testing.T) {
 					return response(200, `{"APPLICATION":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":1}}}`), nil
 				}
 			})})
-			if _, err := client.checkEligibility(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.AuthToken); err != nil {
+			if _, err := client.checkEligibility(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, offer.AuthToken); err != nil {
 				t.Fatal(err)
 			}
 			tokens, err := client.acquireTemporaryToken(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.AuthToken)
@@ -168,5 +175,84 @@ func TestInvalidWebsheetSelectionPreservesPendingFlow(t *testing.T) {
 	result, err = client.Continue(t.Context(), result, ContinueRequest{Websheet: &WebsheetResult{Event: WebsheetEventProfileReadyWithDefaultSMDP, SMDPFQDN: "smdp.example"}})
 	if err != nil || result.State != StatePendingDownload {
 		t.Fatalf("state=%v err=%v", result.State, err)
+	}
+}
+
+func TestWebsheetResultUnmarshalText(t *testing.T) {
+	tests := []struct {
+		name           string
+		text           string
+		wantEvent      WebsheetCallbackEvent
+		wantActivation string
+		wantSMDP       string
+		wantICCID      string
+		wantIMEI       string
+		wantNext       Operation
+	}{
+		{
+			name:           "activation JavaScript callback",
+			text:           `ODSAServiceFlow.profileReadyWithActivationCode("LPA:1$smdp.example$matching","8900000000000000000","123456789012345")`,
+			wantEvent:      WebsheetEventProfileReadyWithActivationCode,
+			wantActivation: "LPA:1$smdp.example$matching",
+			wantICCID:      "8900000000000000000",
+			wantIMEI:       "123456789012345",
+		},
+		{
+			name:      "default smdp JSON callback",
+			text:      `{"event":"profileReadyWithDefaultSmdp","defaultSmdpAddress":"smdp.example","iccid":"8900000000000000000","imei":"123456789012345"}`,
+			wantEvent: WebsheetEventProfileReadyWithDefaultSMDP,
+			wantSMDP:  "smdp.example",
+			wantICCID: "8900000000000000000",
+			wantIMEI:  "123456789012345",
+		},
+		{
+			name:      "prefixed adapter JSON callback",
+			text:      `TS43_ODSA_CALLBACK {"event":"finishFlow","nextAction":"AcquireConfiguration","source":"odsa"}`,
+			wantEvent: WebsheetEventFinishFlow,
+			wantNext:  OperationAcquireConf,
+		},
+		{
+			name:      "VoWiFi entitlement changed JSON callback",
+			text:      `TS43_VOWIFI_CALLBACK {"event":"entitlementChanged","source":"vowifi"}`,
+			wantEvent: WebsheetEventVoWiFiEntitlementChanged,
+		},
+		{
+			name:      "VoWiFi dismiss JavaScript callback",
+			text:      `VoWiFiWebServiceFlow.dismissFlow()`,
+			wantEvent: WebsheetEventVoWiFiDismissFlow,
+		},
+		{
+			name:           "callback URL activation",
+			text:           "https://carrier.test/_callback/esim?activationCode=LPA%3A1%24smdp.example%24matching&iccid=8900000000000000000",
+			wantEvent:      WebsheetEventProfileReadyWithActivationCode,
+			wantActivation: "LPA:1$smdp.example$matching",
+			wantICCID:      "8900000000000000000",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got WebsheetResult
+			if err := got.UnmarshalText([]byte(tt.text)); err != nil {
+				t.Fatalf("UnmarshalText error = %v", err)
+			}
+			if got.Event != tt.wantEvent {
+				t.Errorf("Event = %d, want %d", got.Event, tt.wantEvent)
+			}
+			if got.ActivationCode != tt.wantActivation {
+				t.Errorf("ActivationCode = %q, want %q", got.ActivationCode, tt.wantActivation)
+			}
+			if got.SMDPFQDN != tt.wantSMDP {
+				t.Errorf("SMDPFQDN = %q, want %q", got.SMDPFQDN, tt.wantSMDP)
+			}
+			if got.ICCID != tt.wantICCID {
+				t.Errorf("ICCID = %q, want %q", got.ICCID, tt.wantICCID)
+			}
+			if got.IMEI != tt.wantIMEI {
+				t.Errorf("IMEI = %q, want %q", got.IMEI, tt.wantIMEI)
+			}
+			if got.NextAction != tt.wantNext {
+				t.Errorf("NextAction = %q, want %q", got.NextAction, tt.wantNext)
+			}
+		})
 	}
 }

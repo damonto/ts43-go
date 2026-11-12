@@ -37,7 +37,7 @@ func (c *Client) Transfer(ctx context.Context) (*Result, error) {
 	source := c.transfer.source.Device
 	source.ICCID = firstNonEmpty(source.ICCID, identity.ICCID)
 	target := c.transfer.target.Device
-	tokens, err := c.fetchTransferToken(ctx, *identity, source)
+	tokens, err := c.fetchTransferToken(ctx, *identity, source, target)
 	if err != nil {
 		return nil, err
 	}
@@ -247,13 +247,13 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 	return result, nil
 }
 
-func (c *Client) fetchTransferToken(ctx context.Context, identity Identity, source Device) (TransferTokenResult, error) {
-	return c.fetchTransferTokenWithChannel(ctx, c.transfer.source.Channel, identity, source)
+func (c *Client) fetchTransferToken(ctx context.Context, identity Identity, source, target Device) (TransferTokenResult, error) {
+	return c.fetchTransferTokenWithChannel(ctx, c.transfer.source.Channel, identity, source, target)
 }
 
-func (c *Client) fetchTransferTokenWithChannel(ctx context.Context, channel Channel, identity Identity, source Device) (TransferTokenResult, error) {
+func (c *Client) fetchTransferTokenWithChannel(ctx context.Context, channel Channel, identity Identity, source, target Device) (TransferTokenResult, error) {
 	for attempt := 0; ; attempt++ {
-		tokens, err := c.fetchTransferTokenOnce(ctx, channel, identity, source)
+		tokens, err := c.fetchTransferTokenOnce(ctx, channel, identity, source, target)
 		if isHTTPStatus(err, 511) && attempt < c.transfer.entitlement.AutoRetry511Limit {
 			continue
 		}
@@ -264,12 +264,12 @@ func (c *Client) fetchTransferTokenWithChannel(ctx context.Context, channel Chan
 	}
 }
 
-func (c *Client) fetchTransferTokenOnce(ctx context.Context, channel Channel, identity Identity, source Device) (TransferTokenResult, error) {
+func (c *Client) fetchTransferTokenOnce(ctx context.Context, channel Channel, identity Identity, source, target Device) (TransferTokenResult, error) {
 	auth, err := c.authenticate(ctx, channel, identity, source)
 	if err != nil {
 		return TransferTokenResult{}, fmt.Errorf("authenticate TS.43: %w", err)
 	}
-	auth, err = c.checkEligibility(ctx, channel, identity, source, auth)
+	auth, err = c.checkEligibility(ctx, channel, identity, source, target, auth)
 	if err != nil {
 		return TransferTokenResult{}, err
 	}
@@ -374,6 +374,9 @@ func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, cr
 	deadline := c.now().Add(c.transfer.entitlement.PollTimeout)
 	retries := 0
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if !c.now().Before(deadline) {
 			return nil, errors.New("acquire configuration timeout")
 		}
@@ -385,6 +388,18 @@ func (c *Client) pollConfiguration(ctx context.Context, offer *transferOffer, cr
 				return resp, refreshErr
 			}
 			credential = nextCredential
+			continue
+		}
+		if delay, ok := configurationRetryDelay(c.transfer.entitlement, err); ok {
+			// Keep server delays within this polling attempt's timeout. The result
+			// remains resumable if waiting is canceled or the deadline is reached.
+			remaining := deadline.Sub(c.now())
+			if remaining <= 0 {
+				return resp, errors.New("acquire configuration timeout")
+			}
+			if err := c.sleep(ctx, min(delay, remaining)); err != nil {
+				return resp, err
+			}
 			continue
 		}
 		if err != nil {
@@ -440,7 +455,7 @@ func (c *Client) refreshTransferCredential(ctx context.Context, offer *transferO
 			return transferCredential{}, fmt.Errorf("renew temporary token: %w", err)
 		}
 	}
-	tokens, err := c.fetchTransferToken(ctx, offer.SourceIdentity, offer.SourceDevice)
+	tokens, err := c.fetchTransferToken(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice)
 	if err != nil {
 		return transferCredential{}, fmt.Errorf("refresh transfer credential: %w", err)
 	}
@@ -482,7 +497,7 @@ func (c *Client) refreshActivationAuth(ctx context.Context, offer *transferOffer
 	target := offer.TargetDevice
 	target.ICCID = firstNonEmpty(identity.ICCID, target.ICCID)
 	offer.TargetDevice.ICCID = target.ICCID
-	tokens, err := c.fetchTransferTokenWithChannel(ctx, channel, *identity, target)
+	tokens, err := c.fetchTransferTokenWithChannel(ctx, channel, *identity, target, target)
 	if err != nil {
 		return activationAuth{}, fmt.Errorf("refresh activation credential: %w", err)
 	}

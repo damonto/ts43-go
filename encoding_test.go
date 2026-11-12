@@ -6,6 +6,59 @@ import (
 	"testing"
 )
 
+var (
+	_ encoding.TextMarshaler   = encodedText("")
+	_ encoding.TextUnmarshaler = (*encodedText)(nil)
+	_ encoding.TextMarshaler   = operationList(nil)
+	_ encoding.TextUnmarshaler = (*operationList)(nil)
+)
+
+func TestWireTextCodecs(t *testing.T) {
+	for _, tt := range []struct {
+		name, wire, want string
+		invalid          bool
+	}{
+		{"plain base64 alphabet", "test", "test", false},
+		{"plain whitespace", "  test  ", "  test  ", false},
+		{"encoded", "encodedValue=dGVzdA==", "test", false},
+		{"malformed prefix", "encodedValue=!!!", "", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var text encodedText
+			err := text.UnmarshalText([]byte(tt.wire))
+			if tt.invalid {
+				if err == nil {
+					t.Fatal("malformed Base64 accepted")
+				}
+				return
+			}
+			if err != nil || string(text) != tt.want {
+				t.Fatalf("decoded = %q, %v", text, err)
+			}
+			wire, err := text.MarshalText()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var roundtrip encodedText
+			if err := roundtrip.UnmarshalText(wire); err != nil || roundtrip != text {
+				t.Errorf("round trip = %q, %v", roundtrip, err)
+			}
+		})
+	}
+	for _, wire := range []string{"", "ManageSubscription,AcquireConfiguration", "ManageSubscription,ExtensionOperation"} {
+		t.Run("operations_"+wire, func(t *testing.T) {
+			var ops operationList
+			if err := ops.UnmarshalText([]byte(wire)); err != nil {
+				t.Fatal(err)
+			}
+			data, err := ops.MarshalText()
+			if err != nil || string(data) != wire {
+				t.Errorf("round trip = %q, %v", data, err)
+			}
+		})
+	}
+}
+
 type binaryEncoder interface {
 	encoding.BinaryMarshaler
 	encoding.BinaryAppender
@@ -325,6 +378,17 @@ func TestOperationTextRejectsInvalidUTF8(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.run(); err == nil {
 				t.Error("text conversion error = nil, want invalid UTF-8 error")
+			}
+		})
+	}
+}
+
+func TestRegressionPrefixedText(t *testing.T) {
+	tests := []struct{ name, value, want string }{{"plain regex", "test", "test"}, {"marked text", "encodedValue=dGVzdA==", "test"}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := encodedPrefixedField(tt.value); got != tt.want {
+				t.Errorf("decoded=%q want=%q", got, tt.want)
 			}
 		})
 	}

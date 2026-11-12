@@ -306,7 +306,23 @@ func truncate(s string, n int) string {
 	if n <= 0 || len(s) <= n {
 		return s
 	}
-	return s[:n]
+	// GMS uses Java String.substring, which counts UTF-16 code units. A
+	// surrogate pair cut in half becomes '?' when Android encodes it as UTF-8.
+	units := 0
+	for i, r := range s {
+		size := 1
+		if r > 0xffff {
+			size = 2
+		}
+		if units+size > n {
+			if units == n {
+				return s[:i]
+			}
+			return s[:i] + "?"
+		}
+		units += size
+	}
+	return s
 }
 
 func entitlementProtocol(protocol int) string {

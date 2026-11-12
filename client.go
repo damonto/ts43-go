@@ -197,12 +197,15 @@ func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, ide
 }
 
 func (c *Client) CheckEligibility(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (AuthToken, error) {
-	return c.checkEligibility(ctx, c.transfer.source.Channel, req.Identity, req.Source, auth)
+	return c.checkEligibility(ctx, c.transfer.source.Channel, req.Identity, req.Source, req.Target, auth)
 }
 
-func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken) (AuthToken, error) {
+func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity Identity, source, target Device, auth AuthToken) (AuthToken, error) {
 	req := c.authRequest(source, auth)
 	op := checkEligibilityOperation()
+	if c.transfer.entitlement.SetCheckEligibilityTargetTerminalID || sendAllTargetTerminalIDs(c.transfer.entitlement) {
+		op.TargetTerminalID = targetTerminalID(c.transfer.entitlement, target)
+	}
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
@@ -494,7 +497,7 @@ func (c *Client) transferRequest(device Device, credential transferCredential) S
 
 func (c *Client) activationRequest(target Device, credential transferCredential) ServiceEntitlementRequest {
 	req := c.transferRequest(target, credential)
-	// GMS btoe builds a fresh activation request without the transfer app_name.
+	// GMS cett builds a fresh activation request without the transfer app_name.
 	req.AppName = ""
 	return req
 }
@@ -614,13 +617,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func terminalIMEIs(device Device) []string {
-	if len(device.IMEIs) == 0 {
-		return nil
-	}
-	return append([]string(nil), device.IMEIs...)
 }
 
 func temporaryTokenExpiresAt(value string) (time.Time, error) {
