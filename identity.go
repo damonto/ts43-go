@@ -78,7 +78,7 @@ func matchIMSIPrefixXPattern(pattern, imsi string) bool {
 }
 
 // googleScore follows Android CarrierResolver's carrier-ID rules. WFC carrier
-// settings and Samsung nwInfo retain their own exact-match semantics.
+// settings retain their own exact-match semantics.
 func (m carrierMatch) googleScore(identity Identity) (int, bool) {
 	if m.MCCMNC != mccMNC(identity) {
 		return 0, false

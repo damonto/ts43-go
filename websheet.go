@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 )
 
 // ErrWebsheetDismissed reports that the carrier websheet dismissed the flow.
@@ -109,32 +108,4 @@ func (c *Client) continueWebsheetNextAction(ctx context.Context, result *Result,
 	default:
 		return result, fmt.Errorf("unsupported websheet next action %q", next)
 	}
-}
-
-// Samsung appends the same parameter suffix for both GET user data and POST
-// bodies (including its json/xml content types); it does not merge JSON objects.
-func samsungWebsheet(entitlement Entitlement, sheet Websheet, target Device) Websheet {
-	if !entitlement.SamsungInjectWebsheetParams && !entitlement.SamsungInjectWebsheetParamsLGU {
-		return sheet
-	}
-	imei1, imei2 := target.IMEI, ""
-	if len(target.IMEIs) > 0 {
-		imei1 = target.IMEIs[0]
-	}
-	if len(target.IMEIs) > 1 {
-		imei2 = target.IMEIs[1]
-	}
-	fields := []formField{
-		{"IMEI1", imei1}, {"IMEI2", imei2},
-		{"serial_number", target.SerialNumber}, {"model_name", target.Model},
-	}
-	if entitlement.SamsungInjectWebsheetParamsLGU {
-		fields = append(fields, formField{"barcode_number", target.BarcodeNumber}, formField{"activated_id", target.ActivatedID})
-	}
-	for _, field := range fields {
-		if field.value != "" {
-			sheet.UserData += "&" + field.name + "=" + url.QueryEscape(field.value)
-		}
-	}
-	return sheet
 }

@@ -37,7 +37,7 @@ func (c *Client) Transfer(ctx context.Context) (*Result, error) {
 	source := c.transfer.source.Device
 	source.ICCID = firstNonEmpty(source.ICCID, identity.ICCID)
 	target := c.transfer.target.Device
-	tokens, err := c.fetchTransferToken(ctx, *identity, source, target)
+	tokens, err := c.fetchTransferToken(ctx, *identity, source)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (c *Client) discoverEntitlement(identity Identity) error {
 		return nil
 	}
 	requested := c.transfer.entitlement
-	discovered, err := c.transfer.entitlements.DiscoverForChannel(identity, requested.SourceSIMType, requested.Channel)
+	discovered, err := c.transfer.entitlements.Discover(identity, requested.SourceSIMType)
 	if err != nil {
 		return fmt.Errorf("discover entitlement config: %w", err)
 	}
@@ -67,7 +67,6 @@ func (c *Client) discoverEntitlement(identity Identity) error {
 func (c *Client) applyDiscoveredEntitlement(discovered Entitlement) {
 	requested := c.transfer.entitlement
 	discovered.SourceSIMType = requested.SourceSIMType
-	discovered.SamsungSubscriptionType = requested.SamsungSubscriptionType
 	if c.runtime.explicitTimeout || discovered.Timeout == 0 {
 		discovered.Timeout = requested.Timeout
 	}
@@ -121,7 +120,7 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 			return result, errors.New("websheet result is required")
 		}
 		return c.handleWebsheetResult(ctx, result, *req.Websheet)
-	case StatePendingConfiguration, StatePendingDelayedDownload:
+	case StatePendingConfiguration:
 		return c.continueConfiguration(ctx, result)
 	case StatePendingActivation:
 		return c.resumeActivation(ctx, result)
@@ -129,13 +128,13 @@ func (c *Client) Continue(ctx context.Context, result *Result, req ContinueReque
 		if !req.SourceProfileDeleted {
 			return result, errors.New("source profile deletion confirmation is required")
 		}
-		if transferUsesSourceCredential(c.transfer.entitlement) {
+		if IsSourceCredentialTransferType(c.transfer.entitlement.TransferType) {
 			if session.offer.SourceDevice.EntitlementProtocol == 0 {
 				session.offer.SourceDevice.EntitlementProtocol = sourceProfileDeletedEntitlementProtocol
 			}
 			return c.continueConfiguration(ctx, result)
 		}
-		if c.transfer.entitlement.Channel != EntitlementChannelSamsung && c.transfer.entitlement.TransferType != TransferTypeTemporaryTokenVariant11 {
+		if c.transfer.entitlement.TransferType != TransferTypeTemporaryTokenVariant11 {
 			return c.continueConfiguration(ctx, result)
 		}
 		return c.activate(ctx, session.offer, UserInputResult{Button: MessageButtonUnknown})
@@ -158,10 +157,10 @@ func (c *Client) CompleteActivation(ctx context.Context, result *Result, activat
 	switch result.State {
 	case StateDone, StateDismissed:
 		return result, nil
-	case StatePendingDownload, StatePendingSMDSDiscovery, StatePendingDelayedDownload:
+	case StatePendingDownload, StatePendingSMDSDiscovery:
 		// The caller owns installation for these download events.
 	case StatePendingActivation:
-		if subscriptionUpdateAccepted(c.transfer.entitlement, result.UpdateSubscription) {
+		if subscriptionUpdateAccepted(result.UpdateSubscription) {
 			return c.resumeActivation(ctx, result)
 		}
 	case StatePendingConfiguration:
@@ -221,27 +220,13 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 	// Retrying this phase must never offer another download.
 	result.State = StatePendingActivation
 	result.Event = ActivationPendingEvent{ICCID: offer.TargetDevice.ICCID}
-	needsUpdate := !subscriptionUpdateAccepted(c.transfer.entitlement, result.UpdateSubscription)
-	if needsUpdate {
+	if !subscriptionUpdateAccepted(result.UpdateSubscription) {
 		if err := c.reportActivation(ctx, result, offer); err != nil {
 			return result, err
 		}
 	}
 	update := result.UpdateSubscription
 	result.Event = ActivationPendingEvent{ICCID: offer.TargetDevice.ICCID, SubscriptionResult: update.SubscriptionResult}
-	if needsUpdate && c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		switch update.SubscriptionResult {
-		case SubscriptionResultDismiss:
-			session.websheetOpen = false
-			result.State = StateDismissed
-			result.Event = DismissEvent{SubscriptionResult: update.SubscriptionResult}
-			c.emit(result.Event)
-			return result, nil
-		case SubscriptionResultDelayedDownload:
-			c.emit(result.Event)
-			return result, nil
-		}
-	}
 	auth, err := c.activationAuth(ctx, offer)
 	if err != nil {
 		return result, err
@@ -262,13 +247,13 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 	return result, nil
 }
 
-func (c *Client) fetchTransferToken(ctx context.Context, identity Identity, source, target Device) (TransferTokenResult, error) {
-	return c.fetchTransferTokenWithChannel(ctx, c.transfer.source.Channel, identity, source, target)
+func (c *Client) fetchTransferToken(ctx context.Context, identity Identity, source Device) (TransferTokenResult, error) {
+	return c.fetchTransferTokenWithChannel(ctx, c.transfer.source.Channel, identity, source)
 }
 
-func (c *Client) fetchTransferTokenWithChannel(ctx context.Context, channel Channel, identity Identity, source, target Device) (TransferTokenResult, error) {
+func (c *Client) fetchTransferTokenWithChannel(ctx context.Context, channel Channel, identity Identity, source Device) (TransferTokenResult, error) {
 	for attempt := 0; ; attempt++ {
-		tokens, err := c.fetchTransferTokenOnce(ctx, channel, identity, source, target)
+		tokens, err := c.fetchTransferTokenOnce(ctx, channel, identity, source)
 		if isHTTPStatus(err, 511) && attempt < c.transfer.entitlement.AutoRetry511Limit {
 			continue
 		}
@@ -279,16 +264,16 @@ func (c *Client) fetchTransferTokenWithChannel(ctx context.Context, channel Chan
 	}
 }
 
-func (c *Client) fetchTransferTokenOnce(ctx context.Context, channel Channel, identity Identity, source, target Device) (TransferTokenResult, error) {
+func (c *Client) fetchTransferTokenOnce(ctx context.Context, channel Channel, identity Identity, source Device) (TransferTokenResult, error) {
 	auth, err := c.authenticate(ctx, channel, identity, source)
 	if err != nil {
 		return TransferTokenResult{}, fmt.Errorf("authenticate TS.43: %w", err)
 	}
-	auth, err = c.checkEligibility(ctx, channel, identity, source, auth, target)
+	auth, err = c.checkEligibility(ctx, channel, identity, source, auth)
 	if err != nil {
 		return TransferTokenResult{}, err
 	}
-	return c.transferTokens(ctx, channel, identity, source, target, auth)
+	return c.transferTokens(ctx, channel, identity, source, auth)
 }
 
 func (c *Client) activate(ctx context.Context, offer *transferOffer, answer UserInputResult) (*Result, error) {
@@ -333,19 +318,14 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 	if websheetRequired(manage) {
 		result.session.websheetOpen = true
 		result.State = StatePendingWebsheet
-		sheet := manage.Websheet
-		if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-			sheet = samsungWebsheet(c.transfer.entitlement, sheet, offer.TargetDevice)
-		}
-		result.Event = WebsheetEvent{Websheet: sheet}
+		result.Event = WebsheetEvent{Websheet: manage.Websheet}
 		c.emit(result.Event)
 		return result, nil
 	}
 	if downloadProfileReady(manage) {
 		return c.applyDownloadConfiguration(result, manage.Download, ServiceStatusUnknown)
 	}
-	updateConfigurationRequired := samsungUpdateConfigurationRequired(c.transfer.entitlement, manage)
-	if subscriptionDone(manage) && !updateConfigurationRequired {
+	if subscriptionDone(manage) {
 		result.State = StateDone
 		result.Event = DoneEvent{}
 		c.emit(result.Event)
@@ -357,8 +337,9 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 		c.emit(result.Event)
 		return result, nil
 	}
-	if delayedDownloadRequired(manage) && (c.transfer.entitlement.Channel == EntitlementChannelSamsung || c.transfer.entitlement.UseSMDSDelayedDownload) {
-		result.State, result.Event = c.delayedDownloadState(offer, manage.SubscriptionResult)
+	if delayedDownloadRequired(manage) && c.transfer.entitlement.UseSMDSDelayedDownload {
+		result.State = StatePendingSMDSDiscovery
+		result.Event = smdsDiscoveryEvent(offer, manage.SubscriptionResult)
 		c.emit(result.Event)
 		return result, nil
 	}
@@ -385,12 +366,6 @@ func (c *Client) continueConfiguration(ctx context.Context, result *Result) (*Re
 	}
 	if err != nil {
 		return result, err
-	}
-	if result.ManageSubscription != nil && samsungUpdateConfigurationRequired(c.transfer.entitlement, result.ManageSubscription) && !configuration.DownloadInfoPresent {
-		result.State = StateDone
-		result.Event = DoneEvent{}
-		c.emit(result.Event)
-		return result, nil
 	}
 	return c.applyDownloadConfiguration(result, configuration.Download, configuration.ServiceStatus)
 }
@@ -455,7 +430,7 @@ func (c *Client) refreshTransferCredential(ctx context.Context, offer *transferO
 	// A temporary token can expire while the source authentication token is
 	// still usable, including after the source subscription stops authenticating.
 	if c.usesTemporaryToken() && authCredential(offer.AuthToken).validAt(c.now()) {
-		tokens, err := c.acquireTemporaryToken(ctx, c.transfer.source.Channel, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, offer.AuthToken)
+		tokens, err := c.acquireTemporaryToken(ctx, c.transfer.source.Channel, offer.SourceIdentity, offer.SourceDevice, offer.AuthToken)
 		if err == nil {
 			offer.AuthToken = tokens.Auth
 			offer.TemporaryToken = tokens.Temporary
@@ -465,7 +440,7 @@ func (c *Client) refreshTransferCredential(ctx context.Context, offer *transferO
 			return transferCredential{}, fmt.Errorf("renew temporary token: %w", err)
 		}
 	}
-	tokens, err := c.fetchTransferToken(ctx, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice)
+	tokens, err := c.fetchTransferToken(ctx, offer.SourceIdentity, offer.SourceDevice)
 	if err != nil {
 		return transferCredential{}, fmt.Errorf("refresh transfer credential: %w", err)
 	}
@@ -507,7 +482,7 @@ func (c *Client) refreshActivationAuth(ctx context.Context, offer *transferOffer
 	target := offer.TargetDevice
 	target.ICCID = firstNonEmpty(identity.ICCID, target.ICCID)
 	offer.TargetDevice.ICCID = target.ICCID
-	tokens, err := c.fetchTransferTokenWithChannel(ctx, channel, *identity, target, target)
+	tokens, err := c.fetchTransferTokenWithChannel(ctx, channel, *identity, target)
 	if err != nil {
 		return activationAuth{}, fmt.Errorf("refresh activation credential: %w", err)
 	}
@@ -517,11 +492,11 @@ func (c *Client) refreshActivationAuth(ctx context.Context, offer *transferOffer
 	return activationAuth{identity: *identity, channel: channel, credential: c.transferCredentialFromTokens(tokens)}, nil
 }
 
-func (c *Client) transferTokens(ctx context.Context, channel Channel, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
+func (c *Client) transferTokens(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken) (TransferTokenResult, error) {
 	if !c.usesTemporaryToken() {
 		return TransferTokenResult{Auth: auth}, nil
 	}
-	return c.acquireTemporaryToken(ctx, channel, identity, source, target, auth)
+	return c.acquireTemporaryToken(ctx, channel, identity, source, auth)
 }
 
 func (c *Client) transferCredential(ctx context.Context, offer *transferOffer) (transferCredential, error) {
@@ -575,12 +550,6 @@ func subscriptionDone(resp *ODSAResponse) bool {
 	return resp.OperationResult == OperationResultSuccess && resp.SubscriptionResult == SubscriptionResultDone
 }
 
-func samsungUpdateConfigurationRequired(entitlement Entitlement, resp *ODSAResponse) bool {
-	return entitlement.Channel == EntitlementChannelSamsung &&
-		samsungSubscriptionIntent(entitlement) == SamsungSubscriptionUpdate &&
-		subscriptionDone(resp)
-}
-
 func subscriptionDismissed(resp *ODSAResponse) bool {
 	return resp.OperationResult == OperationResultSuccess && resp.SubscriptionResult == SubscriptionResultDismiss
 }
@@ -590,17 +559,13 @@ func delayedDownloadRequired(resp *ODSAResponse) bool {
 		resp.SubscriptionResult == SubscriptionResultDelayedDownload
 }
 
-func (c *Client) delayedDownloadState(offer *transferOffer, subscriptionResult SubscriptionResult) (State, Event) {
-	event := DelayedDownloadEvent{
+func smdsDiscoveryEvent(offer *transferOffer, subscriptionResult SubscriptionResult) SMDSDiscoveryEvent {
+	return SMDSDiscoveryEvent{
 		SourceICCID:        firstNonEmpty(offer.SourceDevice.ICCID, offer.SourceIdentity.ICCID),
 		TargetEID:          offer.TargetDevice.EID,
 		TargetIMEI:         offer.TargetDevice.IMEI,
 		SubscriptionResult: subscriptionResult,
 	}
-	if c.transfer.entitlement.UseSMDSDelayedDownload {
-		return StatePendingSMDSDiscovery, SMDSDiscoveryEvent(event)
-	}
-	return StatePendingDelayedDownload, event
 }
 
 func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig, status ServiceStatus) (*Result, error) {
@@ -612,8 +577,7 @@ func (c *Client) applyDownloadConfiguration(result *Result, cfg DownloadConfig, 
 	if cfg.ActivationCode == "" && cfg.SMDPFQDN == "" {
 		return result, errDownloadInfoMissing
 	}
-	session.downloadActivated = c.transfer.entitlement.Channel != EntitlementChannelSamsung &&
-		status == ServiceStatusActivated
+	session.downloadActivated = status == ServiceStatusActivated
 	result.DownloadConfig = cfg
 	result.State = StatePendingDownload
 	result.Event = DownloadReadyEvent{Config: result.DownloadConfig}
@@ -636,9 +600,6 @@ func completeDownloadConfig(cfg DownloadConfig, target Device) DownloadConfig {
 }
 
 func (c *Client) pollInterval(resp *ODSAResponse) (time.Duration, bool) {
-	if !resp.PollingIntervalSet && c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		return 0, false
-	}
 	if !resp.PollingIntervalSet {
 		return c.transfer.entitlement.PollInterval, c.transfer.entitlement.PollInterval > 0
 	}
@@ -695,10 +656,8 @@ func (c *Client) offerCredential(offer *transferOffer) transferCredential {
 
 func (c *Client) waitForDownloadConfiguration(ctx context.Context, resp *ODSAResponse) (bool, error) {
 	// Pixel accepts a reusable download while its service is deactivated.
-	// Samsung also delivers DownloadInfo before service activation finishes.
 	hasDownload := resp.Download.ActivationCode != "" || resp.Download.SMDPFQDN != ""
-	if hasDownload && (resp.ServiceStatus == ServiceStatusDeactivated ||
-		(c.transfer.entitlement.Channel == EntitlementChannelSamsung && resp.ServiceStatus == ServiceStatusActivating)) {
+	if hasDownload && resp.ServiceStatus == ServiceStatusDeactivated {
 		return true, nil
 	}
 	return c.waitForConfiguration(ctx, resp)

@@ -22,18 +22,16 @@ func alignmentOffer() *transferOffer {
 func TestConfigurationReadinessDependsOnStage(t *testing.T) {
 	for _, tt := range []struct {
 		name                                 string
-		channel                              EntitlementChannel
 		status                               int
 		download, installed, denied, pending bool
 	}{
 		{name: "Google reusable download", status: 3, download: true},
-		{name: "Samsung reusable download", channel: EntitlementChannelSamsung, status: 3, download: true},
-		{name: "Samsung activating download", channel: EntitlementChannelSamsung, status: 2, download: true},
+
 		{name: "Google activating waits", status: 2, download: true, pending: true},
 		{name: "deactivated without download", status: 3, denied: true},
 		{name: "no reuse cannot download", status: 4, download: true, denied: true},
 		{name: "installed deactivated cannot confirm activation", status: 3, download: true, installed: true, denied: true},
-		{name: "installed activating cannot confirm activation", channel: EntitlementChannelSamsung, status: 2, download: true, installed: true, pending: true},
+		{name: "installed activating cannot confirm activation", status: 2, download: true, installed: true, pending: true},
 		{name: "installed activated", status: 1, installed: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -43,7 +41,7 @@ func TestConfigurationReadinessDependsOnStage(t *testing.T) {
 			if tt.download {
 				download = `,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}`
 			}
-			client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", Channel: tt.channel}, Sleep: func(context.Context, time.Duration) error { waits++; return pause }, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example"}, Sleep: func(context.Context, time.Duration) error { waits++; return pause }, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 				if Operation(req.URL.Query().Get("operation")) != OperationAcquireConf {
 					t.Fatalf("unexpected operation %s", req.URL.Query().Get("operation"))
 				}
@@ -193,14 +191,14 @@ func TestRenewTemporaryTokenWithoutSourceReauthentication(t *testing.T) {
 	}
 }
 
-func TestContinueDelayedDownloadOnlyQueriesConfiguration(t *testing.T) {
-	client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", Channel: EntitlementChannelSamsung}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+func TestContinuePendingConfigurationOnlyQueriesConfiguration(t *testing.T) {
+	client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example"}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 		if req.URL.Query().Get("operation") != string(OperationAcquireConf) {
 			t.Fatal("subscription submitted again")
 		}
 		return response(200, `{"APPLICATION":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":3,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}}}}`), nil
 	})})
-	next, err := client.Continue(t.Context(), &Result{State: StatePendingDelayedDownload, session: &transferSession{offer: alignmentOffer()}}, ContinueRequest{})
+	next, err := client.Continue(t.Context(), &Result{State: StatePendingConfiguration, session: &transferSession{offer: alignmentOffer()}}, ContinueRequest{})
 	if err != nil || next.State != StatePendingDownload {
 		t.Fatalf("result=%v error=%v", next.State, err)
 	}
@@ -222,10 +220,7 @@ func TestAndroidOptionalHintsFallback(t *testing.T) {
 		if interval, ok := client.pollInterval(&resp); !ok || interval != 2*time.Minute {
 			t.Fatalf("Google polling=%s enabled=%t", interval, ok)
 		}
-		client.transfer.entitlement.Channel = EntitlementChannelSamsung
-		if _, ok := client.pollInterval(&resp); ok {
-			t.Fatal("Samsung polling enabled without a valid interval")
-		}
+
 	}
 }
 

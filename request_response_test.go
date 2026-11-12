@@ -125,136 +125,20 @@ func TestBuildHTTPSendsConfiguredApp(t *testing.T) {
 	}
 }
 
-func TestBuildHTTPSendsSamsungInitialAuthFields(t *testing.T) {
-	req, err := buildHTTPRequest(
-		context.Background(),
-		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
-		Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"},
-		ServiceEntitlementRequest{
-			RequestVersion:      "1",
-			App:                 AppODSAPrimary,
-			AppName:             AppODSAPrimary,
-			AppVersion:          "3.0.00",
-			ProvisioningVersion: "5.0",
-			EntitlementVersion:  "8.0",
-			TerminalID:          "123456789012345",
-			TerminalVendor:      "samsung",
-			TerminalModel:       "SM-S938B",
-			TerminalSoftware:    "16",
-		},
-		ODSAOperation{},
-		SamsungODSAClientTS43,
-		DefaultEAPAKARealm,
-	)
-	if err != nil {
-		t.Fatalf("buildHTTPRequest() error = %v", err)
-	}
-	query := req.URL.Query()
-	if got := query.Get("app"); got != AppODSAPrimary {
-		t.Errorf("app = %q, want %q", got, AppODSAPrimary)
-	}
-	if got := query.Get("vers"); got != "1" {
-		t.Errorf("vers = %q, want 1", got)
-	}
-	if got := query.Get("app_name"); got != AppODSAPrimary {
-		t.Errorf("app_name = %q, want %q", got, AppODSAPrimary)
-	}
-	if got := query.Get("provisioning_version"); got != "5.0" {
-		t.Errorf("provisioning_version = %q, want 5.0", got)
-	}
-	if got := req.Header.Get("Accept"); got != EAPRelayContentType {
-		t.Errorf("Accept = %q, want %q", got, EAPRelayContentType)
-	}
-	if got, want := req.Header.Get("Accept-Language"), "en-US,en;q=0.5"; got != want {
-		t.Errorf("Accept-Language = %q, want %q", got, want)
-	}
-	if got, want := req.Header.Get("User-Agent"), "PRD-TS43 SM-S938B client-Primary-ODSA OS-Android/16"; got != want {
-		t.Errorf("User-Agent = %q, want %q", got, want)
-	}
-}
-
-func TestBuildHTTPSendsSamsungOperationAppFields(t *testing.T) {
-	req, err := buildHTTPRequest(
-		context.Background(),
-		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
-		Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"},
-		ServiceEntitlementRequest{
-			AuthenticationToken: "auth",
-			RequestVersion:      "1",
-			App:                 AppODSAPrimary,
-			AppName:             AppODSAPrimary,
-			EntitlementVersion:  "8.0",
-			TerminalID:          "123456789012345",
-			TerminalVendor:      "samsung",
-			TerminalModel:       "SM-S938B",
-			TerminalSoftware:    "16",
-		},
-		ODSAOperation{Operation: OperationManage},
-		SamsungODSAClientTS43,
-		DefaultEAPAKARealm,
-	)
-	if err != nil {
-		t.Fatalf("buildHTTPRequest() error = %v", err)
-	}
-	query := req.URL.Query()
-	if got := query.Get("app"); got != AppODSAPrimary {
-		t.Errorf("app = %q, want %q", got, AppODSAPrimary)
-	}
-}
-
-func TestBuildHTTPShapesCommonDeviceFieldsByChannel(t *testing.T) {
-	tests := []struct {
-		name               string
-		entitlement        Entitlement
-		entitlementVersion string
-		wantVendor         string
-		wantModel          string
-		wantSoftware       string
-	}{
-		{
-			name:               "Google uses TS43 field limits",
-			entitlement:        Entitlement{Server: "https://example.test/ts43"},
-			entitlementVersion: "9.0",
-			wantVendor:         "sams",
-			wantModel:          "SM-S938B-E",
-			wantSoftware:       "16/UP1A.231005.007/l",
-		},
-		{
-			name: "Samsung before 5.0 keeps all device fields",
-			entitlement: Entitlement{
-				Server:  "https://example.test/ts43",
-				Channel: EntitlementChannelSamsung,
-			},
-			entitlementVersion: "4.0",
-			wantVendor:         "samsung",
-			wantModel:          "SM-S938B-ENTERPRISE",
-			wantSoftware:       "16/UP1A.231005.007/long-build",
-		},
-		{
-			name: "Samsung 5.0 truncates only vendor",
-			entitlement: Entitlement{
-				Server:  "https://example.test/ts43",
-				Channel: EntitlementChannelSamsung,
-			},
-			entitlementVersion: "5.0",
-			wantVendor:         "sams",
-			wantModel:          "SM-S938B-ENTERPRISE",
-			wantSoftware:       "16/UP1A.231005.007/long-build",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+func TestBuildHTTPTruncatesDeviceFields(t *testing.T) {
+	for _, post := range []bool{false, true} {
+		t.Run("post_"+strconv.FormatBool(post), func(t *testing.T) {
 			req, err := buildHTTPRequest(
-				context.Background(),
-				tt.entitlement,
-				Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"},
+				t.Context(),
+				Entitlement{Server: "https://example.test/ts43", UsePost: post},
+				Identity{IMSI: "001010123456789", MCC: "001", MNC: "01"},
 				ServiceEntitlementRequest{
 					AuthenticationToken: "auth",
 					App:                 AppODSAPrimary,
-					EntitlementVersion:  tt.entitlementVersion,
+					EntitlementVersion:  "9.0",
 					TerminalID:          "123456789012345",
-					TerminalVendor:      "samsung",
-					TerminalModel:       "SM-S938B-ENTERPRISE",
+					TerminalVendor:      "ExampleVendor",
+					TerminalModel:       "ExampleDevice-ENTERPRISE",
 					TerminalSoftware:    "16/UP1A.231005.007/long-build",
 				},
 				ODSAOperation{},
@@ -264,15 +148,15 @@ func TestBuildHTTPShapesCommonDeviceFieldsByChannel(t *testing.T) {
 			if err != nil {
 				t.Fatalf("buildHTTPRequest() error = %v", err)
 			}
-			query := req.URL.Query()
-			if got := query.Get("terminal_vendor"); got != tt.wantVendor {
-				t.Errorf("terminal_vendor = %q, want %q", got, tt.wantVendor)
-			}
-			if got := query.Get("terminal_model"); got != tt.wantModel {
-				t.Errorf("terminal_model = %q, want %q", got, tt.wantModel)
-			}
-			if got := query.Get("terminal_sw_version"); got != tt.wantSoftware {
-				t.Errorf("terminal_sw_version = %q, want %q", got, tt.wantSoftware)
+			fields := requestFields(t, req)
+			for key, want := range map[string]string{
+				"terminal_vendor":     "Exam",
+				"terminal_model":      "ExampleDev",
+				"terminal_sw_version": "16/UP1A.231005.007/l",
+			} {
+				if got := fields[key]; got != want {
+					t.Errorf("%s = %q, want %q", key, got, want)
+				}
 			}
 		})
 	}
@@ -315,122 +199,6 @@ func TestEAPRelayAccept(t *testing.T) {
 				t.Errorf("eapRelayAccept() = %q, want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestBuildHTTPUsesSamsungResponseAcceptAfterAuthentication(t *testing.T) {
-	identity := Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"}
-	req, err := buildHTTPRequest(
-		context.Background(),
-		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
-		identity,
-		ServiceEntitlementRequest{
-			AuthenticationToken: "auth",
-			App:                 AppODSAPrimary,
-			EntitlementVersion:  "8.0",
-			TerminalID:          "123456789012345",
-			TerminalVendor:      "samsung",
-			TerminalModel:       "SM-S938B",
-			TerminalSoftware:    "16",
-		},
-		ODSAOperation{Operation: OperationManage},
-		SamsungODSAClientTS43,
-		DefaultEAPAKARealm,
-	)
-	if err != nil {
-		t.Fatalf("buildHTTPRequest() error = %v", err)
-	}
-	if got := req.Header.Get("Accept"); got != SamsungResponseAccept {
-		t.Errorf("Accept = %q, want %q", got, SamsungResponseAccept)
-	}
-	query := req.URL.Query()
-	want, err := terminalIMSIEAPBase64(identity, DefaultEAPAKARealm)
-	if err != nil {
-		t.Fatalf("terminalIMSIEAPBase64() error = %v", err)
-	}
-	if got := query.Get("IMSI"); got != want {
-		t.Errorf("IMSI = %q, want %q", got, want)
-	}
-	if got := query.Get("terminal_imsieapbase64"); got != "" {
-		t.Errorf("terminal_imsieapbase64 = %q, want empty", got)
-	}
-}
-
-func TestBuildHTTPSamsungEAPIdentityOperationScope(t *testing.T) {
-	tests := []struct {
-		name      string
-		operation Operation
-		wantIMSI  bool
-	}{
-		{name: "CheckEligibility", operation: OperationCheck, wantIMSI: true},
-		{name: "AcquireTemporaryToken", operation: OperationTempToken},
-		{name: "ManageSubscription", operation: OperationManage, wantIMSI: true},
-		{name: "AcquireConfiguration", operation: OperationAcquireConf, wantIMSI: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, err := buildHTTPRequest(
-				context.Background(),
-				Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
-				Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"},
-				ServiceEntitlementRequest{
-					AuthenticationToken: "auth",
-					App:                 AppODSAPrimary,
-					EntitlementVersion:  "8.0",
-					TerminalID:          "123456789012345",
-					TerminalVendor:      "samsung",
-					TerminalModel:       "SM-S938B",
-					TerminalSoftware:    "16",
-				},
-				ODSAOperation{Operation: tt.operation},
-				SamsungODSAClientTS43,
-				DefaultEAPAKARealm,
-			)
-			if err != nil {
-				t.Fatalf("buildHTTPRequest() error = %v", err)
-			}
-			if got := req.URL.Query().Get("IMSI") != ""; got != tt.wantIMSI {
-				t.Errorf("IMSI present = %v, want %v", got, tt.wantIMSI)
-			}
-		})
-	}
-}
-
-func TestBuildHTTPSamsungRequiresEAPIdentity(t *testing.T) {
-	_, err := buildHTTPRequest(
-		context.Background(),
-		Entitlement{Server: "https://example.test/ts43", Channel: EntitlementChannelSamsung},
-		Identity{MCC: "450", MNC: "05"},
-		ServiceEntitlementRequest{
-			AuthenticationToken: "auth",
-			App:                 AppODSAPrimary,
-			EntitlementVersion:  "8.0",
-			TerminalID:          "123456789012345",
-		},
-		ODSAOperation{Operation: OperationManage},
-		SamsungODSAClientTS43,
-		DefaultEAPAKARealm,
-	)
-	if err == nil {
-		t.Error("buildHTTPRequest() error = nil")
-	}
-}
-
-func TestBaseRequestUsesSamsungDefaults(t *testing.T) {
-	client := newClient(Config{
-		AppVersion:  "3.0.00",
-		Entitlement: Entitlement{Channel: EntitlementChannelSamsung, Version: "8.0"},
-	})
-
-	req := client.baseRequest(Device{IMEI: "123456789012345"}, "auth", "")
-	if req.App != AppODSAPrimary {
-		t.Errorf("App = %q, want %q", req.App, AppODSAPrimary)
-	}
-	if req.AppName != AppODSAPrimary {
-		t.Errorf("AppName = %q, want %q", req.AppName, AppODSAPrimary)
-	}
-	if req.RequestVersion != "1" {
-		t.Errorf("RequestVersion = %q, want 1", req.RequestVersion)
 	}
 }
 
@@ -571,28 +339,24 @@ func TestBuildHTTPRequestsSendsExtendedFields(t *testing.T) {
 func TestODSAResponseDownloadConfig(t *testing.T) {
 	activationCode := "LPA:1$smdp.example$MATCH"
 	tests := []struct {
-		name        string
-		body        []byte
-		want        DownloadConfig
-		wantPresent bool
+		name string
+		body []byte
+		want DownloadConfig
 	}{
 		{
-			name:        "profile activation code",
-			body:        []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="` + base64.StdEncoding.EncodeToString([]byte(activationCode)) + `"/><parm name="ProfileIccid" value="8900000000000000000"/></characteristic></characteristic></wap-provisioningdoc>`),
-			want:        DownloadConfig{ActivationCode: activationCode, ProfileICCID: "8900000000000000000"},
-			wantPresent: true,
+			name: "profile activation code",
+			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="` + base64.StdEncoding.EncodeToString([]byte(activationCode)) + `"/><parm name="ProfileIccid" value="8900000000000000000"/></characteristic></characteristic></wap-provisioningdoc>`),
+			want: DownloadConfig{ActivationCode: activationCode, ProfileICCID: "8900000000000000000"},
 		},
 		{
-			name:        "smdp and iccid",
-			body:        []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><characteristic type="DownloadInfo"><parm name="ProfileIccid" value="8900000000000000000"/><parm name="ProfileSmdpAddress" value="smdp1.example, smdp2.example"/></characteristic></characteristic></characteristic></wap-provisioningdoc>`),
-			want:        DownloadConfig{SMDPFQDN: "smdp1.example", ProfileICCID: "8900000000000000000"},
-			wantPresent: true,
+			name: "smdp and iccid",
+			body: []byte(`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><characteristic type="DownloadInfo"><parm name="ProfileIccid" value="8900000000000000000"/><parm name="ProfileSmdpAddress" value="smdp1.example, smdp2.example"/></characteristic></characteristic></characteristic></wap-provisioningdoc>`),
+			want: DownloadConfig{SMDPFQDN: "smdp1.example", ProfileICCID: "8900000000000000000"},
 		},
 		{
-			name:        "explicit matching id",
-			body:        []byte(`{"DownloadInfo":{"MatchingID":"MATCH","ProfileIccid":"8900000000000000000","ProfileSmdpAddress":"smdp.example"}}`),
-			want:        DownloadConfig{SMDPFQDN: "smdp.example", MatchingID: "MATCH", ProfileICCID: "8900000000000000000"},
-			wantPresent: true,
+			name: "explicit matching id",
+			body: []byte(`{"DownloadInfo":{"MatchingID":"MATCH","ProfileIccid":"8900000000000000000","ProfileSmdpAddress":"smdp.example"}}`),
+			want: DownloadConfig{SMDPFQDN: "smdp.example", MatchingID: "MATCH", ProfileICCID: "8900000000000000000"},
 		},
 		{
 			name: "absent download information",
@@ -607,9 +371,6 @@ func TestODSAResponseDownloadConfig(t *testing.T) {
 			}
 			if got.Download != tt.want {
 				t.Errorf("Download = %+v, want %+v", got.Download, tt.want)
-			}
-			if got.DownloadInfoPresent != tt.wantPresent {
-				t.Errorf("DownloadInfoPresent = %t, want %t", got.DownloadInfoPresent, tt.wantPresent)
 			}
 		})
 	}

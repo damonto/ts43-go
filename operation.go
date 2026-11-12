@@ -1,80 +1,129 @@
 package ts43
 
-func temporaryTokenOperation(entitlement Entitlement, source, target Device) ODSAOperation {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		return samsungTemporaryTokenOperation(source)
+func temporaryTokenOperation() ODSAOperation {
+	return ODSAOperation{
+		Operation:        OperationTempToken,
+		OperationType:    OperationTypeOmit,
+		OperationTargets: []Operation{OperationManage, OperationAcquireConf},
 	}
-	return googleTemporaryTokenOperation()
 }
 
-func checkEligibilityOperation(entitlement Entitlement, source, target Device) ODSAOperation {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		op := samsungCheckEligibilityOperation(source, target)
-		return samsungExtraTerminalFields(entitlement, op, target)
+func checkEligibilityOperation() ODSAOperation {
+	return ODSAOperation{
+		Operation:     OperationCheck,
+		OperationType: OperationTypeOmit,
 	}
-	return googleCheckEligibilityOperation()
-}
-
-func manageSubscriptionRequestDevice(entitlement Entitlement, source, target Device) Device {
-	if samsungDigitalizedTransfer(entitlement) {
-		return target
-	}
-	if transferUsesSourceCredential(entitlement) {
-		return source
-	}
-	return target
 }
 
 func manageSubscriptionOperation(entitlement Entitlement, req ManageSubscriptionRequest) ODSAOperation {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		op := samsungManageSubscriptionOperation(entitlement, req)
-		return samsungExtraTerminalFields(entitlement, op, req.Target)
-	}
-	return googleManageSubscriptionOperation(entitlement, req)
-}
-
-func acquireConfigurationRequestDevice(entitlement Entitlement, source, target Device) Device {
-	if transferUsesSourceCredential(entitlement) {
-		return source
-	}
-	return target
-}
-
-func transferUsesSourceCredential(entitlement Entitlement) bool {
-	return !samsungDigitalizedTransfer(entitlement) &&
-		IsSourceCredentialTransferType(entitlement.TransferType)
-}
-
-func acquireConfigurationOperation(entitlement Entitlement, source, target Device) ODSAOperation {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		op := samsungAcquireConfigurationOperation(entitlement, source, target)
-		return samsungExtraTerminalFields(entitlement, op, target)
-	}
-	return googleAcquireConfigurationOperation(entitlement, source, target)
-}
-
-func updateSubscriptionOperation(entitlement Entitlement, source, target Device) ODSAOperation {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		op := samsungUpdateSubscriptionOperation(source, target)
-		return samsungExtraTerminalFields(entitlement, op, target)
-	}
-	return googleUpdateSubscriptionOperation(entitlement, source, target)
-}
-
-func activationConfigurationOperation(entitlement Entitlement, target Device) ODSAOperation {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		op := samsungActivationConfigurationOperation(target)
-		return samsungExtraTerminalFields(entitlement, op, target)
-	}
-	return googleActivationConfigurationOperation(target)
-}
-
-func baseManageSubscriptionOperation(operationType OperationType, answer UserInputResult) ODSAOperation {
-	return ODSAOperation{
+	source, target, answer := req.Source, req.Target, req.UserInput
+	op := ODSAOperation{
 		Operation:        OperationManage,
-		OperationType:    operationType,
+		OperationType:    OperationTypeTransferSubscription,
 		MessageResponse:  answer.Response,
 		MessageButton:    answer.Button,
 		MessageButtonSet: answer.Button != MessageButtonUnknown,
 	}
+	if IsSourceCredentialTransferType(entitlement.TransferType) {
+		op.TargetTerminalID = target.IMEI
+		op.TargetTerminalEID = target.EID
+	} else {
+		op.TerminalEID = target.EID
+		op.TerminalICCID = target.ICCID
+		if includeTargetTerminalIdentity(entitlement) {
+			setTargetTerminalFields(&op, target)
+		}
+	}
+	addOldTerminalFields(&op, entitlement, source)
+	return op
+}
+
+func acquireConfigurationOperation(entitlement Entitlement, source, target Device) ODSAOperation {
+	op := ODSAOperation{
+		Operation:                   OperationAcquireConf,
+		OperationType:               OperationTypeOmit,
+		OldTerminalEntitlementProto: entitlementProtocol(source.EntitlementProtocol),
+	}
+	if IsSourceCredentialTransferType(entitlement.TransferType) {
+		op.TargetTerminalID = target.IMEI
+		op.TargetTerminalEID = target.EID
+		return op
+	}
+	op.TerminalEID = target.EID
+	op.TerminalICCID = target.ICCID
+	if includeTargetTerminalIdentity(entitlement) {
+		setTargetTerminalFields(&op, target)
+	}
+	return op
+}
+
+func updateSubscriptionOperation(entitlement Entitlement, source, target Device) ODSAOperation {
+	op := ODSAOperation{
+		Operation:     OperationManage,
+		OperationType: OperationTypeUpdateSubscription,
+		TerminalEID:   target.EID,
+		TerminalICCID: target.ICCID,
+	}
+	addOldTerminalFields(&op, entitlement, source)
+	return op
+}
+
+func activationConfigurationOperation(target Device) ODSAOperation {
+	return ODSAOperation{
+		Operation:     OperationAcquireConf,
+		OperationType: OperationTypeOmit,
+		TerminalEID:   target.EID,
+	}
+}
+
+func setTargetTerminalFields(op *ODSAOperation, target Device) {
+	op.TargetTerminalID = target.IMEI
+	op.TargetTerminalEID = target.EID
+	op.TargetTerminalICCID = target.ICCID
+	op.TargetTerminalModel = target.Model
+	op.TargetTerminalSN = target.SerialNumber
+	op.TargetTerminalIMEIs = terminalIMEIs(target)
+	op.TargetTerminalEntitlementProto = entitlementProtocol(target.EntitlementProtocol)
+}
+
+func addOldTerminalFields(op *ODSAOperation, entitlement Entitlement, source Device) {
+	op.OldTerminalEntitlementProto = entitlementProtocol(source.EntitlementProtocol)
+	if !includeOldTerminalIDs(entitlement, op.OperationType) {
+		return
+	}
+	op.OldTerminalID = source.IMEI
+	op.OldTerminalICCID = source.ICCID
+}
+
+func includeTargetTerminalIdentity(entitlement Entitlement) bool {
+	switch entitlement.TransferType {
+	case TransferTypeTemporaryToken, TransferTypeTemporaryTokenVariant11:
+		return entitlement.SetTargetTerminalFields
+	default:
+		return true
+	}
+}
+
+func includeOldTerminalIDs(entitlement Entitlement, operationType OperationType) bool {
+	if !entitlement.RestrictOldTerminalFields {
+		return true
+	}
+	// GMS btod preserves source IDs for source-credential transfers. Its btoe
+	// post-installation update applies the narrower type 7/9 rule instead.
+	if operationType == OperationTypeTransferSubscription && IsSourceCredentialTransferType(entitlement.TransferType) {
+		return true
+	}
+	switch entitlement.TransferType {
+	case TransferTypeOldTerminalIDs, TransferTypeTemporaryTokenOldTerminalIDs:
+		return true
+	default:
+		return false
+	}
+}
+
+func transferRequestDevice(entitlement Entitlement, source, target Device) Device {
+	if IsSourceCredentialTransferType(entitlement.TransferType) {
+		return source
+	}
+	return target
 }

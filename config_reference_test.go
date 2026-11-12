@@ -12,26 +12,6 @@ import (
 	"testing"
 )
 
-func TestEntitlementChannelPolicy(t *testing.T) {
-	var rows []entitlementRecord
-	if err := json.Unmarshal(privateCarrierJSON(t, "entitlement.json"), &rows); err != nil {
-		t.Fatal(err)
-	}
-	google := make(map[string]bool)
-	for _, row := range rows {
-		if row.Channel == "google" {
-			google[row.MCCMNC] = true
-		}
-	}
-	for _, row := range rows {
-		t.Run(row.Channel+"/"+row.MCCMNC+"/"+row.CarrierName, func(t *testing.T) {
-			if row.Channel == "samsung" && google[row.MCCMNC] {
-				t.Fatalf("Samsung duplicates Google MCCMNC %s", row.MCCMNC)
-			}
-		})
-	}
-}
-
 func TestWFCReferenceConfiguration(t *testing.T) {
 	var rows []wfcRecord
 	if err := json.Unmarshal(privateCarrierJSON(t, "wfc.json"), &rows); err != nil {
@@ -60,124 +40,6 @@ func TestWFCReferenceConfiguration(t *testing.T) {
 	}
 }
 
-type samsungReference struct {
-	Versions []struct {
-		Data struct {
-			Countries []struct {
-				Operators []samsungOperator `json:"operatorList"`
-			} `json:"countryDataList"`
-		} `json:"configData"`
-	} `json:"odaConfigVersionList"`
-}
-
-type samsungOperator struct {
-	Name     string
-	Vendor   int              `json:"esVendor"`
-	Networks []samsungNetwork `json:"nwInfo"`
-	Settings []samsungSetting `json:"esSettings"`
-}
-
-type samsungNetwork struct{ MCC, MNC, GID1, GID2, SPN, Subset string }
-
-type samsungSetting struct {
-	Type, EsURL, EsVersion string
-	Params                 []struct {
-		Name  string
-		Value stringField
-	} `json:"esOptionalParamList"`
-	Subscriptions []struct {
-		Name  string
-		Value bool
-	} `json:"subscriptionType"`
-}
-
-func samsungReferenceSetting(operators []samsungOperator, row entitlementRecord) (samsungOperator, samsungSetting, bool) {
-	for _, op := range operators {
-		if op.Name != row.CarrierName {
-			continue
-		}
-		if !slices.ContainsFunc(op.Networks, func(network samsungNetwork) bool {
-			return network.MCC+network.MNC == row.MCCMNC && network.GID1 == optionalString(row.GID1) && network.GID2 == optionalString(row.GID2) && network.SPN == optionalString(row.SPN) && network.Subset == optionalString(row.IMSIPrefixXPattern)
-		}) {
-			continue
-		}
-		for _, setting := range op.Settings {
-			if setting.Type == "PROD" && setting.EsURL == row.EntitlementServer {
-				return op, setting, true
-			}
-		}
-	}
-	return samsungOperator{}, samsungSetting{}, false
-}
-
-func TestSamsungReferenceConfiguration(t *testing.T) {
-	var source samsungReference
-	if err := json.Unmarshal(referenceFile(t, "refs/com.samsung.oda.service/assets/prod/170000/oda_operator_list_default.json"), &source); err != nil {
-		t.Fatal(err)
-	}
-	var operators []samsungOperator
-	for _, version := range source.Versions {
-		for _, country := range version.Data.Countries {
-			operators = append(operators, country.Operators...)
-		}
-	}
-
-	var rows []entitlementRecord
-	if err := json.Unmarshal(privateCarrierJSON(t, "entitlement.json"), &rows); err != nil {
-		t.Fatal(err)
-	}
-	for _, row := range rows {
-		if row.Channel != "samsung" {
-			continue
-		}
-		t.Run(row.MCCMNC+"/"+row.CarrierName, func(t *testing.T) {
-
-			op, setting, found := samsungReferenceSetting(operators, row)
-			if !found {
-				t.Fatal("no matching reference operator/network/PROD setting")
-			}
-			params := make(map[string]string)
-			for _, v := range setting.Params {
-				params[v.Name] = v.Value.String()
-			}
-			subscriptions := make(map[string]bool)
-			for _, v := range setting.Subscriptions {
-				subscriptions[v.Name] = v.Value
-			}
-			for _, field := range []struct {
-				name      string
-				got, want bool
-			}{
-				{"http post", row.UseHTTPPost, params["USE_POST_HTTP_API"] == "true"},
-				{"extra terminal", row.SamsungExtraTerminalParams, params["NEED_EXTRA_TERMINAL_PARAMS"] == "true"},
-				{"websheet injection", row.SamsungInjectWebsheetParams, params["NEED_INJECT_EXTRA_PARAMS"] == "true"},
-				{"LGU injection", row.SamsungInjectWebsheetParamsLGU, params["NEED_INJECT_EXTRA_PARAMS_LGU"] == "true"},
-				{"legacy UA", row.SamsungLegacyUserAgent, params["TS43_USERAGENT_NOTSUPPORT"] == "true"},
-				{"Android backend", row.SamsungAndroidEntitlement, op.Vendor == 4 || op.Vendor == 8},
-				{"pSIM support", row.SupportPsimToEsimTransfer, subscriptions["DIGITALIZED_SIM"]},
-				{"eSIM support", row.SupportEsimToEsimTransfer, subscriptions["D2D_TRANSFER_AKA"] || subscriptions["D2D_TRANSFER_TEMP_TOKEN"]},
-				{"4FF token", row.UseTempTokenConversion, params["4FF_TEMP_TOKEN"] == "true"},
-			} {
-				if field.got != field.want {
-					t.Errorf("%s=%v, want %v", field.name, field.got, field.want)
-				}
-			}
-			if value := params["CUSTOM_READ_TIMEOUT"]; value != "" {
-				want, err := strconv.Atoi(value)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if row.TimeoutSeconds != want {
-					t.Errorf("timeout=%d, want %d", row.TimeoutSeconds, want)
-				}
-			}
-			if row.EntitlementVersion != setting.EsVersion || row.ProvisioningVersion != params["TS43_PROVISIONING_VERSION"] {
-				t.Errorf("version=%q/%q, want %q/%q", row.EntitlementVersion, row.ProvisioningVersion, setting.EsVersion, params["TS43_PROVISIONING_VERSION"])
-			}
-		})
-	}
-}
-
 type googleReferenceRecord struct {
 	MCCMNC, CarrierName string
 	MatchRules          []map[string][]string
@@ -195,7 +57,7 @@ func TestGoogleReferenceConfiguration(t *testing.T) {
 	}
 	for _, row := range rows {
 		var id struct {
-			MCCMNC, Channel, CarrierName                      string
+			MCCMNC, CarrierName                               string
 			GID1, GID2, SPN, IMSIPrefixXPattern, PreferredAPN *string
 		}
 		data, err := json.Marshal(row)
@@ -204,9 +66,6 @@ func TestGoogleReferenceConfiguration(t *testing.T) {
 		}
 		if err := json.Unmarshal(data, &id); err != nil {
 			t.Fatal(err)
-		}
-		if id.Channel != "google" {
-			continue
 		}
 		t.Run(id.MCCMNC+"/"+id.CarrierName, func(t *testing.T) {
 			index := slices.IndexFunc(source, func(s googleReferenceRecord) bool {
@@ -260,28 +119,4 @@ func referenceFile(t *testing.T, path string) []byte {
 		t.Fatal(err)
 	}
 	return data
-}
-
-func optionalString(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
-}
-
-func TestSamsungAndroidBackendGuard(t *testing.T) {
-	for _, mccmnc := range []string{"24214", "312012"} {
-		t.Run(mccmnc, func(t *testing.T) {
-			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: mccmnc[:3], MNC: mccmnc[3:]}, SIMTypeESIM, EntitlementChannelSamsung)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !ent.SamsungAndroidEntitlement {
-				t.Fatal("Android backend choice lost")
-			}
-			if _, err := buildHTTPRequest(t.Context(), ent, Identity{}, ServiceEntitlementRequest{}, ODSAOperation{}, "", ""); !errors.Is(err, ErrAndroidEntitlementRequired) {
-				t.Fatalf("backend error = %v", err)
-			}
-		})
-	}
 }

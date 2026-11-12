@@ -11,7 +11,6 @@ func TestDownloadActivationStateControlsCompletion(t *testing.T) {
 	for _, post := range []bool{false, true} {
 		for _, tt := range []struct {
 			name        string
-			channel     EntitlementChannel
 			status      int
 			delayed     bool
 			expireToken bool
@@ -21,8 +20,6 @@ func TestDownloadActivationStateControlsCompletion(t *testing.T) {
 			{name: "Google activated without surviving credentials", status: 1, delayed: true, expireToken: true},
 			{name: "Google reusable download needs activation", status: 3, delayed: true, wantUpdates: 1},
 			{name: "Google direct download needs activation", wantUpdates: 1},
-			{name: "Samsung activated download retains update", channel: EntitlementChannelSamsung, status: 1, delayed: true, wantUpdates: 1},
-			{name: "Samsung activating download retains update", channel: EntitlementChannelSamsung, status: 2, delayed: true, wantUpdates: 1},
 		} {
 			t.Run(fmt.Sprintf("post_%v/%s", post, tt.name), func(t *testing.T) {
 				now := time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)
@@ -33,7 +30,6 @@ func TestDownloadActivationStateControlsCompletion(t *testing.T) {
 					Now: func() time.Time { return now },
 					Entitlement: Entitlement{
 						Server:       "https://carrier.example",
-						Channel:      tt.channel,
 						TransferType: TransferTypeTemporaryToken,
 						UsePost:      post,
 					},
@@ -73,9 +69,6 @@ func TestDownloadActivationStateControlsCompletion(t *testing.T) {
 				result, err := client.activate(t.Context(), offer, UserInputResult{Button: MessageButtonUnknown})
 				if err != nil {
 					t.Fatal(err)
-				}
-				if result.State == StatePendingDelayedDownload {
-					result, err = client.Continue(t.Context(), result, ContinueRequest{})
 				}
 				if err != nil || result.State != StatePendingDownload {
 					t.Fatalf("download state=%v err=%v", result.State, err)

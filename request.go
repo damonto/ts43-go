@@ -3,7 +3,6 @@ package ts43
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,10 +34,6 @@ type ServiceEntitlementRequest struct {
 
 var errAppRequired = errors.New("app is required")
 
-// ErrAndroidEntitlementRequired reports a carrier routed by Samsung through
-// Android Ts43Operation, which this direct HTTP client cannot substitute.
-var ErrAndroidEntitlementRequired = errors.New("carrier requires Android Ts43Operation entitlement backend")
-
 type ODSAOperation struct {
 	Operation                      Operation
 	OperationType                  OperationType
@@ -69,10 +64,6 @@ type ODSAOperation struct {
 }
 
 func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Identity, req ServiceEntitlementRequest, op ODSAOperation, clientTS43, realm string) (*http.Request, error) {
-	if entitlement.SamsungAndroidEntitlement {
-		return nil, ErrAndroidEntitlementRequired
-	}
-	req = shapeSamsungRequest(entitlement, req)
 	if req.App == "" {
 		return nil, errAppRequired
 	}
@@ -80,21 +71,18 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 	if err := addAuthIdentity(params, identity, req, realm); err != nil {
 		return nil, err
 	}
-	addCommon(params, entitlement, req)
+	addCommon(params, req)
 	if op.Operation != "" {
 		addOperation(params, op)
-	}
-	if err := addSamsungOperationFields(params, entitlement, identity, op, realm); err != nil {
-		return nil, err
 	}
 	server, err := url.Parse(entitlement.Server)
 	if err != nil {
 		return nil, fmt.Errorf("parse entitlement server: %w", err)
 	}
-	accept := requestAccept(entitlement, req)
+	accept := requestAccept(req)
 	var httpReq *http.Request
 	if entitlement.UsePost {
-		data, err := marshalRequestJSON(entitlement, params)
+		data, err := json.Marshal(jsonBodyFields(params))
 		if err != nil {
 			return nil, fmt.Errorf("marshal TS.43 request: %w", err)
 		}
@@ -120,10 +108,7 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 		clientTS43 = req.ClientTS43
 	}
 	httpReq.Header.Set("Accept", accept)
-	httpReq.Header.Set("User-Agent", userAgent(entitlement, req, clientTS43))
-	if entitlement.Channel == EntitlementChannelSamsung {
-		httpReq.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	}
+	httpReq.Header.Set("User-Agent", userAgent(req, clientTS43))
 	for _, cookie := range req.Cookies {
 		if cookie != "" {
 			httpReq.Header.Add("Cookie", cookie)
@@ -132,23 +117,17 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 	return httpReq, nil
 }
 
-func requestAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
-	accept := responseAccept(entitlement, req)
+func requestAccept(req ServiceEntitlementRequest) string {
+	accept := responseAccept(req)
 	if initialEAPRequest(req) {
-		if entitlement.Channel == EntitlementChannelSamsung {
-			return EAPRelayContentType
-		}
 		return eapRelayAccept(accept)
 	}
 	return accept
 }
 
-func responseAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
+func responseAccept(req ServiceEntitlementRequest) string {
 	if req.Accept != "" {
 		return req.Accept
-	}
-	if entitlement.Channel == EntitlementChannelSamsung {
-		return SamsungResponseAccept
 	}
 	if req.App == AppODSAPrimary {
 		return ODSAResponseAccept
@@ -178,68 +157,6 @@ func acceptHasMediaType(accept, mediaType string) bool {
 		}
 	}
 	return false
-}
-
-func shapeSamsungRequest(entitlement Entitlement, req ServiceEntitlementRequest) ServiceEntitlementRequest {
-	if entitlement.Channel != EntitlementChannelSamsung {
-		return req
-	}
-	req.App = AppODSAPrimary
-	return req
-}
-
-func addSamsungOperationFields(params url.Values, entitlement Entitlement, identity Identity, op ODSAOperation, realm string) error {
-	if entitlement.Channel != EntitlementChannelSamsung || op.Operation == "" {
-		return nil
-	}
-	if op.Operation == OperationManage && samsungDigitalizedTempToken4FF(entitlement) {
-		params.Del("IMSI")
-		return nil
-	}
-	if !samsungOperationUsesEAPIdentity(op.Operation) {
-		params.Del("IMSI")
-		return nil
-	}
-	params.Del("IMSI")
-	eapIDBase64, err := terminalIMSIEAPBase64(identity, realm)
-	if err != nil {
-		return fmt.Errorf("build Samsung IMSI EAP identity: %w", err)
-	}
-	params.Set("IMSI", eapIDBase64)
-	return nil
-}
-
-func samsungOperationUsesEAPIdentity(operation Operation) bool {
-	return operation == OperationCheck || operation == OperationManage || operation == OperationAcquireConf
-}
-
-func terminalIMSIEAPBase64(identity Identity, realm string) (string, error) {
-	eapID, err := IMSIEAPIdentity(mccMNC(identity), identity.IMSI, realm)
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString([]byte(eapID)), nil
-}
-
-func marshalRequestJSON(entitlement Entitlement, params url.Values) ([]byte, error) {
-	if entitlement.Channel != EntitlementChannelSamsung {
-		return json.Marshal(jsonBodyFields(params))
-	}
-	body := make(map[string]json.RawMessage, len(params))
-	for name, values := range params {
-		var data []byte
-		var err error
-		if name == "target_terminal_imeis" {
-			data, err = json.Marshal(values)
-		} else {
-			data, err = json.Marshal(strings.Join(values, ","))
-		}
-		if err != nil {
-			return nil, fmt.Errorf("marshal request field %s: %w", name, err)
-		}
-		body[name] = data
-	}
-	return json.Marshal(body)
 }
 
 func jsonBodyFields(params url.Values) map[string]string {
@@ -280,23 +197,14 @@ func addAuthIdentity(params url.Values, identity Identity, req ServiceEntitlemen
 	return nil
 }
 
-func addCommon(params url.Values, entitlement Entitlement, req ServiceEntitlementRequest) {
+func addCommon(params url.Values, req ServiceEntitlementRequest) {
 	version := req.RequestVersion
 	if version == "" {
 		version = "0"
 	}
-	vendor := req.TerminalVendor
-	model := req.TerminalModel
-	software := req.TerminalSoftware
-	if entitlement.Channel == EntitlementChannelSamsung {
-		if samsungVendorTruncated(req.EntitlementVersion) {
-			vendor = truncate(vendor, 4)
-		}
-	} else {
-		vendor = truncate(vendor, 4)
-		model = truncate(model, 10)
-		software = truncate(software, 20)
-	}
+	vendor := truncate(req.TerminalVendor, 4)
+	model := truncate(req.TerminalModel, 10)
+	software := truncate(req.TerminalSoftware, 20)
 	setFields(params,
 		formField{"terminal_id", req.TerminalID},
 		formField{"app", req.App},
@@ -312,12 +220,6 @@ func addCommon(params url.Values, entitlement Entitlement, req ServiceEntitlemen
 		formField{"app_name", req.AppName},
 		formField{"provisioning_version", req.ProvisioningVersion},
 	)
-}
-
-func samsungVendorTruncated(version string) bool {
-	major, _, _ := strings.Cut(version, ".")
-	n, err := strconv.Atoi(major)
-	return err == nil && n >= 5
 }
 
 func addOperation(params url.Values, op ODSAOperation) {
@@ -387,22 +289,9 @@ func operationTargets(ops []Operation) string {
 	return operationList(ops).String()
 }
 
-func userAgent(entitlement Entitlement, req ServiceEntitlementRequest, clientTS43 string) string {
+func userAgent(req ServiceEntitlementRequest, clientTS43 string) string {
 	if clientTS43 == "" {
 		clientTS43 = DefaultODSAClientTS43
-	}
-	if entitlement.Channel == EntitlementChannelSamsung {
-		if entitlement.SamsungLegacyUserAgent {
-			return req.TerminalModel + " Android" + req.TerminalSoftware
-		}
-		if !strings.HasPrefix(clientTS43, "client-") {
-			clientTS43 = "client-" + clientTS43
-		}
-		return fmt.Sprintf("PRD-TS43 %s %s OS-Android/%s",
-			req.TerminalModel,
-			clientTS43,
-			req.TerminalSoftware,
-		)
 	}
 	return fmt.Sprintf("PRD-TS43 term-%s/%s %s/%s OS-Android/%s",
 		truncate(req.TerminalVendor, 4),

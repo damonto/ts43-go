@@ -64,10 +64,10 @@ func TestGoogleTypeTwoFieldsForEachPhase(t *testing.T) {
 					return response(200, `{"APPLICATION":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":1}}}`), nil
 				}
 			})})
-			if _, err := client.checkEligibility(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.AuthToken, offer.TargetDevice); err != nil {
+			if _, err := client.checkEligibility(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.AuthToken); err != nil {
 				t.Fatal(err)
 			}
-			tokens, err := client.acquireTemporaryToken(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.TargetDevice, offer.AuthToken)
+			tokens, err := client.acquireTemporaryToken(t.Context(), nil, offer.SourceIdentity, offer.SourceDevice, offer.AuthToken)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,7 +90,7 @@ func TestWebsheetRemainsUsableAcrossDownloadAndActivation(t *testing.T) {
 		} {
 			t.Run(fmt.Sprintf("post_%v/callback_%d", post, callback.Event), func(t *testing.T) {
 				manages, queries, authentications := 0, 0, 0
-				client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", Channel: EntitlementChannelSamsung, UsePost: post}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+				client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", UsePost: post}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 					fields := alignmentRequestFields(t, req)
 					switch Operation(fields.Get("operation")) {
 					case "":
@@ -110,7 +110,7 @@ func TestWebsheetRemainsUsableAcrossDownloadAndActivation(t *testing.T) {
 					case OperationAcquireConf:
 						queries++
 						if queries == 1 {
-							return response(200, `{"APPLICATION":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":2}}}`), nil
+							return response(200, `{"APPLICATION":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":2,"PollingInterval":0}}}`), nil
 						}
 						return response(200, `{"APPLICATION":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":1,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}}}}`), nil
 					default:

@@ -80,23 +80,6 @@ func TestInstalledProfileAuthFailurePreservesActivation(t *testing.T) {
 	}
 }
 
-func TestActivationDismissalClosesPortal(t *testing.T) {
-	calls := 0
-	client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", Channel: EntitlementChannelSamsung}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
-		calls++
-		return response(200, `{"APPLICATION":{"OperationResult":1,"SubscriptionResult":5}}`), nil
-	})})
-	result := &Result{State: StatePendingDownload, session: &transferSession{offer: alignmentOffer(), websheetOpen: true}}
-	result, err := client.CompleteActivation(t.Context(), result, ActivationResult{ICCID: "installed"})
-	if err != nil || result.State != StateDismissed || result.session.websheetOpen {
-		t.Fatalf("state=%v err=%v", result.State, err)
-	}
-	result, err = client.Continue(t.Context(), result, ContinueRequest{Websheet: &WebsheetResult{Event: WebsheetEventFinishFlow}})
-	if err == nil || result.State != StateDismissed || calls != 1 {
-		t.Fatalf("state=%v calls=%d", result.State, calls)
-	}
-}
-
 func TestTokenOperationPreservesCookieDeletion(t *testing.T) {
 	client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example"}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 		resp := responseWithCookie(200, `{"APPLICATION":{"OperationResult":1,"PrimaryAppEligibility":1}}`, "remove=; Max-Age=0")
@@ -104,7 +87,7 @@ func TestTokenOperationPreservesCookieDeletion(t *testing.T) {
 		return resp, nil
 	})})
 	identity := Identity{MCC: "310", MNC: "260", IMSI: "310260123456789"}
-	token, err := client.checkEligibility(t.Context(), nil, identity, Device{}, AuthToken{Value: "old", Cookies: []string{"sticky=keep", "remove=gone", "relay=one"}}, Device{})
+	token, err := client.checkEligibility(t.Context(), nil, identity, Device{}, AuthToken{Value: "old", Cookies: []string{"sticky=keep", "remove=gone", "relay=one"}})
 	if err != nil {
 		t.Fatal(err)
 	}

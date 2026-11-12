@@ -22,19 +22,13 @@ var (
 )
 
 type entitlementRecord struct {
-	SamsungAndroidEntitlement                  bool    `json:"samsungAndroidEntitlement"`
 	MCCMNC                                     string  `json:"mccmnc"`
 	PreferredAPN                               *string `json:"preferredApn"`
-	SamsungExtraTerminalParams                 bool    `json:"samsungExtraTerminalParams"`
-	SamsungInjectWebsheetParams                bool    `json:"samsungInjectWebsheetParams"`
-	SamsungInjectWebsheetParamsLGU             bool    `json:"samsungInjectWebsheetParamsLgu"`
-	SamsungLegacyUserAgent                     bool    `json:"samsungLegacyUserAgent"`
 	GID1                                       *string `json:"gid1"`
 	GID2                                       *string `json:"gid2"`
 	SPN                                        *string `json:"spn"`
 	IMSIPrefixXPattern                         *string `json:"imsiPrefixXpattern"`
 	CarrierName                                string  `json:"carrierName"`
-	Channel                                    string  `json:"channel"`
 	EntitlementServer                          string  `json:"entitlementServer"`
 	App                                        string  `json:"app"`
 	AppName                                    *string `json:"appName"`
@@ -56,15 +50,9 @@ type entitlementRecord struct {
 	RestrictOldTerminalFields                  bool    `json:"restrictOldTerminalFields"`
 }
 
-// Discover returns the carrier TS.43 entitlement configuration for
-// the source SIM identity in the supplied carrier configuration.
+// Discover returns the Google transfer entitlement configuration for the source
+// SIM identity in the application-supplied carrier configuration.
 func (c *EntitlementConfigs) Discover(identity Identity, sourceSIMType SIMType) (Entitlement, error) {
-	return c.DiscoverForChannel(identity, sourceSIMType, "")
-}
-
-// DiscoverForChannel returns a carrier TS.43 entitlement
-// configuration for the requested client channel.
-func (c *EntitlementConfigs) DiscoverForChannel(identity Identity, sourceSIMType SIMType, channel EntitlementChannel) (Entitlement, error) {
 	if identity.MCC == "" || identity.MNC == "" {
 		return Entitlement{}, errors.New("source MCC/MNC is required")
 	}
@@ -72,49 +60,18 @@ func (c *EntitlementConfigs) DiscoverForChannel(identity Identity, sourceSIMType
 	if c != nil {
 		records = c.records
 	}
-	if channel == "" {
-		return discoverEntitlementAuto(records, identity, sourceSIMType)
-	}
-	record, err := selectEntitlementRecord(records, identity, normalizeEntitlementChannel(channel))
+	record, err := selectEntitlementRecord(records, identity)
 	if err != nil {
 		return Entitlement{}, err
 	}
 	return record.entitlement(sourceSIMType)
 }
 
-func discoverEntitlementAuto(records []entitlementRecord, identity Identity, sourceSIMType SIMType) (Entitlement, error) {
-	var unsupported error
-	for _, channel := range []EntitlementChannel{EntitlementChannelGoogle, EntitlementChannelSamsung} {
-		record, err := selectEntitlementRecord(records, identity, channel)
-		if errors.Is(err, ErrEntitlementNotFound) {
-			continue
-		}
-		if err != nil {
-			return Entitlement{}, err
-		}
-		entitlement, err := record.entitlement(sourceSIMType)
-		if errors.Is(err, ErrEntitlementUnsupported) {
-			if unsupported == nil {
-				unsupported = err
-			}
-			continue
-		}
-		return entitlement, err
-	}
-	if unsupported != nil {
-		return Entitlement{}, unsupported
-	}
-	return Entitlement{}, fmt.Errorf("%w for MCCMNC %s", ErrEntitlementNotFound, mccMNC(identity))
-}
-
-func selectEntitlementRecord(records []entitlementRecord, identity Identity, channel EntitlementChannel) (entitlementRecord, error) {
+func selectEntitlementRecord(records []entitlementRecord, identity Identity) (entitlementRecord, error) {
 	var matches []entitlementRecord
 	bestScore := -1
 	for _, record := range records {
-		if normalizeEntitlementChannel(EntitlementChannel(record.Channel)) != channel {
-			continue
-		}
-		score, ok := record.score(identity)
+		score, ok := record.match().googleScore(identity)
 		if !ok || score < bestScore {
 			continue
 		}
@@ -168,23 +125,17 @@ func (r entitlementRecord) entitlement(sourceSIMType SIMType) (Entitlement, erro
 
 func (r entitlementRecord) toEntitlement(sourceSIMType SIMType, transferType TransferType) Entitlement {
 	entitlement := Entitlement{
-		SamsungAndroidEntitlement:      r.SamsungAndroidEntitlement,
-		Server:                         r.EntitlementServer,
-		Channel:                        normalizeEntitlementChannel(EntitlementChannel(r.Channel)),
-		UsePost:                        r.UseHTTPPost,
-		SamsungExtraTerminalParams:     r.SamsungExtraTerminalParams,
-		SamsungInjectWebsheetParams:    r.SamsungInjectWebsheetParams,
-		SamsungInjectWebsheetParamsLGU: r.SamsungInjectWebsheetParamsLGU,
-		SamsungLegacyUserAgent:         r.SamsungLegacyUserAgent,
-		SourceSIMType:                  sourceSIMType,
-		TransferType:                   transferType,
-		UseTempTokenConversion:         r.UseTempTokenConversion,
-		SetTargetTerminalFields:        r.SetTargetTerminalFields,
-		RestrictOldTerminalFields:      r.RestrictOldTerminalFields,
-		UseSMDSDelayedDownload:         r.UseSMDSDelayedDownload,
-		PollInterval:                   time.Duration(r.AcquireConfigurationPollingIntervalMinutes) * time.Minute,
-		PollTimeout:                    time.Duration(r.AcquireConfigurationPollingTimeoutMinutes) * time.Minute,
-		App:                            r.App,
+		Server:                    r.EntitlementServer,
+		UsePost:                   r.UseHTTPPost,
+		SourceSIMType:             sourceSIMType,
+		TransferType:              transferType,
+		UseTempTokenConversion:    r.UseTempTokenConversion,
+		SetTargetTerminalFields:   r.SetTargetTerminalFields,
+		RestrictOldTerminalFields: r.RestrictOldTerminalFields,
+		UseSMDSDelayedDownload:    r.UseSMDSDelayedDownload,
+		PollInterval:              time.Duration(r.AcquireConfigurationPollingIntervalMinutes) * time.Minute,
+		PollTimeout:               time.Duration(r.AcquireConfigurationPollingTimeoutMinutes) * time.Minute,
+		App:                       r.App,
 
 		ProvisioningVersion: r.ProvisioningVersion,
 		RequestVersion:      r.RequestVersion,
@@ -204,19 +155,4 @@ func (r entitlementRecord) toEntitlement(sourceSIMType SIMType, transferType Tra
 		entitlement.Timeout = time.Duration(r.TimeoutSeconds) * time.Second
 	}
 	return entitlement
-}
-
-func normalizeEntitlementChannel(channel EntitlementChannel) EntitlementChannel {
-	if channel == "" {
-		return EntitlementChannelGoogle
-	}
-	return channel
-}
-
-func (r entitlementRecord) score(identity Identity) (int, bool) {
-	match := r.match()
-	if normalizeEntitlementChannel(EntitlementChannel(r.Channel)) == EntitlementChannelGoogle {
-		return match.googleScore(identity)
-	}
-	return match.score(identity)
 }

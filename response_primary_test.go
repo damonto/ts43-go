@@ -61,8 +61,8 @@ func TestODSAResponsePrimaryConfigurations(t *testing.T) {
 			if err := got.UnmarshalBinary([]byte(tt.body)); err != nil {
 				t.Fatal(err)
 			}
-			if got.ServiceStatus != tt.wantStatus || got.Download.ProfileICCID != tt.wantICCID || got.DownloadInfoPresent != tt.wantDownload {
-				t.Fatalf("status=%v ICCID=%q downloadInfo=%t, want %v %q %t", got.ServiceStatus, got.Download.ProfileICCID, got.DownloadInfoPresent, tt.wantStatus, tt.wantICCID, tt.wantDownload)
+			if got.ServiceStatus != tt.wantStatus || got.Download.ProfileICCID != tt.wantICCID {
+				t.Fatalf("status=%v ICCID=%q, want %v %q", got.ServiceStatus, got.Download.ProfileICCID, tt.wantStatus, tt.wantICCID)
 			}
 			if tt.wantDownload && got.Download.SMDPFQDN != "smdp.example" {
 				t.Errorf("SM-DP+ = %q", got.Download.SMDPFQDN)

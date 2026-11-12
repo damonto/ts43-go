@@ -73,9 +73,6 @@ func New(cfg *Config) (*Client, error) {
 	if cfg == nil {
 		return nil, errors.New("config is required")
 	}
-	if err := validateSamsungSubscriptionType(cfg.Entitlement); err != nil {
-		return nil, err
-	}
 	if cfg.Source.Device.IMEI == "" {
 		return nil, errors.New("source IMEI is required")
 	}
@@ -164,12 +161,12 @@ func (c *Client) authenticate(ctx context.Context, channel Channel, identity Ide
 }
 
 func (c *Client) AcquireTemporaryToken(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (TransferTokenResult, error) {
-	return c.acquireTemporaryToken(ctx, c.transfer.source.Channel, req.Identity, req.Source, req.Target, auth)
+	return c.acquireTemporaryToken(ctx, c.transfer.source.Channel, req.Identity, req.Source, auth)
 }
 
-func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, identity Identity, source, target Device, auth AuthToken) (TransferTokenResult, error) {
+func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken) (TransferTokenResult, error) {
 	req := c.authRequest(source, auth)
-	op := temporaryTokenOperation(c.transfer.entitlement, source, target)
+	op := temporaryTokenOperation()
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
@@ -200,12 +197,12 @@ func (c *Client) acquireTemporaryToken(ctx context.Context, channel Channel, ide
 }
 
 func (c *Client) CheckEligibility(ctx context.Context, req SubscriptionTransferRequest, auth AuthToken) (AuthToken, error) {
-	return c.checkEligibility(ctx, c.transfer.source.Channel, req.Identity, req.Source, auth, req.Target)
+	return c.checkEligibility(ctx, c.transfer.source.Channel, req.Identity, req.Source, auth)
 }
 
-func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken, target Device) (AuthToken, error) {
+func (c *Client) checkEligibility(ctx context.Context, channel Channel, identity Identity, source Device, auth AuthToken) (AuthToken, error) {
 	req := c.authRequest(source, auth)
-	op := checkEligibilityOperation(c.transfer.entitlement, source, target)
+	op := checkEligibilityOperation()
 	c.addOptionalOperationFields(&op)
 	resp, cookies, err := c.callWithChannel(ctx, channel, identity, req, op)
 	if err != nil {
@@ -238,7 +235,7 @@ func (c *Client) manageSubscription(ctx context.Context, identity Identity, sour
 }
 
 func (c *Client) manageSubscriptionRequest(input ManageSubscriptionRequest, credential transferCredential) (ServiceEntitlementRequest, ODSAOperation) {
-	reqDevice := manageSubscriptionRequestDevice(c.transfer.entitlement, input.Source, input.Target)
+	reqDevice := transferRequestDevice(c.transfer.entitlement, input.Source, input.Target)
 	req := c.transferRequest(reqDevice, credential)
 	op := manageSubscriptionOperation(c.transfer.entitlement, input)
 	c.addOptionalOperationFields(&op)
@@ -254,7 +251,7 @@ func (c *Client) AcquireConfigurationWithTemporaryToken(ctx context.Context, req
 }
 
 func (c *Client) acquireConfiguration(ctx context.Context, identity Identity, source Device, target Device, credential transferCredential) (*ODSAResponse, error) {
-	reqDevice := acquireConfigurationRequestDevice(c.transfer.entitlement, source, target)
+	reqDevice := transferRequestDevice(c.transfer.entitlement, source, target)
 	req := c.transferRequest(reqDevice, credential)
 	op := acquireConfigurationOperation(c.transfer.entitlement, source, target)
 	c.addOptionalOperationFields(&op)
@@ -282,7 +279,7 @@ func (c *Client) updateSubscriptionOnChannel(ctx context.Context, channel Channe
 	if err != nil {
 		return resp, err
 	}
-	if !subscriptionUpdateAccepted(c.transfer.entitlement, resp) {
+	if !subscriptionUpdateAccepted(resp) {
 		return resp, &CarrierDeniedError{Operation: OperationManage, Result: resp}
 	}
 	return resp, nil
@@ -302,7 +299,7 @@ func (c *Client) acquireActivationConfiguration(ctx context.Context, identity Id
 
 func (c *Client) acquireActivationConfigurationOnChannel(ctx context.Context, channel Channel, identity Identity, target Device, credential transferCredential) (*ODSAResponse, error) {
 	req := c.activationRequest(target, credential)
-	op := activationConfigurationOperation(c.transfer.entitlement, target)
+	op := activationConfigurationOperation(target)
 	c.addOptionalOperationFields(&op)
 	resp, _, err := c.callWithChannel(ctx, channel, identity, req, op)
 	return checkedConfiguration(resp, err)
@@ -434,11 +431,8 @@ func (t entitlementTransport) postRelay(ctx context.Context, packet string, req 
 		return nil, nil, err
 	}
 	httpReq.Header.Set("Content-Type", EAPRelayContentType)
-	httpReq.Header.Set("Accept", relayResponseAccept(c.transfer.entitlement, req))
-	httpReq.Header.Set("User-Agent", userAgent(c.transfer.entitlement, req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		httpReq.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	}
+	httpReq.Header.Set("Accept", relayResponseAccept(req))
+	httpReq.Header.Set("User-Agent", userAgent(req, firstNonEmpty(req.ClientTS43, c.clientTS43())))
 	for _, cookie := range cookies {
 		httpReq.AddCookie(cookie)
 	}
@@ -446,14 +440,11 @@ func (t entitlementTransport) postRelay(ctx context.Context, packet string, req 
 	return DoRaw(ctx, t.client.runtime.httpClient, httpReq)
 }
 
-func relayResponseAccept(entitlement Entitlement, req ServiceEntitlementRequest) string {
-	if entitlement.Channel == EntitlementChannelSamsung {
-		return EAPRelayContentType + ", " + WFCResponseAccept
-	}
+func relayResponseAccept(req ServiceEntitlementRequest) string {
 	if req.App == AppVoWiFi || req.ClientTS43 == DefaultWFCClientTS43 {
 		return firstNonEmpty(req.Accept, WFCResponseAccept)
 	}
-	return eapRelayAccept(responseAccept(entitlement, req))
+	return eapRelayAccept(responseAccept(req))
 }
 
 func relayPacket(data []byte) string {
@@ -503,10 +494,8 @@ func (c *Client) transferRequest(device Device, credential transferCredential) S
 
 func (c *Client) activationRequest(target Device, credential transferCredential) ServiceEntitlementRequest {
 	req := c.transferRequest(target, credential)
-	if c.transfer.entitlement.Channel != EntitlementChannelSamsung {
-		// GMS btoe builds a fresh activation request without the transfer app_name.
-		req.AppName = ""
-	}
+	// GMS btoe builds a fresh activation request without the transfer app_name.
+	req.AppName = ""
 	return req
 }
 
@@ -523,12 +512,6 @@ func (c *Client) addOptionalOperationFields(op *ODSAOperation) {
 }
 
 func (c *Client) clientTS43() string {
-	if c.transfer.clientTS43 != "" {
-		return c.transfer.clientTS43
-	}
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		return SamsungODSAClientTS43
-	}
 	return firstNonEmpty(c.transfer.clientTS43, DefaultODSAClientTS43)
 }
 
@@ -543,16 +526,10 @@ func (c *Client) appName() string {
 	if c.transfer.entitlement.AppName != "" {
 		return c.transfer.entitlement.AppName
 	}
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		return AppODSAPrimary
-	}
 	return "androidTransfer"
 }
 
 func (c *Client) accept() string {
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		return ""
-	}
 	if c.app() == AppODSAPrimary {
 		return ODSAResponseAccept
 	}
@@ -563,18 +540,12 @@ func (c *Client) app() string {
 	if c.transfer.entitlement.App != "" {
 		return c.transfer.entitlement.App
 	}
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		return AppODSAPrimary
-	}
 	return AppODSAPrimary
 }
 
 func (c *Client) requestVersion() string {
 	if c.transfer.entitlement.RequestVersion != "" {
 		return c.transfer.entitlement.RequestVersion
-	}
-	if c.transfer.entitlement.Channel == EntitlementChannelSamsung {
-		return "1"
 	}
 	return "0"
 }
@@ -603,20 +574,7 @@ func transferTypeUsesTemporaryToken(transferType TransferType) bool {
 }
 
 func (c *Client) usesTemporaryToken() bool {
-	entitlement := c.transfer.entitlement
-	return samsungDigitalizedTempToken4FF(entitlement) ||
-		transferTypeUsesTemporaryToken(entitlement.TransferType)
-}
-
-func validateSamsungSubscriptionType(entitlement Entitlement) error {
-	subscriptionType := entitlement.SamsungSubscriptionType
-	if subscriptionType >= samsungSubscriptionTypeCount {
-		return fmt.Errorf("invalid Samsung subscription type %d", subscriptionType)
-	}
-	if subscriptionType != SamsungSubscriptionUnspecified && entitlement.Channel != EntitlementChannelSamsung {
-		return errors.New("subscription type requires the Samsung entitlement channel")
-	}
-	return nil
+	return transferTypeUsesTemporaryToken(c.transfer.entitlement.TransferType)
 }
 
 func isHTTPStatus(err error, status int) bool {
@@ -644,19 +602,9 @@ func manageSubscriptionAccepted(resp *ODSAResponse) bool {
 	}
 }
 
-func subscriptionUpdateAccepted(entitlement Entitlement, resp *ODSAResponse) bool {
-	if resp == nil || resp.OperationResult != OperationResultSuccess {
-		return false
-	}
-	if entitlement.Channel != EntitlementChannelSamsung {
-		return resp.SubscriptionResult == SubscriptionResultDone
-	}
-	switch resp.SubscriptionResult {
-	case SubscriptionResultDone, SubscriptionResultDelayedDownload, SubscriptionResultDismiss:
-		return true
-	default:
-		return false
-	}
+func subscriptionUpdateAccepted(resp *ODSAResponse) bool {
+	return resp != nil && resp.OperationResult == OperationResultSuccess &&
+		resp.SubscriptionResult == SubscriptionResultDone
 }
 
 func firstNonEmpty(values ...string) string {

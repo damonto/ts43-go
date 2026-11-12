@@ -19,7 +19,7 @@ func TestContinueAfterConfigurationHTTPError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []Operation
 			queries := 0
-			client := newClient(Config{Entitlement: Entitlement{Server: "https://example.test", Channel: EntitlementChannelSamsung, TransferType: TransferTypeTS43V8}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			client := newClient(Config{Entitlement: Entitlement{Server: "https://example.test", TransferType: TransferTypeTS43V8}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 				op := Operation(req.URL.Query().Get("operation"))
 				calls = append(calls, op)
 				if op == OperationManage {
@@ -69,7 +69,7 @@ func TestWebsheetWaitsForConfiguration(t *testing.T) {
 		event WebsheetCallbackEvent
 	}{{"finish flow", WebsheetEventFinishFlow}, {"check status", WebsheetEventCheckProfileServiceStatus}} {
 		t.Run(tt.name, func(t *testing.T) {
-			client := newClient(Config{Entitlement: Entitlement{Server: "https://example.test", Channel: EntitlementChannelSamsung}, HTTPClient: &queueDoer{bodies: []string{`{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":2}}}`}}})
+			client := newClient(Config{Entitlement: Entitlement{Server: "https://example.test"}, HTTPClient: &queueDoer{bodies: []string{`{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":2,"PollingInterval":0}}}`}}})
 			result := &Result{State: StatePendingWebsheet, session: &transferSession{offer: &transferOffer{SourceIdentity: Identity{MCC: "450", MNC: "05", IMSI: "450051234567890"}, AuthToken: AuthToken{Value: "auth"}}}}
 			got, err := client.Continue(t.Context(), result, ContinueRequest{Websheet: &WebsheetResult{Event: tt.event}})
 			if err != nil {

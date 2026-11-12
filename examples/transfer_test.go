@@ -42,13 +42,6 @@ func TestRunTransferPropagatesContinuationErrors(t *testing.T) {
 			wantErr:    ts43.ErrWebsheetDismissed,
 			wantCalls:  []ts43.Operation{"", ts43.OperationCheck, ts43.OperationManage},
 		},
-		{
-			name:       "delayed download activation",
-			manageBody: `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="4"/></characteristic></wap-provisioningdoc>`,
-			input:      "8900000000000000000\n",
-			wantErr:    transportErr,
-			wantCalls:  []ts43.Operation{"", ts43.OperationCheck, ts43.OperationManage, ts43.OperationManage},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,8 +63,7 @@ func TestRunTransferPropagatesContinuationErrors(t *testing.T) {
 					}, nil
 				}),
 				Entitlement: ts43.Entitlement{
-					Server:  "https://example.test/ts43",
-					Channel: ts43.EntitlementChannelSamsung,
+					Server: "https://example.test/ts43",
 				},
 				Source: ts43.Endpoint{Channel: transferTestChannel{}, Device: ts43.Device{IMEI: "111111111111111"}},
 				Target: ts43.Endpoint{Device: ts43.Device{IMEI: "222222222222222", EID: "89049032000001000000000000000000"}},

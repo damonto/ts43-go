@@ -24,7 +24,7 @@ func TestGoogleInvalidUserInputPreservesCredentials(t *testing.T) {
 					calls := 0
 					client := newClient(Config{
 						Now:         func() time.Time { return now },
-						Entitlement: Entitlement{Server: "https://carrier.example/ts43", Channel: EntitlementChannelGoogle, TransferType: transferType, UsePost: post},
+						Entitlement: Entitlement{Server: "https://carrier.example/ts43", TransferType: transferType, UsePost: post},
 						HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 							calls++
 							fields := alignmentRequestFields(t, req)
@@ -130,7 +130,7 @@ func TestGoogleAuthenticationRetryPreservesIdentity(t *testing.T) {
 					}
 					calls := 0
 					client := newClient(Config{
-						Entitlement: Entitlement{Server: "https://carrier.example/ts43", Channel: EntitlementChannelGoogle, UsePost: post, AutoRetry511Limit: tt.limit},
+						Entitlement: Entitlement{Server: "https://carrier.example/ts43", UsePost: post, AutoRetry511Limit: tt.limit},
 						Source:      Endpoint{Channel: identityChannel{identity: offer.SourceIdentity}, Device: offer.SourceDevice},
 						Target:      Endpoint{Device: offer.TargetDevice},
 						HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {

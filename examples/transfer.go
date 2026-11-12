@@ -59,12 +59,6 @@ func runTransfer(ctx context.Context, reader *bufio.Reader, w io.Writer, client 
 				return err
 			}
 			result, transferErr = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
-		case ts43.DelayedDownloadEvent:
-			iccid, err := ts43DelayedDownloadICCID(reader, w, event)
-			if err != nil {
-				return err
-			}
-			result, transferErr = client.CompleteActivation(ctx, result, ts43.ActivationResult{ICCID: iccid})
 		case ts43.ConfigurationPendingEvent:
 			fmt.Fprintln(w, "Waiting for the carrier to prepare download configuration.")
 			if _, err := prompt(reader, w, "After the carrier signals readiness, press Enter to check again: "); err != nil {
@@ -98,16 +92,6 @@ func downloadTS43DiscoveredProfile(ctx context.Context, reader *bufio.Reader, w 
 		return "", err
 	}
 	return downloadTS43Profile(ctx, reader, w, client, cfg)
-}
-
-func ts43DelayedDownloadICCID(reader *bufio.Reader, w io.Writer, event ts43.DelayedDownloadEvent) (string, error) {
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Carrier delayed the profile download.")
-	fmt.Fprintf(w, "source_iccid=%s\n", event.SourceICCID)
-	fmt.Fprintf(w, "target_eid=%s\n", event.TargetEID)
-	fmt.Fprintf(w, "target_imei=%s\n", event.TargetIMEI)
-	fmt.Fprintln(w, "Download/install the profile through the carrier-provided path, then handle install and enable notifications.")
-	return prompt(reader, w, "Installed ICCID: ")
 }
 
 func ts43SMDSDownloadConfig(reader *bufio.Reader, w io.Writer, client *lpa.Client, event ts43.SMDSDiscoveryEvent) (ts43.DownloadConfig, error) {

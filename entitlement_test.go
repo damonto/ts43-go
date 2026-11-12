@@ -1,10 +1,66 @@
 package ts43
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 )
+
+func TestDiscoverTransferConfiguration(t *testing.T) {
+	var configs EntitlementConfigs
+	if err := json.Unmarshal([]byte(`[
+		{"mccmnc":"00101","carrierName":"generic","entitlementServer":"https://generic.example","supportPsimToEsimTransfer":true,"supportEsimToEsimTransfer":true,"transferTypePsim":9,"transferTypeEsim":2},
+		{"mccmnc":"00101","gid1":"AA","carrierName":"specific","entitlementServer":"https://specific.example","supportPsimToEsimTransfer":true,"transferTypePsim":7}
+	]`), &configs); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name          string
+		identity      Identity
+		sourceSIMType SIMType
+		wantServer    string
+		wantType      TransferType
+		wantErr       error
+	}{
+		{
+			name: "eSIM transfer", identity: Identity{MCC: "001", MNC: "01"},
+			wantServer: "https://generic.example", wantType: TransferTypeTemporaryToken,
+		},
+		{
+			name: "pSIM conversion", identity: Identity{MCC: "001", MNC: "01"}, sourceSIMType: SIMTypePSIM,
+			wantServer: "https://generic.example", wantType: TransferTypeTemporaryTokenOldTerminalIDs,
+		},
+		{
+			name: "GID prefix selects specific carrier", identity: Identity{MCC: "001", MNC: "01", GID1: "aa1234"}, sourceSIMType: SIMTypePSIM,
+			wantServer: "https://specific.example", wantType: TransferTypeOldTerminalIDs,
+		},
+		{
+			name: "unsupported specific carrier does not use generic record", identity: Identity{MCC: "001", MNC: "01", GID1: "aa1234"},
+			wantErr: ErrEntitlementUnsupported,
+		},
+		{
+			name: "unknown carrier", identity: Identity{MCC: "001", MNC: "02"},
+			wantErr: ErrEntitlementNotFound,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := configs.Discover(tt.identity, tt.sourceSIMType)
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("Discover() error = %v, want %v", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Server != tt.wantServer || got.TransferType != tt.wantType || got.SourceSIMType != tt.sourceSIMType {
+				t.Fatalf("Discover() = %+v, want server %q, type %v, source SIM %v", got, tt.wantServer, tt.wantType, tt.sourceSIMType)
+			}
+		})
+	}
+}
 
 func TestDiscoverEntitlement(t *testing.T) {
 	tests := []struct {
@@ -132,11 +188,6 @@ func TestDiscoverEntitlement(t *testing.T) {
 			wantErr:  ErrEntitlementNotFound,
 		},
 		{
-			name:     "Google MCCMNC does not fall back to Samsung",
-			identity: Identity{MCC: "208", MNC: "01"},
-			wantErr:  ErrEntitlementNotFound,
-		},
-		{
 			name:     "missing MCCMNC",
 			identity: Identity{MCC: "999", MNC: "99"},
 			wantErr:  ErrEntitlementNotFound,
@@ -193,10 +244,10 @@ func TestSelectEntitlementRecordIdentityMatching(t *testing.T) {
 	gid2 := "BB"
 	spn := "Example"
 	records := []entitlementRecord{
-		{MCCMNC: "00101", CarrierName: "fallback", EntitlementServer: "fallback", Channel: "google"},
-		{MCCMNC: "00101", GID1: &gid1, CarrierName: "gid1", EntitlementServer: "gid1", Channel: "google"},
-		{MCCMNC: "00101", GID1: &gid1, GID2: &gid2, CarrierName: "gid12", EntitlementServer: "gid12", Channel: "google"},
-		{MCCMNC: "00101", SPN: &spn, CarrierName: "spn", EntitlementServer: "spn", Channel: "google"},
+		{MCCMNC: "00101", CarrierName: "fallback", EntitlementServer: "fallback"},
+		{MCCMNC: "00101", GID1: &gid1, CarrierName: "gid1", EntitlementServer: "gid1"},
+		{MCCMNC: "00101", GID1: &gid1, GID2: &gid2, CarrierName: "gid12", EntitlementServer: "gid12"},
+		{MCCMNC: "00101", SPN: &spn, CarrierName: "spn", EntitlementServer: "spn"},
 	}
 	tests := []struct {
 		name     string
@@ -222,7 +273,7 @@ func TestSelectEntitlementRecordIdentityMatching(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := selectEntitlementRecord(records, tt.identity, EntitlementChannelGoogle)
+			got, err := selectEntitlementRecord(records, tt.identity)
 			if tt.wantErr != nil {
 				if !errors.Is(err, tt.wantErr) {
 					t.Errorf("selectEntitlementRecord() error = %v, want %v", err, tt.wantErr)
@@ -243,147 +294,11 @@ func TestSelectEntitlementRecordEqualSpecificityIsAmbiguous(t *testing.T) {
 	first := "AA"
 	second := "AA"
 	records := []entitlementRecord{
-		{MCCMNC: "00101", GID1: &first, CarrierName: "first", EntitlementServer: "first", Channel: "google"},
-		{MCCMNC: "00101", GID1: &second, CarrierName: "second", EntitlementServer: "second", Channel: "google"},
+		{MCCMNC: "00101", GID1: &first, CarrierName: "first", EntitlementServer: "first"},
+		{MCCMNC: "00101", GID1: &second, CarrierName: "second", EntitlementServer: "second"},
 	}
-	_, err := selectEntitlementRecord(records, Identity{MCC: "001", MNC: "01", GID1: "aa"}, EntitlementChannelGoogle)
+	_, err := selectEntitlementRecord(records, Identity{MCC: "001", MNC: "01", GID1: "aa"})
 	if !errors.Is(err, ErrEntitlementAmbiguous) {
 		t.Errorf("selectEntitlementRecord() error = %v, want %v", err, ErrEntitlementAmbiguous)
-	}
-}
-
-func TestDiscoverEntitlementForSamsungChannel(t *testing.T) {
-	tests := []struct {
-		name          string
-		identity      Identity
-		sourceSIMType SIMType
-		want          Entitlement
-	}{
-		{
-			name:     "Samsung SK Telecom eSIM transfer",
-			identity: Identity{MCC: "450", MNC: "05"},
-			want: Entitlement{
-				Server:                      "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
-				Channel:                     EntitlementChannelSamsung,
-				TransferType:                TransferTypeTS43V8,
-				SamsungInjectWebsheetParams: true,
-				App:                         AppODSAPrimary,
-				AppName:                     AppODSAPrimary,
-				ProvisioningVersion:         "5.0",
-				RequestVersion:              "1",
-				Version:                     "8.0",
-			},
-		},
-		{
-			name:          "Samsung SK Telecom pSIM transfer keeps old terminal ICCID shape",
-			identity:      Identity{MCC: "450", MNC: "05"},
-			sourceSIMType: SIMTypePSIM,
-			want: Entitlement{
-				Server:                      "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
-				Channel:                     EntitlementChannelSamsung,
-				TransferType:                TransferTypeOldTerminalIDs,
-				SamsungInjectWebsheetParams: true,
-				App:                         AppODSAPrimary,
-				AppName:                     AppODSAPrimary,
-				ProvisioningVersion:         "5.0",
-				RequestVersion:              "1",
-				Version:                     "8.0",
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, tt.sourceSIMType, EntitlementChannelSamsung)
-			if err != nil {
-				t.Fatalf("privateEntitlementConfigs(t).DiscoverForChannel() error = %v", err)
-			}
-			if got.Server != tt.want.Server {
-				t.Errorf("Server = %q, want %q", got.Server, tt.want.Server)
-			}
-			if got.Channel != tt.want.Channel {
-				t.Errorf("Channel = %q, want %q", got.Channel, tt.want.Channel)
-			}
-			if got.TransferType != tt.want.TransferType {
-				t.Errorf("TransferType = %v, want %v", got.TransferType, tt.want.TransferType)
-			}
-			if got.SourceSIMType != tt.sourceSIMType {
-				t.Errorf("SourceSIMType = %v, want %v", got.SourceSIMType, tt.sourceSIMType)
-			}
-			if got.SamsungInjectWebsheetParams != tt.want.SamsungInjectWebsheetParams {
-				t.Errorf("SamsungInjectWebsheetParams = %t, want %t", got.SamsungInjectWebsheetParams, tt.want.SamsungInjectWebsheetParams)
-			}
-			if got.App != tt.want.App {
-				t.Errorf("App = %q, want %q", got.App, tt.want.App)
-			}
-			if got.AppName != tt.want.AppName {
-				t.Errorf("AppName = %q, want %q", got.AppName, tt.want.AppName)
-			}
-			if got.ProvisioningVersion != tt.want.ProvisioningVersion {
-				t.Errorf("ProvisioningVersion = %q, want %q", got.ProvisioningVersion, tt.want.ProvisioningVersion)
-			}
-			if got.RequestVersion != tt.want.RequestVersion {
-				t.Errorf("RequestVersion = %q, want %q", got.RequestVersion, tt.want.RequestVersion)
-			}
-			if got.Version != tt.want.Version {
-				t.Errorf("Version = %q, want %q", got.Version, tt.want.Version)
-			}
-			if got.Timeout != tt.want.Timeout {
-				t.Errorf("Timeout = %s, want %s", got.Timeout, tt.want.Timeout)
-			}
-		})
-	}
-}
-
-func TestDiscoverEntitlementAutoChannel(t *testing.T) {
-	tests := []struct {
-		name          string
-		identity      Identity
-		sourceSIMType SIMType
-		wantChannel   EntitlementChannel
-		wantServer    string
-	}{
-		{
-			name:        "prefers Google when Google has the carrier",
-			identity:    Identity{MCC: "310", MNC: "260"},
-			wantChannel: EntitlementChannelGoogle,
-			wantServer:  "https://ts43.eas3.msg.t-mobile.com/google/",
-		},
-		{
-			name:        "Google specific match beats Samsung fallback",
-			identity:    Identity{MCC: "208", MNC: "01", SPN: "Orange F"},
-			wantChannel: EntitlementChannelGoogle,
-			wantServer:  "https://des.orange.fr",
-		},
-		{
-			name:        "falls back to Samsung when Google has no carrier key",
-			identity:    Identity{MCC: "450", MNC: "05"},
-			wantChannel: EntitlementChannelSamsung,
-			wantServer:  "https://entitlements-prod.sktdns.com:9901/DEGDROIDInterfaceTS43",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := privateEntitlementConfigs(t).Discover(tt.identity, tt.sourceSIMType)
-			if err != nil {
-				t.Fatalf("privateEntitlementConfigs(t).Discover() error = %v", err)
-			}
-			if got.Channel != tt.wantChannel {
-				t.Errorf("Channel = %q, want %q", got.Channel, tt.wantChannel)
-			}
-			if got.Server != tt.wantServer {
-				t.Errorf("Server = %q, want %q", got.Server, tt.wantServer)
-			}
-		})
-	}
-}
-
-func TestDiscoverEntitlementSamsungTeliaHalebopIsAmbiguous(t *testing.T) {
-	_, err := privateEntitlementConfigs(t).DiscoverForChannel(
-		Identity{MCC: "240", MNC: "01"},
-		SIMTypeESIM,
-		EntitlementChannelSamsung,
-	)
-	if !errors.Is(err, ErrEntitlementAmbiguous) {
-		t.Errorf("privateEntitlementConfigs(t).DiscoverForChannel() error = %v, want %v", err, ErrEntitlementAmbiguous)
 	}
 }

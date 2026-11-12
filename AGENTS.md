@@ -5,7 +5,7 @@ Repository instructions for changes anywhere in this project. Follow more specif
 ## Project scope
 
 - `github.com/damonto/ts43-go` is a Go library; the root package is `ts43`. Use the Go version declared in [go.mod](go.mod) and keep code compatible with it.
-- The library owns TS.43 requests, EAP-AKA relay, carrier discovery, transfer state, and Wi-Fi Calling entitlement. SIM transports belong to `wwan-go`; LPA operations, profile installation, UI hosting, and persistent scheduling belong to integrating applications.
+- The library owns TS.43 requests, EAP-AKA relay, Google transfer discovery and state, and Wi-Fi Calling entitlement. SIM transports belong to `wwan-go`; LPA operations, profile installation, UI hosting, and persistent scheduling belong to integrating applications.
 - [examples](examples) is a separate Go module with a local replacement for the root module. It uses `euicc-go` for the transfer CLI. Root `./...` commands do not include this module.
 - Keep the flat package layout. Add focused files beside related code; introduce packages or dependencies only when the requested change justifies them.
 
@@ -16,9 +16,9 @@ Read the implementation and nearby tests relevant to the task; use [README.md](R
 | Concern | Main files |
 | --- | --- |
 | Public API and transfer lifecycle | `types.go`, `client.go`, `service.go`, `service_test.go`, `service_resume_test.go` |
-| Request construction and carrier differences | `request.go`, `operation.go`, `google_request.go`, `samsung_request.go`, `request_response_test.go` |
+| Request construction and carrier differences | `request.go`, `operation.go`, `operation_test.go`, `request_response_test.go` |
 | Response and value codecs | `response.go`, `constants.go`, `encoding_test.go`, `conformance_test.go` |
-| Carrier matching and supplied data | `identity.go`, `entitlement.go`, `carrier_config.go`, `config_reference_test.go` |
+| Carrier matching and supplied data | `identity.go`, `entitlement.go`, `config_codecs.go`, `config_reference_test.go` |
 | Wi-Fi Calling | `wfc.go`, `wfc_response.go`, `wfc_test.go`, `wfc_response_test.go` |
 | SIM authentication and HTTP | `source.go`, `aka.go`, `http_client.go`, and their matching test files |
 | Websheet callbacks and CLI integration | `websheet.go`, `websheet_result.go`, `examples/*.go`, `examples/*_service_flow.js` |
@@ -36,12 +36,12 @@ Read the implementation and nearby tests relevant to the task; use [README.md](R
 
 ## Compatibility contracts
 
-- **Wire behavior:** Preserve Google and Samsung request differences, including authentication mode, source/target identifiers, EID placement, and operation-specific fields. Omitted, empty, and zero values can have different meanings, including `OmitAppName` and explicit message buttons. Cover changed GET and POST behavior in tests.
+- **Wire behavior:** Preserve Google transfer authentication mode, source/target identifiers, EID placement, and operation-specific fields. Omitted, empty, and zero values can have different meanings, including `OmitAppName` and explicit message buttons. Cover changed GET and POST behavior in tests.
 - **Transfer continuation:** Configuration preparation and activation confirmation are distinct pending states. Preserve a non-nil resumable `Result` alongside polling errors where supported. Resuming after an accepted subscription update must not submit that update again. Results retain an in-memory session; do not imply that serializing them enables process-restart recovery.
 - **Credentials:** Keep source authentication tokens and temporary transfer tokens separate. Preserve expiry, cookies, permitted operations, and bounded rejection retries. Post-installation credential refresh may require `Target.Channel`; do not silently reuse source-SIM authentication in its place.
-- **Carrier discovery:** Preserve identity qualifiers and ambiguity/unsupported errors. Google matching and Samsung/WFC matching use different rules. Supplied transfer records prefer Google coverage, with Samsung records only for MCC/MNC values absent from the Google list. When updating data, identify the upstream source and intended behavior in the change summary; do not invent records or relax matching to force a result.
+- **Carrier discovery:** Transfer catalogs contain only Google records and have no channel selector. Preserve identity qualifiers and ambiguity/unsupported errors. Google transfer matching and WFC matching use different rules. When updating data, identify the upstream source and intended behavior in the change summary; do not invent records or relax matching to force a result.
 - **Wi-Fi Calling:** Keep WFC usable without transfer-only target fields. Preserve cancellation status, VERS reset behavior, and the distinction between initial activation and emergency-address updates. A successful portal callback triggers an entitlement recheck; cancellation preserves the previous entitlement state.
-- **HTTP transport:** Preserve caller-owned clients and transports, explicit TLS settings, supported carrier compatibility, response-body restoration after logging, and response headers in `HTTPError`. Keep unsupported Android-backend and transfer-type-8 flows explicit rather than routing them through an incompatible HTTP operation.
+- **HTTP transport:** Preserve caller-owned clients and transports, explicit TLS settings, supported carrier compatibility, response-body restoration after logging, and response headers in `HTTPError`. Keep unsupported transfer-type-8 flows explicit rather than routing them through an incompatible HTTP operation.
 - **Encoding and AKA:** Preserve protocol numeric values and standard text/binary codec contracts. Test malformed input and decoder reuse where relevant. Keep known authentication vectors passing; do not replace protocol cryptography with an ad hoc scheme.
 
 ## Tests and verification

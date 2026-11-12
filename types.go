@@ -13,10 +13,8 @@ const (
 	DefaultResponseAccept = "application/json, text/vnd.wap.connectivity-xml"
 	ODSAResponseAccept    = "text/vnd.wap.connectivity-xml"
 	WFCResponseAccept     = "text/vnd.wap.connectivity-xml"
-	SamsungResponseAccept = "application/xml, text/xml"
 	EAPRelayContentType   = "application/vnd.gsma.eap-relay.v1.0+json"
 	DefaultODSAClientTS43 = "client-Primary-ODSA"
-	SamsungODSAClientTS43 = "Primary-ODSA"
 	DefaultWFCClientTS43  = "client-IMS-Entitlement"
 	DefaultEAPAKARealm    = "nai.epc"
 )
@@ -45,25 +43,13 @@ type Config struct {
 }
 
 type Entitlement struct {
-	Server        string
-	Channel       EntitlementChannel
-	UsePost       bool
-	Timeout       time.Duration
-	SourceSIMType SIMType
-	TransferType  TransferType
-	// SamsungSubscriptionType is the Samsung ODA subscription intent used to
-	// derive ManageSubscription operation_type. Its zero value is inferred from
-	// SourceSIMType for transfer flows.
-	SamsungSubscriptionType SamsungSubscriptionType
-	// Samsung capability flags have different wire destinations.
-	SamsungExtraTerminalParams     bool
-	SamsungInjectWebsheetParams    bool
-	SamsungInjectWebsheetParamsLGU bool
-	SamsungLegacyUserAgent         bool
-	// SamsungAndroidEntitlement requires the Android Ts43Operation backend.
-	SamsungAndroidEntitlement bool
-	UseTempTokenConversion    bool
-	SetTargetTerminalFields   bool
+	Server                  string
+	UsePost                 bool
+	Timeout                 time.Duration
+	SourceSIMType           SIMType
+	TransferType            TransferType
+	UseTempTokenConversion  bool
+	SetTargetTerminalFields bool
 	// RestrictOldTerminalFields mirrors the GMS Ljotr.Q feature flag. When true,
 	// initial transfers send old terminal IDs for types 3, 6, 7, and 9;
 	// post-installation updates send them only for types 7 and 9.
@@ -82,26 +68,6 @@ type Entitlement struct {
 	RequestVersion      string
 	Version             string
 }
-
-// SamsungSubscriptionType identifies the Samsung ODA subscription intent.
-// It is independent of Google's carrier-config TransferType values.
-type SamsungSubscriptionType uint8
-
-const (
-	SamsungSubscriptionUnspecified SamsungSubscriptionType = iota
-	SamsungSubscriptionD2DTransfer
-	SamsungSubscriptionDigitalizedSIM
-	SamsungSubscriptionUnsubscribe
-	SamsungSubscriptionUnsubscribe4FF
-	SamsungSubscriptionChange
-	SamsungSubscriptionChange4FF
-	SamsungSubscriptionTransferOpenID
-	SamsungSubscriptionTransferSMSOTP
-	SamsungSubscriptionRemoteAKATransfer
-	SamsungSubscriptionContinueTemporaryToken
-	SamsungSubscriptionUpdate
-	samsungSubscriptionTypeCount
-)
 
 type Endpoint struct {
 	Channel Channel
@@ -122,8 +88,6 @@ type Device struct {
 	Model               string
 	SoftwareVersion     string
 	SerialNumber        string
-	BarcodeNumber       string
-	ActivatedID         string
 	FriendlyName        string
 	Service             string
 	EntitlementProtocol int
@@ -145,7 +109,6 @@ const (
 	StateDone
 	StatePendingSMDSDiscovery
 	StateDismissed
-	StatePendingDelayedDownload
 	// StatePendingConfiguration waits for download configuration before installation.
 	StatePendingConfiguration
 )
@@ -218,15 +181,6 @@ type SMDSDiscoveryEvent struct {
 }
 
 func (SMDSDiscoveryEvent) ts43Event() {}
-
-type DelayedDownloadEvent struct {
-	SourceICCID        string
-	TargetEID          string
-	TargetIMEI         string
-	SubscriptionResult SubscriptionResult
-}
-
-func (DelayedDownloadEvent) ts43Event() {}
 
 // ConfigurationPendingEvent requests a later check for profile download data.
 type ConfigurationPendingEvent struct {

@@ -17,7 +17,7 @@ func TestConfigCodecs(t *testing.T) {
 			encoding.BinaryUnmarshaler
 		}
 	}{
-		{"entitlement", `[{"mccmnc":"00101","carrierName":"test","channel":"google","entitlementServer":"https://one.example","supportEsimToEsimTransfer":true,"transferTypeEsim":7}]`, new(EntitlementConfigs)},
+		{"entitlement", `[{"mccmnc":"00101","carrierName":"test","entitlementServer":"https://one.example","supportEsimToEsimTransfer":true,"transferTypeEsim":7}]`, new(EntitlementConfigs)},
 		{"wfc", `[{"mccmnc":"00101","carrierName":"test","entitlementServer":"https://wfc.example"}]`, new(WFCConfigs)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

@@ -62,72 +62,6 @@ func TestRegressionEmptyWFCApplication(t *testing.T) {
 	}
 }
 
-func TestRegressionSamsungOperation(t *testing.T) {
-	tests := []struct {
-		name     string
-		transfer TransferType
-	}{
-		{"AKA D2D", TransferTypeTS43V8},
-		{"temporary-token D2D", TransferTypeTemporaryToken},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ent := Entitlement{Channel: EntitlementChannelSamsung, TransferType: tt.transfer}
-			op := samsungManageSubscriptionOperation(ent, ManageSubscriptionRequest{Source: Device{IMEI: "source", EID: "source-eid"}, Target: Device{IMEI: "target", EID: "target-eid"}, UserInput: UserInputResult{Button: MessageButtonUnknown}})
-			if op.OperationType != OperationTypeTransferSubscription {
-				t.Errorf("operation_type = %s, want 3", op.OperationType)
-			}
-		})
-	}
-}
-
-func TestRegressionSamsungEID(t *testing.T) {
-	tests := []struct {
-		name             string
-		ent              Entitlement
-		terminal, target string
-	}{
-		{"normal pSIM conversion", Entitlement{Channel: EntitlementChannelSamsung, SourceSIMType: SIMTypePSIM, TransferType: TransferTypeOldTerminalIDs}, "", "target-eid"},
-		{"source AKA transfer", Entitlement{Channel: EntitlementChannelSamsung, TransferType: TransferTypeTS43V8}, "source-eid", "target-eid"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			op := samsungManageSubscriptionOperation(tt.ent, ManageSubscriptionRequest{Source: Device{EID: "source-eid"}, Target: Device{EID: "target-eid"}, UserInput: UserInputResult{Button: MessageButtonUnknown}})
-			if op.TerminalEID != tt.terminal || op.TargetTerminalEID != tt.target {
-				t.Errorf("terminal_eid=%q target_terminal_eid=%q; want %q, %q", op.TerminalEID, op.TargetTerminalEID, tt.terminal, tt.target)
-			}
-		})
-	}
-}
-
-func TestRegressionSamsungExtraFields(t *testing.T) {
-	tests := []struct {
-		name      string
-		operation Operation
-	}{{"KT eligibility", OperationCheck}, {"KT manage", OperationManage}, {"KT acquire", OperationAcquireConf}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: "450", MNC: "02"}, SIMTypeESIM, EntitlementChannelSamsung)
-			if err != nil {
-				t.Fatal(err)
-			}
-			target := Device{IMEI: "target", Model: "target-model", SerialNumber: "target-sn", IMEIs: []string{"imei1", "imei2"}}
-			var op ODSAOperation
-			switch tt.operation {
-			case OperationCheck:
-				op = checkEligibilityOperation(ent, Device{}, target)
-			case OperationManage:
-				op = manageSubscriptionOperation(ent, ManageSubscriptionRequest{Target: target})
-			case OperationAcquireConf:
-				op = acquireConfigurationOperation(ent, Device{}, target)
-			}
-			if op.TargetTerminalSN != target.SerialNumber || op.TargetTerminalModel != target.Model || len(op.TargetTerminalIMEIs) != 2 {
-				t.Errorf("extra fields lost with SetTargetTerminalFields=%v: %+v", ent.SetTargetTerminalFields, op)
-			}
-		})
-	}
-}
-
 func TestRegressionGoogleTransferBranches(t *testing.T) {
 	tests := []struct {
 		name, body string
@@ -141,7 +75,7 @@ func TestRegressionGoogleTransferBranches(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			doer := &queueDoer{bodies: []string{tt.body, `{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":1,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}}}}`}}
-			c := newClient(Config{HTTPClient: doer, Entitlement: Entitlement{Server: "https://example.test", Channel: EntitlementChannelGoogle, TransferType: TransferTypeTS43V8}})
+			c := newClient(Config{HTTPClient: doer, Entitlement: Entitlement{Server: "https://example.test", TransferType: TransferTypeTS43V8}})
 			result, err := c.activate(context.Background(), &transferOffer{SourceIdentity: Identity{IMSI: "310260123456789", MCC: "310", MNC: "260"}, AuthToken: AuthToken{Value: "audit"}}, UserInputResult{Button: MessageButtonUnknown})
 			if tt.invalid {
 				if denied, ok := errors.AsType[*CarrierDeniedError](err); !ok || denied.Result.GeneralErrorText != "invalid input" {
@@ -169,7 +103,7 @@ func TestRegressionGoogleAppName(t *testing.T) {
 	}{{"Verizon", Identity{MCC: "310", MNC: "012"}}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, SIMTypeESIM, EntitlementChannelGoogle)
+			ent, err := privateEntitlementConfigs(t).Discover(tt.identity, SIMTypeESIM)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -177,25 +111,6 @@ func TestRegressionGoogleAppName(t *testing.T) {
 			defer c.CloseIdleConnections()
 			if got := c.baseRequest(Device{}, "audit", "").AppName; got != "" {
 				t.Errorf("configured appName=%q became request app_name=%q", ent.AppName, got)
-			}
-		})
-	}
-}
-
-func TestRegressionSamsungUserAgent(t *testing.T) {
-	tests := []struct {
-		name     string
-		identity Identity
-	}{{"KT", Identity{MCC: "450", MNC: "02"}}, {"SKT", Identity{MCC: "450", MNC: "05"}}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, SIMTypeESIM, EntitlementChannelSamsung)
-			if err != nil {
-				t.Fatal(err)
-			}
-			got := userAgent(ent, ServiceEntitlementRequest{TerminalModel: "SM-S938B", TerminalSoftware: "16"}, SamsungODSAClientTS43)
-			if got != "SM-S938B Android16" {
-				t.Errorf("User-Agent=%q, want legacy model Android16 form", got)
 			}
 		})
 	}
@@ -212,7 +127,7 @@ func TestRegressionGoogleCarrierMatching(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := privateEntitlementConfigs(t).DiscoverForChannel(tt.identity, SIMTypeESIM, EntitlementChannelGoogle)
+			got, err := privateEntitlementConfigs(t).Discover(tt.identity, SIMTypeESIM)
 			if err != nil {
 				t.Fatalf("discovery error = %v", err)
 			}
@@ -234,22 +149,6 @@ func TestRegressionPrefixedText(t *testing.T) {
 	}
 }
 
-func TestRegressionSamsungPollingWithoutInterval(t *testing.T) {
-	tests := []struct {
-		name string
-		ent  Entitlement
-	}{{"Samsung missing interval", Entitlement{Channel: EntitlementChannelSamsung}}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := newClient(Config{Entitlement: tt.ent})
-			defer c.CloseIdleConnections()
-			if interval, ok := c.pollInterval(&ODSAResponse{ServiceStatus: ServiceStatusActivating}); ok {
-				t.Errorf("missing server interval starts polling every %v", interval)
-			}
-		})
-	}
-}
-
 func TestRegressionTimeout(t *testing.T) {
 	for _, tt := range []struct {
 		name string
@@ -263,7 +162,7 @@ func TestRegressionTimeout(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newClient(tt.cfg)
 			t.Cleanup(c.CloseIdleConnections)
-			c.applyDiscoveredEntitlement(Entitlement{Server: "https://example.test", Channel: EntitlementChannelSamsung, Timeout: time.Minute})
+			c.applyDiscoveredEntitlement(Entitlement{Server: "https://example.test", Timeout: time.Minute})
 			if got := c.runtime.httpClient.(*http.Client).Timeout; got != tt.want {
 				t.Errorf("timeout = %v, want %v", got, tt.want)
 			}
@@ -315,7 +214,7 @@ func TestRegressionAfterSourceDeletion(t *testing.T) {
 				}
 				return response(200, `{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":1,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}}}}`), nil
 			})
-			c := newClient(Config{HTTPClient: doer, Entitlement: Entitlement{Server: "https://example.test", TransferType: tt.transfer, Channel: EntitlementChannelGoogle}})
+			c := newClient(Config{HTTPClient: doer, Entitlement: Entitlement{Server: "https://example.test", TransferType: tt.transfer}})
 			r, err := c.activate(context.Background(), &transferOffer{SourceIdentity: Identity{MCC: "310", MNC: "260", IMSI: "310260123456789"}, AuthToken: AuthToken{Value: "audit"}, TemporaryToken: TemporaryToken{Value: "temp"}}, UserInputResult{Button: MessageButtonUnknown})
 			if err != nil {
 				t.Fatal(err)

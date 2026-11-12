@@ -3,11 +3,9 @@ package ts43
 import (
 	"context"
 	"encoding"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -67,95 +65,6 @@ func TestWireTextCodecs(t *testing.T) {
 	}
 }
 
-func TestSamsungTransferWireFields(t *testing.T) {
-	source := Device{IMEI: "source-imei", ICCID: "physical-iccid", EID: "source-eid"}
-	target := Device{IMEI: "target-imei", EID: "target-eid", Model: "SM-S938B", SerialNumber: "serial", IMEIs: []string{"imei1", "imei2"}}
-	for _, tt := range []struct {
-		name                          string
-		ent                           Entitlement
-		device, eid, targetEID, iccid string
-	}{
-		{"AKA", Entitlement{TransferType: TransferTypeTS43V8}, source.IMEI, source.EID, target.EID, source.ICCID},
-		{"temporary token continuation", Entitlement{TransferType: TransferTypeTemporaryToken}, target.IMEI, target.EID, "", ""},
-		{"ordinary physical conversion", Entitlement{SourceSIMType: SIMTypePSIM, TransferType: TransferTypeOldTerminalIDs}, target.IMEI, "", target.EID, source.ICCID},
-		{"4FF token conversion", Entitlement{SourceSIMType: SIMTypePSIM, TransferType: TransferTypeTemporaryTokenOldTerminalIDs, UseTempTokenConversion: true}, target.IMEI, target.EID, "", ""},
-	} {
-		for _, post := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/post_%v", tt.name, post), func(t *testing.T) {
-				ent := tt.ent
-				ent.Channel = EntitlementChannelSamsung
-				ent.Server = "https://example.test"
-				ent.UsePost = post
-				c := newClient(Config{Entitlement: ent, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
-					fields := req.URL.Query()
-					if post {
-						var data map[string]stringField
-						if err := json.NewDecoder(req.Body).Decode(&data); err != nil {
-							t.Fatal(err)
-						}
-						fields = make(url.Values)
-						for k, v := range data {
-							fields.Set(k, v.String())
-						}
-					}
-					for key, want := range map[string]string{"operation_type": "3", "terminal_id": tt.device, "terminal_eid": tt.eid, "target_terminal_eid": tt.targetEID, "terminal_iccid": tt.iccid} {
-						if got := fields.Get(key); got != want {
-							t.Errorf("%s = %q, want %q", key, got, want)
-						}
-					}
-					return response(200, `{"APPLICATION":{"OperationResult":1,"SubscriptionResult":3}}`), nil
-				})})
-				credential := authCredential(AuthToken{Value: "auth"})
-				if c.usesTemporaryToken() {
-					credential = temporaryCredential(TemporaryToken{Value: "temp"})
-				}
-				_, err := c.manageSubscription(context.Background(), Identity{IMSI: "450051234567890", MCC: "450", MNC: "05"}, source, target, credential, UserInputResult{Button: MessageButtonUnknown})
-				if err != nil {
-					t.Fatal(err)
-				}
-			})
-		}
-	}
-}
-
-func TestSamsungPortalInjection(t *testing.T) {
-	for _, tt := range []struct {
-		name, mnc string
-		extra     bool
-	}{
-		{"KT uses HTTP fields", "02", false}, {"SKT", "05", true}, {"LGU", "06", true},
-	} {
-		for _, kind := range []string{"", "json", "xml"} {
-			t.Run(tt.name+"/"+kind, func(t *testing.T) {
-				ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: "450", MNC: tt.mnc}, SIMTypeESIM, EntitlementChannelSamsung)
-				if err != nil {
-					t.Fatal(err)
-				}
-				body := `{"APPLICATION":{"OperationResult":1,"SubscriptionResult":1,"SubscriptionServiceURL":"https://portal.test","SubscriptionServiceUserData":"test","SubscriptionServiceContentsType":"` + kind + `"}}`
-				c := newClient(Config{Entitlement: ent, HTTPClient: &queueDoer{bodies: []string{body}}})
-				result, err := c.activate(context.Background(), &transferOffer{SourceIdentity: Identity{MCC: "450", MNC: tt.mnc, IMSI: "450051234567890"}, AuthToken: AuthToken{Value: "auth"}, TargetDevice: Device{IMEIs: []string{"first", "second"}, SerialNumber: "serial", Model: "model", BarcodeNumber: "barcode", ActivatedID: "aid"}}, UserInputResult{Button: MessageButtonUnknown})
-				if err != nil {
-					t.Fatal(err)
-				}
-				event, ok := result.Event.(WebsheetEvent)
-				if !ok {
-					t.Fatalf("event = %T", result.Event)
-				}
-				want := "test"
-				if tt.extra {
-					want += "&IMEI1=first&IMEI2=second&serial_number=serial&model_name=model"
-				}
-				if tt.mnc == "06" {
-					want += "&barcode_number=barcode&activated_id=aid"
-				}
-				if event.Websheet.UserData != want || event.Websheet.ContentsType != kind {
-					t.Errorf("websheet = %+v, want data %q, type %q", event.Websheet, want, kind)
-				}
-			})
-		}
-	}
-}
-
 func TestContinuePendingConfigurationAndActivation(t *testing.T) {
 	for _, tt := range []struct {
 		name          string
@@ -166,7 +75,7 @@ func TestContinuePendingConfigurationAndActivation(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []Operation
-			c := newClient(Config{Entitlement: Entitlement{Channel: EntitlementChannelSamsung, Server: "https://example.test", TransferType: TransferTypeTS43V8}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+			c := newClient(Config{Entitlement: Entitlement{Server: "https://example.test", TransferType: TransferTypeTS43V8}, HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 				op := Operation(req.URL.Query().Get("operation"))
 				calls = append(calls, op)
 				if op == OperationManage {
@@ -175,7 +84,7 @@ func TestContinuePendingConfigurationAndActivation(t *testing.T) {
 				if slices.Contains(calls[:len(calls)-1], OperationAcquireConf) {
 					return response(200, `{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":1,"DownloadInfo":{"ProfileSmdpAddress":"smdp.test"}}}}`), nil
 				}
-				return response(200, `{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":2}}}`), nil
+				return response(200, `{"APPLICATION":{"PrimaryConfiguration":{"ServiceStatus":2,"PollingInterval":0}}}`), nil
 			})})
 			result := &Result{State: StatePendingDownload, session: &transferSession{offer: &transferOffer{SourceIdentity: Identity{MCC: "450", MNC: "05", IMSI: "450051234567890"}, AuthToken: AuthToken{Value: "token"}}}}
 			var err error
@@ -350,48 +259,6 @@ func TestTemporaryCredentialRefreshFlow(t *testing.T) {
 			}
 			if !slices.Equal(calls, want) {
 				t.Errorf("calls=%v, want %v", calls, want)
-			}
-		})
-	}
-}
-
-func TestSamsungExtraTerminalJSONList(t *testing.T) {
-	for _, operation := range []Operation{OperationCheck, OperationManage, OperationAcquireConf} {
-		t.Run(operation.String(), func(t *testing.T) {
-			ent, err := privateEntitlementConfigs(t).DiscoverForChannel(Identity{MCC: "450", MNC: "02"}, SIMTypeESIM, EntitlementChannelSamsung)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ent.UsePost = true
-			target := Device{IMEI: "imei1", IMEIs: []string{"imei1", "imei2"}, SerialNumber: "serial", Model: "model"}
-			var op ODSAOperation
-			switch operation {
-			case OperationCheck:
-				op = checkEligibilityOperation(ent, Device{}, target)
-			case OperationManage:
-				op = manageSubscriptionOperation(ent, ManageSubscriptionRequest{Target: target, UserInput: UserInputResult{Button: MessageButtonUnknown}})
-			case OperationAcquireConf:
-				op = acquireConfigurationOperation(ent, Device{}, target)
-			}
-			req, err := buildHTTPRequest(t.Context(), ent, Identity{MCC: "450", MNC: "02", IMSI: "450021234567890"}, ServiceEntitlementRequest{App: AppODSAPrimary, AuthenticationToken: "token"}, op, "", DefaultEAPAKARealm)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() {
-				if err := req.Body.Close(); err != nil {
-					t.Error(err)
-				}
-			})
-			var got struct {
-				IMEIs  []string `json:"target_terminal_imeis"`
-				Serial string   `json:"target_terminal_sn"`
-				Model  string   `json:"target_terminal_model"`
-			}
-			if err := json.NewDecoder(req.Body).Decode(&got); err != nil {
-				t.Fatal(err)
-			}
-			if !slices.Equal(got.IMEIs, target.IMEIs) || got.Serial != target.SerialNumber || got.Model != target.Model {
-				t.Errorf("extra terminal fields=%+v", got)
 			}
 		})
 	}

@@ -10,17 +10,14 @@ func TestTransferResponseNegotiation(t *testing.T) {
 	for _, post := range []bool{false, true} {
 		for _, tt := range []struct {
 			name                string
-			channel             EntitlementChannel
 			token, accept, want string
 		}{
 			{name: "Google authentication", want: EAPRelayContentType + ", " + ODSAResponseAccept},
 			{name: "Google operation", token: "auth", want: ODSAResponseAccept},
 			{name: "Google explicit JSON", token: "auth", accept: "application/json", want: "application/json"},
-			{name: "Samsung authentication", channel: EntitlementChannelSamsung, want: EAPRelayContentType},
-			{name: "Samsung operation", channel: EntitlementChannelSamsung, token: "auth", want: SamsungResponseAccept},
 		} {
 			t.Run(fmt.Sprintf("post_%v/%s", post, tt.name), func(t *testing.T) {
-				client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", Channel: tt.channel, UsePost: post}})
+				client := newClient(Config{Entitlement: Entitlement{Server: "https://carrier.example", UsePost: post}})
 				offer := alignmentOffer()
 				request := client.baseRequest(offer.SourceDevice, tt.token, "")
 				if tt.accept != "" {

@@ -47,7 +47,6 @@ func TestCompleteActivationAcceptsExternalDownloads(t *testing.T) {
 		state State
 	}{
 		{name: "SM-DS discovery", state: StatePendingSMDSDiscovery},
-		{name: "delayed download", state: StatePendingDelayedDownload},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			updates, queries := 0, 0

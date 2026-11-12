@@ -8,7 +8,7 @@ import (
 	"fmt"
 )
 
-// EntitlementConfigs holds application-supplied transfer discovery records.
+// EntitlementConfigs holds application-supplied Google transfer discovery records.
 // Decode before sharing a value with clients. Both encodings use UTF-8 JSON.
 type EntitlementConfigs struct{ records []entitlementRecord }
 

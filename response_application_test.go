@@ -62,7 +62,7 @@ func TestODSAResponseReuseIsAtomicAndClearsAbsentFields(t *testing.T) {
 		if err := got.UnmarshalBinary([]byte(body)); err != nil {
 			t.Fatal(err)
 		}
-		if got.Websheet != (Websheet{}) || got.Message.Text != "" || got.TemporaryToken != "" || got.AuthenticationToken != "" || got.DownloadInfoPresent || got.Download.SMDPFQDN != "" {
+		if got.Websheet != (Websheet{}) || got.Message.Text != "" || got.TemporaryToken != "" || got.AuthenticationToken != "" || got.Download.SMDPFQDN != "" {
 			t.Fatalf("stale fields remained: %+v", got)
 		}
 		before := got
