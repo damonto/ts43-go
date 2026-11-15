@@ -812,8 +812,6 @@ func TestActivateDownloadAndCompleteActivation(t *testing.T) {
 	activationCode := "LPA:1$smdp.example$MATCH"
 	doer := &queueDoer{bodies: []string{
 		`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="2"/><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="` + base64.StdEncoding.EncodeToString([]byte(activationCode)) + `"/><parm name="ProfileIccid" value="8900000000000000000"/></characteristic></characteristic></wap-provisioningdoc>`,
-		`<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`,
-		`<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`,
 	}}
 	events := make(chan Event, 4)
 	client, err := New(&Config{
@@ -858,8 +856,8 @@ func TestActivateDownloadAndCompleteActivation(t *testing.T) {
 	if _, ok := result.Event.(DoneEvent); !ok {
 		t.Fatalf("Event = %#v", result.Event)
 	}
-	if doer.calls != 3 {
-		t.Errorf("HTTP calls = %d, want download, activation, and configuration requests", doer.calls)
+	if doer.calls != 1 {
+		t.Errorf("HTTP calls = %d, want only the transfer request", doer.calls)
 	}
 }
 
@@ -1153,9 +1151,6 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 				if got := query.Get("token"); got != "checked-auth" {
 					t.Errorf("ManageSubscription token = %q, want checked-auth", got)
 				}
-				if query.Get("operation_type") == OperationTypeUpdateSubscription.String() {
-					return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="3"/></characteristic></wap-provisioningdoc>`), nil
-				}
 				if got := query.Get("operation_type"); got != OperationTypeTransferSubscription.String() {
 					t.Errorf("operation_type = %q, want %s", got, OperationTypeTransferSubscription)
 				}
@@ -1187,8 +1182,6 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 					t.Errorf("old_terminal_entitlement_protocol = %q, want empty", got)
 				}
 				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><parm name="OperationResult" value="1"/><parm name="SubscriptionResult" value="2"/><characteristic type="DownloadInfo"><parm name="ProfileActivationCode" value="`+base64.StdEncoding.EncodeToString([]byte(activationCode))+`"/></characteristic></characteristic></wap-provisioningdoc>`), nil
-			case OperationAcquireConf:
-				return response(200, `<wap-provisioningdoc><characteristic type="APPLICATION"><characteristic type="PrimaryConfiguration"><parm name="ServiceStatus" value="1"/></characteristic></characteristic></wap-provisioningdoc>`), nil
 			default:
 				t.Fatalf("unexpected operation %q", op)
 				return response(500, ""), nil
@@ -1236,7 +1229,6 @@ func TestTransferSourceCredentialReturnsDownload(t *testing.T) {
 	if _, ok := result.Event.(DoneEvent); !ok {
 		t.Errorf("Event after CompleteActivation = %#v, want DoneEvent", result.Event)
 	}
-	wantCalls = append(wantCalls, OperationManage, OperationAcquireConf)
 	if !slices.Equal(calls, wantCalls) {
 		t.Errorf("calls after CompleteActivation = %v, want %v", calls, wantCalls)
 	}

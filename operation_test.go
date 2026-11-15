@@ -40,6 +40,9 @@ func TestPostInstallationRequestFields(t *testing.T) {
 					HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
 						fields := alignmentRequestFields(t, req)
 						initial := fields.Get("operation_type") == "3"
+						if fields.Get("operation") == OperationAcquireConf.String() && updates == 0 {
+							initial = true
+						}
 						wantApp := "transfer-app"
 						if !initial {
 							wantApp = ""
@@ -64,7 +67,7 @@ func TestPostInstallationRequestFields(t *testing.T) {
 						case OperationManage:
 							if initial {
 								transfers++
-								return response(200, `{"ap2009":{"OperationResult":1,"SubscriptionResult":2,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}}}`), nil
+								return response(200, `{"ap2009":{"OperationResult":1,"SubscriptionResult":4}}`), nil
 							}
 							updates++
 							if fields.Get("operation_type") != "4" || fields.Get("terminal_iccid") != "installed" {
@@ -73,7 +76,10 @@ func TestPostInstallationRequestFields(t *testing.T) {
 							return response(200, `{"ap2009":{"OperationResult":1,"SubscriptionResult":3}}`), nil
 						case OperationAcquireConf:
 							queries++
-							if queries == 1 {
+							if updates == 0 {
+								return response(200, `{"ap2009":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":3,"DownloadInfo":{"ProfileSmdpAddress":"smdp.example"}}}}`), nil
+							}
+							if queries == 2 {
 								return response(200, `{"ap2009":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":2,"PollingInterval":0}}}`), nil
 							}
 							return response(200, `{"ap2009":{"OperationResult":1,"PrimaryConfiguration":{"ServiceStatus":1}}}`), nil
@@ -92,7 +98,7 @@ func TestPostInstallationRequestFields(t *testing.T) {
 					t.Fatalf("activation result=%v err=%v", result, err)
 				}
 				result, err = client.Continue(t.Context(), result, ContinueRequest{})
-				if err != nil || result.State != StateDone || transfers != 1 || updates != 1 || queries != 2 {
+				if err != nil || result.State != StateDone || transfers != 1 || updates != 1 || queries != 3 {
 					t.Fatalf("result=%v transfers=%d updates=%d queries=%d err=%v", result, transfers, updates, queries, err)
 				}
 			})

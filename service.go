@@ -208,7 +208,7 @@ func (c *Client) resumeActivation(ctx context.Context, result *Result) (*Result,
 		return result, err
 	}
 	if session.profileInstalled && session.downloadActivated {
-		// GMS returns an already-activated download when ServiceStatus is 1.
+		// GMS marks direct downloads and ServiceStatus=1 as already activated.
 		// Installation still has to finish, but no activation request is needed.
 		result.State = StateDone
 		result.Event = DoneEvent{}
@@ -323,7 +323,8 @@ func (c *Client) activate(ctx context.Context, offer *transferOffer, answer User
 		return result, nil
 	}
 	if downloadProfileReady(manage) {
-		return c.applyDownloadConfiguration(result, manage.Download, ServiceStatusUnknown)
+		// GMS marks SubscriptionResult=2 downloads as already activated.
+		return c.applyDownloadConfiguration(result, manage.Download, ServiceStatusActivated)
 	}
 	if subscriptionDone(manage) {
 		result.State = StateDone

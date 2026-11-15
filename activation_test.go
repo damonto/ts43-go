@@ -24,7 +24,8 @@ func TestDownloadActivationStateControlsCompletion(t *testing.T) {
 			{name: "Google activated delayed download", status: 1, delayed: true},
 			{name: "Google activated without surviving credentials", status: 1, delayed: true, expireToken: true},
 			{name: "Google reusable download needs activation", status: 3, delayed: true, wantUpdates: 1},
-			{name: "Google direct download needs activation", wantUpdates: 1},
+			{name: "Google direct download is already activated"},
+			{name: "Google direct download without surviving credentials", expireToken: true},
 		} {
 			t.Run(fmt.Sprintf("post_%v/%s", post, tt.name), func(t *testing.T) {
 				now := time.Date(2026, 11, 11, 0, 0, 0, 0, time.UTC)
