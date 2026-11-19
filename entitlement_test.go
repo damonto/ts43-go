@@ -187,16 +187,29 @@ func TestGoogleTransferCapabilitiesSurviveConfigRoundTrip(t *testing.T) {
 }
 
 func TestWFCReferenceConfiguration(t *testing.T) {
+	const settingsDir = "refs/adevtool/vendor-skels/google_devices/tokay/proprietary/product/etc/CarrierSettings"
 	var rows []wfcRecord
 	if err := json.Unmarshal(privateCarrierJSON(t, "wfc.json"), &rows); err != nil {
 		t.Fatal(err)
 	}
 	for _, row := range rows {
 		t.Run(row.CarrierName+"/"+row.MCCMNC, func(t *testing.T) {
-			data := referenceFile(t, filepath.Join("refs/adevtool/vendor-skels/google_devices/tokay/proprietary/product/etc/CarrierSettings", row.CarrierName+".textproto"))
+			data, err := os.ReadFile(filepath.Join(settingsDir, row.CarrierName+".textproto"))
+			if errors.Is(err, os.ErrNotExist) {
+				others := referenceFile(t, filepath.Join(settingsDir, "others.textproto"))
+				profile := regexp.MustCompile(`(?ms)^setting \{\n  canonical_name: "` +
+					regexp.QuoteMeta(row.CarrierName) + `"\n.*?^\}`)
+				data = profile.Find(others)
+				if data == nil {
+					t.Skip("carrier profile absent from local reference corpus")
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
 			for _, field := range []struct{ name, want string }{
 				{"entitlement_server_url_string", strconv.Quote(row.EntitlementServer)},
 				{"default_service_entitlement_status_bool", strconv.FormatBool(row.DefaultServiceEntitlementEnabled)},
+				{"ims_provisioning_bool", strconv.FormatBool(row.NeedsIMSProvisioning)},
 				{"skip_wfc_activation_bool", strconv.FormatBool(row.SkipActivation)},
 				{"show_vowifi_webview_bool", strconv.FormatBool(row.ShowVoWiFiWebview)},
 			} {

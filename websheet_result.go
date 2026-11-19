@@ -21,13 +21,13 @@ type websheetCallbackPayload struct {
 
 func (r *WebsheetResult) UnmarshalText(text []byte) error {
 	line := strings.TrimSpace(string(text))
-	line = strings.ReplaceAll(line, "WiFiCallingWebViewController.", "VoWiFiWebServiceFlow.")
 	if line == "" {
 		return errors.New("websheet callback is required")
 	}
-	vowifiCallback := strings.HasPrefix(line, "TS43_VOWIFI_CALLBACK")
+	vowifiCallback := strings.HasPrefix(line, "TS43_VOWIFI_CALLBACK") || strings.HasPrefix(line, "VOWIFI_CALLBACK")
 	line = trimCallbackLogPrefix(line, "TS43_ODSA_CALLBACK")
 	line = trimCallbackLogPrefix(line, "TS43_VOWIFI_CALLBACK")
+	line = trimCallbackLogPrefix(line, "VOWIFI_CALLBACK")
 
 	var next WebsheetResult
 	var err error
@@ -36,12 +36,10 @@ func (r *WebsheetResult) UnmarshalText(text []byte) error {
 		next, err = websheetResultFromJSON(line, vowifiCallback)
 	case strings.Contains(line, "ODSAServiceFlow."):
 		next, err = websheetResultFromJS(line)
-	case strings.Contains(line, "VoWiFiWebServiceFlow."):
-		next, err = websheetResultFromVoWiFiJS(line)
 	case strings.Contains(line, "/_callback"):
 		next, err = websheetResultFromURL(line)
 	default:
-		return fmt.Errorf("unknown websheet callback %q", line)
+		next, err = websheetResultFromVoWiFiJS(line)
 	}
 	if err != nil {
 		return err
@@ -92,25 +90,38 @@ func websheetResultFromJS(line string) (WebsheetResult, error) {
 }
 
 func websheetResultFromVoWiFiJS(line string) (WebsheetResult, error) {
-	_, after, ok := strings.Cut(line, "VoWiFiWebServiceFlow.")
-	if !ok {
-		return WebsheetResult{}, errors.New("VoWiFiWebServiceFlow callback is required")
+	for _, controller := range []string{"VoWiFiWebServiceFlow.", "WiFiCallingWebViewController.", "NsdsWebSheetController."} {
+		_, call, ok := strings.Cut(line, controller)
+		if !ok {
+			continue
+		}
+		name, args, ok := strings.Cut(call, "(")
+		if !ok || !strings.Contains(args, ")") {
+			return WebsheetResult{}, errors.New("complete callback argument list is required")
+		}
+		return websheetResultFromVoWiFiName(name)
 	}
-	name, _, ok := strings.Cut(after, "(")
-	if !ok {
-		return WebsheetResult{}, errors.New("callback argument list is required")
-	}
-	return websheetResultFromVoWiFiName(name)
+	return WebsheetResult{}, fmt.Errorf("unknown websheet callback %q", line)
 }
 
 func websheetResultFromVoWiFiName(name string) (WebsheetResult, error) {
-	switch normalizeCallbackName(name) {
-	case "entitlementchanged", "closewebview", "phoneservicesaccountstatuschanged", "workflowabandoned", "workflowcompleted":
-		return WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}, nil
-	case "dismissflow", "cancelbuttonclicked", "cancelbuttonpressed":
-		return WebsheetResult{Event: WebsheetEventVoWiFiDismissFlow}, nil
-	default:
+	event := VoWiFiWebsheetEvent(name)
+	if event == WebsheetEventUnknown {
 		return WebsheetResult{}, fmt.Errorf("unknown VoWiFi websheet callback %q", name)
+	}
+	return WebsheetResult{Event: event}, nil
+}
+
+// VoWiFiWebsheetEvent classifies a VoWiFi portal callback name.
+// Unknown names return WebsheetEventUnknown.
+func VoWiFiWebsheetEvent(name string) WebsheetCallbackEvent {
+	switch normalizeCallbackName(name) {
+	case "entitlementchanged", "closewebview", "onclosewebview", "phoneservicesaccountstatuschanged", "workflowabandoned", "workflowcompleted":
+		return WebsheetEventVoWiFiEntitlementChanged
+	case "dismissflow", "cancelbuttonclicked", "cancelbuttonpressed":
+		return WebsheetEventVoWiFiDismissFlow
+	default:
+		return WebsheetEventUnknown
 	}
 }
 
@@ -181,9 +192,10 @@ func websheetResultFromName(name string, args []string, query url.Values) (Websh
 			Event: WebsheetEventDeleteProfileInUse,
 			ICCID: argOrQuery(args, query, 0, "iccid", "ICCID"),
 		}, nil
-	case "entitlementchanged", "closewebview", "phoneservicesaccountstatuschanged", "workflowabandoned", "workflowcompleted":
-		return WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}, nil
 	default:
+		if event := VoWiFiWebsheetEvent(name); event != WebsheetEventUnknown {
+			return WebsheetResult{Event: event}, nil
+		}
 		return WebsheetResult{}, fmt.Errorf("unknown websheet callback %q", name)
 	}
 }

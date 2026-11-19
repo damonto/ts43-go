@@ -2,15 +2,134 @@ package ts43
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestWFCProvisioningRequests(t *testing.T) {
+	const status = `"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}`
+	for _, method := range []string{http.MethodGet, http.MethodPost} {
+		t.Run(method, func(t *testing.T) {
+			var catalog WFCConfigs
+			data := fmt.Sprintf(`[{"mccmnc":"00101","entitlementServer":"https://example.test","needsIMSProvisioning":true,"useHttpPost":%t}]`, method == http.MethodPost)
+			if err := catalog.UnmarshalBinary([]byte(data)); err != nil {
+				t.Fatal(err)
+			}
+			identity := Identity{MCC: "001", MNC: "01", IMSI: "001010000000000"}
+			config, err := catalog.Discover(identity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantApps := []string{AppVoWiFi, appVoLTE, appSMSOIP}
+			wantVersions := []string{"0", "7", "0"}
+			calls := 0
+			client := newClient(Config{HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+				if calls >= len(wantVersions) {
+					t.Fatal("unexpected request")
+				}
+				if req.Method != method {
+					t.Fatalf("method = %s, want %s", req.Method, method)
+				}
+				query := req.URL.Query()
+				apps, version, token := query["app"], query.Get("vers"), query.Get("token")
+				if method == http.MethodPost {
+					var body struct {
+						Apps    []string `json:"app"`
+						Version string   `json:"vers"`
+						Token   string   `json:"token"`
+					}
+					if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+						t.Fatal(err)
+					}
+					apps, version, token = body.Apps, body.Version, body.Token
+				}
+				if !slices.Equal(apps, wantApps) || version != wantVersions[calls] {
+					t.Errorf("request %d apps = %v, vers = %s, want %v, %s", calls, apps, version, wantApps, wantVersions[calls])
+				}
+				calls++
+				switch calls {
+				case 1:
+					return response(http.StatusOK, `{"VERS":{"version":7,"validity":60},"TOKEN":{"token":"test-token","validity":60},`+status+`}`), nil
+				case 2:
+					if token != "test-token" {
+						t.Errorf("expected cached token on recheck")
+					}
+					return response(http.StatusNetworkAuthenticationRequired, ""), nil
+				default:
+					if token != "" {
+						t.Errorf("retry retained rejected token")
+					}
+					return response(http.StatusOK, `{"VERS":{"version":8,"validity":60},`+status+`}`), nil
+				}
+			})})
+			first, err := client.CheckWFCEntitlement(t.Context(), WFCEntitlementRequest{Identity: identity, Config: config})
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := client.ContinueWFC(t.Context(), first, WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged})
+			if err != nil || !second.Status.Entitled() || second.Configuration.Version != 8 || calls != len(wantVersions) {
+				t.Fatalf("recheck = %+v, requests = %d, err = %v", second, calls, err)
+			}
+		})
+	}
+}
+
+func TestWFCContinuationClearsRejectedCredentialsOnRetryError(t *testing.T) {
+	const available = `"ap2004":{"EntitlementStatus":1,"TC_Status":2,"AddrStatus":2,"ProvStatus":2}`
+	calls := 0
+	client := newClient(Config{HTTPClient: fakeDoer(func(req *http.Request) (*http.Response, error) {
+		calls++
+		query := req.URL.Query()
+		switch calls {
+		case 1:
+			return responseWithCookie(http.StatusOK, `{"VERS":{"version":7,"validity":60},"TOKEN":{"token":"test-token","validity":60},`+available+`}`, "session=original"), nil
+		case 2:
+			if query.Get("vers") != "7" || query.Get("token") != "test-token" {
+				t.Fatal("recheck did not reuse VERS and token")
+			}
+			if got := req.Header.Get("Cookie"); got != "session=original" {
+				t.Errorf("recheck Cookie = %q, want session=original", got)
+			}
+			return response(http.StatusNetworkAuthenticationRequired, ""), nil
+		case 3:
+			return response(http.StatusServiceUnavailable, ""), nil
+		default:
+			if query.Get("vers") != "0" || query.Get("token") != "" {
+				t.Fatal("recheck reused rejected VERS or token")
+			}
+			return response(http.StatusOK, `{"VERS":{"version":8,"validity":60},`+available+`}`), nil
+		}
+	})})
+	result, err := client.CheckWFCEntitlement(t.Context(), WFCEntitlementRequest{
+		Identity: Identity{MCC: "001", MNC: "01", IMSI: "001010000000000"},
+		Config:   WFCConfig{Server: "https://example.test", NeedsIMSProvisioning: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.AuthToken.Cookies) != 1 {
+		t.Fatalf("CheckWFCEntitlement() returned %d cookies, want 1", len(result.AuthToken.Cookies))
+	}
+	result.AuthToken.Cookies[0] = "session=caller"
+	callback := WebsheetResult{Event: WebsheetEventVoWiFiEntitlementChanged}
+	result, err = client.ContinueWFC(t.Context(), result, callback)
+	if !isHTTPStatus(err, http.StatusServiceUnavailable) || !result.Status.Entitled() ||
+		!result.ConfigurationReset || result.Configuration.Present || result.AuthToken.Value != "" {
+		t.Fatalf("interrupted recheck = %+v, %v", result, err)
+	}
+	result, err = client.ContinueWFC(t.Context(), result, callback)
+	if err != nil || result.Configuration.Version != 8 || calls != 4 {
+		t.Fatalf("resumed recheck = %+v, %v, calls = %d", result, err, calls)
+	}
+}
 
 func TestWFCResetAndContinuation(t *testing.T) {
 	for _, tt := range []struct {
@@ -37,6 +156,9 @@ func TestWFCResetAndContinuation(t *testing.T) {
 			}
 			if got.ConfigurationReset != tt.reset || got.Status.Entitled() != tt.enabled || got.AuthToken.Value != "" {
 				t.Errorf("result = %+v", got)
+			}
+			if tt.reset && !tt.enabled && !got.Status.Incompatible() {
+				t.Errorf("inactive carrier default must be incompatible, got %+v", got.Status)
 			}
 		})
 	}
@@ -250,6 +372,7 @@ func TestDiscoverWFC(t *testing.T) {
 				Version:                          "8.0",
 				ClientTS43:                       DefaultWFCClientTS43,
 				DefaultServiceEntitlementEnabled: true,
+				NeedsIMSProvisioning:             true,
 				WebsheetClientName:               "WiFiCallingWebViewController",
 			},
 		},
@@ -263,6 +386,7 @@ func TestDiscoverWFC(t *testing.T) {
 				Version:                          "8.0",
 				ClientTS43:                       DefaultWFCClientTS43,
 				DefaultServiceEntitlementEnabled: true,
+				NeedsIMSProvisioning:             true,
 				WebsheetClientName:               "WiFiCallingWebViewController",
 			},
 		},
@@ -660,8 +784,9 @@ func TestWFCAuthTokenValidity(t *testing.T) {
 		want    int
 		wantErr bool
 	}{
-		{name: "empty uses default", want: 3600},
-		{name: "zero uses default", value: "0", want: 3600},
+		{name: "omitted validity has no expiry"},
+		{name: "zero validity has no expiry", value: "0"},
+		{name: "negative validity has no expiry", value: "-1"},
 		{name: "positive", value: "7200", want: 7200},
 		{name: "invalid", value: "one hour", wantErr: true},
 	}
@@ -684,6 +809,15 @@ func TestWFCAuthTokenValidity(t *testing.T) {
 				t.Errorf("wfcAuthTokenValidity(%q) error = %q, want field context", tt.value, err)
 			}
 		})
+	}
+}
+
+func TestWFCZeroTokenValidityClearsPreviousExpiry(t *testing.T) {
+	now := time.Unix(1000, 0)
+	payload := wfcPayload{Token: &tokenFields{Token: "new", Validity: "0"}}
+	token, err := payload.authToken(AuthToken{Value: "prior", ExpiresAt: now.Add(time.Minute)}, now)
+	if err != nil || token.Value != "new" || !token.ExpiresAt.IsZero() {
+		t.Fatalf("authToken() = %+v, %v", token, err)
 	}
 }
 

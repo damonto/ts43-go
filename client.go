@@ -337,17 +337,13 @@ func (c *Client) callWithChannel(ctx context.Context, channel Channel, identity 
 	return &resp, cookies, nil
 }
 
-func (c *Client) callRaw(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
-	return c.callRawWithChannel(ctx, c.transfer.source.Channel, identity, req, op)
-}
-
 func (c *Client) callRawWithChannel(ctx context.Context, channel Channel, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
 	return entitlementTransport{client: c, channel: channel}.callRaw(ctx, identity, req, op)
 }
 
-func (t entitlementTransport) callRaw(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation) ([]byte, []string, error) {
+func (t entitlementTransport) callRaw(ctx context.Context, identity Identity, req ServiceEntitlementRequest, op ODSAOperation, additionalApps ...string) ([]byte, []string, error) {
 	c := t.client
-	httpReq, err := buildHTTPRequest(ctx, c.transfer.entitlement, identity, req, op, c.clientTS43(), c.realm())
+	httpReq, err := buildHTTPRequest(ctx, c.transfer.entitlement, identity, req, op, c.clientTS43(), c.realm(), additionalApps...)
 	if err != nil {
 		return nil, nil, err
 	}

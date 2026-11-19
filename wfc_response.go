@@ -379,7 +379,10 @@ func (p wfcPayload) authToken(current AuthToken, now time.Time) (AuthToken, erro
 		return current, err
 	}
 	current.Value = p.Token.Token.String()
-	current.ExpiresAt = now.Add(time.Duration(validity) * time.Second)
+	current.ExpiresAt = time.Time{}
+	if validity > 0 {
+		current.ExpiresAt = now.Add(time.Duration(validity) * time.Second)
+	}
 	return current, nil
 }
 
@@ -388,10 +391,10 @@ func wfcAuthTokenValidity(value string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("parse WFC authentication token validity: %w", err)
 	}
-	if validity.value > 0 {
-		return validity.value, nil
+	if int64(validity.value) > int64((1<<63-1)/time.Second) {
+		return 0, errors.New("WFC authentication token validity exceeds supported duration")
 	}
-	return 3600, nil
+	return max(validity.value, 0), nil
 }
 
 // WFCConfiguration contains the server's VERS values. Validity is in seconds;
@@ -404,6 +407,13 @@ type WFCConfiguration struct {
 
 func (v WFCConfiguration) resetToDefault() bool {
 	return v.Version <= 0 || v.Validity < 0
+}
+
+func (v WFCConfiguration) requestVersion() int {
+	if !v.resetToDefault() || (v.Version == -1 || v.Version == -2) && v.Version == v.Validity {
+		return v.Version
+	}
+	return 0
 }
 
 func (v *WFCConfiguration) UnmarshalJSON(data []byte) error {

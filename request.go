@@ -63,7 +63,7 @@ type ODSAOperation struct {
 	MessageButtonSet               bool
 }
 
-func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Identity, req ServiceEntitlementRequest, op ODSAOperation, clientTS43, realm string) (*http.Request, error) {
+func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Identity, req ServiceEntitlementRequest, op ODSAOperation, clientTS43, realm string, additionalApps ...string) (*http.Request, error) {
 	if req.App == "" {
 		return nil, errAppRequired
 	}
@@ -72,6 +72,7 @@ func buildHTTPRequest(ctx context.Context, entitlement Entitlement, identity Ide
 		return nil, err
 	}
 	addCommon(params, req)
+	params["app"] = append(params["app"], additionalApps...)
 	if op.Operation != "" {
 		addOperation(params, op)
 	}
@@ -159,9 +160,13 @@ func acceptHasMediaType(accept, mediaType string) bool {
 	return false
 }
 
-func jsonBodyFields(params url.Values) map[string]string {
-	body := make(map[string]string, len(params))
+func jsonBodyFields(params url.Values) map[string]any {
+	body := make(map[string]any, len(params))
 	for key, values := range params {
+		if key == "app" && len(values) > 1 {
+			body[key] = values
+			continue
+		}
 		if key == "target_terminal_imeis" {
 			// Repeated JSON object keys keep the last value.
 			for _, value := range values {

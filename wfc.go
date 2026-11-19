@@ -145,7 +145,7 @@ type WFCConfig struct {
 	UsePost                          bool
 	ClientTS43                       string
 	DefaultServiceEntitlementEnabled bool
-	// NeedsIMSProvisioning enables VERS-driven resets to carrier defaults.
+	// NeedsIMSProvisioning queries additional IMS services and applies carrier VERS state.
 	NeedsIMSProvisioning bool
 	SkipActivation       bool
 	ShowVoWiFiWebview    bool
@@ -153,9 +153,11 @@ type WFCConfig struct {
 }
 
 type WFCResult struct {
-	Status             WFCStatus
-	AuthToken          AuthToken
-	Configuration      WFCConfiguration
+	Status        WFCStatus
+	AuthToken     AuthToken
+	Configuration WFCConfiguration
+	// ConfigurationReset reports a VERS reset or an authentication reset that
+	// invalidates cached state even if the full authentication retry fails.
 	ConfigurationReset bool
 	Cancelled          bool
 	request            *WFCEntitlementRequest
@@ -166,6 +168,9 @@ type WFCEntitlementRequest struct {
 	Device    Device
 	Config    WFCConfig
 	AuthToken AuthToken
+	// Configuration is the VERS state from the last check for this SIM and server.
+	// It is used when Config.NeedsIMSProvisioning is enabled.
+	Configuration WFCConfiguration
 }
 
 type wfcRecord struct {
@@ -182,6 +187,7 @@ type wfcRecord struct {
 	UseHTTPPost                      bool    `json:"useHttpPost"`
 	ClientTS43                       string  `json:"clientTS43"`
 	DefaultServiceEntitlementEnabled bool    `json:"defaultServiceEntitlementStatus"`
+	NeedsIMSProvisioning             bool    `json:"needsIMSProvisioning,omitempty"`
 	SkipActivation                   bool    `json:"skipActivation"`
 	ShowVoWiFiWebview                bool    `json:"showVoWiFiWebview"`
 	WebsheetClientName               string  `json:"websheetClientName"`
@@ -251,6 +257,7 @@ func (r wfcRecord) config() WFCConfig {
 		UsePost:                          r.UseHTTPPost,
 		ClientTS43:                       firstNonEmpty(r.ClientTS43, DefaultWFCClientTS43),
 		DefaultServiceEntitlementEnabled: r.DefaultServiceEntitlementEnabled,
+		NeedsIMSProvisioning:             r.NeedsIMSProvisioning,
 		SkipActivation:                   r.SkipActivation,
 		ShowVoWiFiWebview:                r.ShowVoWiFiWebview,
 		WebsheetClientName:               r.WebsheetClientName,
@@ -327,32 +334,42 @@ func (c WFCConfig) ShouldShowAddressUpdate(status WFCStatus) bool {
 	return c.ShowVoWiFiWebview && status.ServiceFlowURL != "" && !status.Incompatible()
 }
 
+// CheckWFCEntitlement queries the carrier using cfg's HTTP transport and source SIM.
 func CheckWFCEntitlement(ctx context.Context, cfg Config, req WFCEntitlementRequest) (WFCResult, error) {
 	client := newClient(cfg)
 	return client.CheckWFCEntitlement(ctx, req)
 }
 
+// CheckWFCEntitlement queries the current Wi-Fi Calling entitlement for req.
+// A result that reports ConfigurationReset invalidates the previous credentials
+// even if the check also returns an error.
 func (c *Client) CheckWFCEntitlement(ctx context.Context, req WFCEntitlementRequest) (WFCResult, error) {
-	token := req.AuthToken
-	if !authCredential(token).validAt(c.now()) {
-		token = AuthToken{}
-	}
-	req.AuthToken = token
-	result, err := c.checkWFCEntitlementOnce(ctx, req)
-	if token.Value != "" && isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) {
+	if !authCredential(req.AuthToken).validAt(c.now()) {
 		req.AuthToken = AuthToken{}
+	}
+	result, err := c.checkWFCEntitlementOnce(ctx, req)
+	if (req.AuthToken.Value != "" || req.Config.NeedsIMSProvisioning) &&
+		isHTTPStatus(err, http.StatusNetworkAuthenticationRequired) {
+		req.AuthToken = AuthToken{}
+		req.Configuration = WFCConfiguration{}
 		result, err = c.checkWFCEntitlementOnce(ctx, req)
+		if err != nil {
+			result.ConfigurationReset = true
+		}
 	}
 	if err != nil {
 		return result, err
 	}
 	req.AuthToken = result.AuthToken
+	req.AuthToken.Cookies = slices.Clone(result.AuthToken.Cookies)
+	req.Configuration = result.Configuration
 	result.request = &req
 	return result, nil
 }
 
-// ContinueWFC rechecks entitlement after portal completion. Cancellation keeps
-// the previous entitlement state; changing the device's WFC setting is up to the caller.
+// ContinueWFC rechecks entitlement after portal completion. On cancellation or
+// recheck failure it returns the previous status, with any rejected credentials
+// removed. The caller owns the device's WFC setting.
 func (c *Client) ContinueWFC(ctx context.Context, previous WFCResult, callback WebsheetResult) (WFCResult, error) {
 	if previous.request == nil {
 		return previous, errors.New("WFC request is required")
@@ -362,7 +379,20 @@ func (c *Client) ContinueWFC(ctx context.Context, previous WFCResult, callback W
 		previous.Cancelled = true
 		return previous, nil
 	case WebsheetEventVoWiFiEntitlementChanged:
-		return c.CheckWFCEntitlement(ctx, *previous.request)
+		result, err := c.CheckWFCEntitlement(ctx, *previous.request)
+		if err == nil {
+			return result, nil
+		}
+		if result.ConfigurationReset {
+			req := *previous.request
+			req.AuthToken = AuthToken{}
+			req.Configuration = WFCConfiguration{}
+			previous.request = &req
+			previous.AuthToken = AuthToken{}
+			previous.Configuration = WFCConfiguration{}
+			previous.ConfigurationReset = true
+		}
+		return previous, err
 	default:
 		return previous, errors.New("WFC portal callback is required")
 	}
@@ -392,7 +422,13 @@ func (c *Client) checkWFCEntitlementOnce(ctx context.Context, input WFCEntitleme
 		AuthenticationToken: token.Value,
 		Cookies:             token.Cookies,
 	}
-	body, cookies, err := next.callRaw(ctx, input.Identity, req, ODSAOperation{})
+	var additionalApps []string
+	if cfg.NeedsIMSProvisioning {
+		req.RequestVersion = strconv.Itoa(input.Configuration.requestVersion())
+		additionalApps = []string{appVoLTE, appSMSOIP}
+	}
+	transport := entitlementTransport{client: &next, channel: next.transfer.source.Channel}
+	body, cookies, err := transport.callRaw(ctx, input.Identity, req, ODSAOperation{}, additionalApps...)
 	if err != nil {
 		return WFCResult{}, err
 	}
@@ -403,9 +439,14 @@ func (c *Client) checkWFCEntitlementOnce(ctx context.Context, input WFCEntitleme
 	result := WFCResult{Configuration: payload.Configuration}
 	if cfg.NeedsIMSProvisioning && payload.Configuration.resetToDefault() {
 		result.ConfigurationReset = true
-		result.Status = WFCStatus{EntitlementStatus: WFCEntitlementDisabled, TCStatus: WFCTCNotRequired, AddrStatus: WFCAddressNotRequired, ProvStatus: WFCProvisionNotRequired}
+		result.Status = WFCStatus{EntitlementStatus: WFCEntitlementIncompatible}
 		if cfg.DefaultServiceEntitlementEnabled {
-			result.Status.EntitlementStatus = WFCEntitlementEnabled
+			result.Status = WFCStatus{
+				EntitlementStatus: WFCEntitlementEnabled,
+				TCStatus:          WFCTCNotRequired,
+				AddrStatus:        WFCAddressNotRequired,
+				ProvStatus:        WFCProvisionNotRequired,
+			}
 		}
 		// A VERS reset also invalidates cached authentication credentials.
 		return result, nil
